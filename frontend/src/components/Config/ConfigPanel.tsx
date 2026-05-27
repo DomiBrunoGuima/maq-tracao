@@ -196,7 +196,7 @@ export default function ConfigPanel({ onClose }: Props) {
             </div>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => fetchFtpMut.mutate()}
+                onClick={() => updateMut.mutate(form, { onSuccess: () => fetchFtpMut.mutate() })}
                 disabled={fetchFtpMut.isPending || !form.ihm_ip || !form.ftp_remote_filename}
                 title={
                   !form.ihm_ip ? "Configure o IP da IHM primeiro" :

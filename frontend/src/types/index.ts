@@ -97,18 +97,84 @@ export interface ModbusFetchResult {
   ensaio_id: number;
 }
 
+export interface DadosEmpresa {
+  nome: string;
+  endereco: string;
+  telefone: string;
+  email: string;
+  site: string;
+  numero_relatorio: string;
+  logo_data_url: string;
+}
+
+export interface DadosCliente {
+  nome: string;
+  os: string;
+  contato: string;
+  email_cliente: string;
+  telefone_cliente: string;
+  endereco: string;
+  bairro: string;
+  cidade_uf: string;
+  cep: string;
+  data_recebimento: string;
+  periodo_realizacao: string;
+}
+
+export interface DadosAmostra {
+  id_interno: string;
+  id_cliente: string;
+  imagem_data_url: string;
+}
+
+export interface CondicoesEnsaio {
+  temp_laboratorio: string;
+  umidade_laboratorio: string;
+  temp_ensaio: string;
+  num_corpos_prova: string;
+  celula_carga: string;
+  comprimento_inicial_mm: string;
+  velocidade_ensaio: string;
+  tipo_corpo_prova: string;
+  distancia_garras_mm: string;
+  extensometro: string;
+  largura_cp_mm: string;
+  espessura_cp_mm: string;
+  preparacao_cp: string[];
+  data_realizacao: string;
+  equipamentos: string;
+  norma_referencia: string;
+}
+
+export interface Assinatura {
+  nome: string;
+  cargo: string;
+}
+
 export interface ReportRequest {
   ensaio_id: number;
-  include_metadata: boolean;
-  include_kpis: boolean;
+  include_empresa: boolean;
+  include_cliente: boolean;
+  include_amostra: boolean;
+  include_objetivos: boolean;
+  include_condicoes: boolean;
+  include_resultados: boolean;
   include_stress_strain: boolean;
-  include_force_displacement: boolean;
-  include_force_time: boolean;
+  include_graficos_adicionais: boolean;
   include_raw_data: boolean;
-  include_derived_data: boolean;
-  observations: string;
+  include_conclusao: boolean;
+  include_observacoes_finais: boolean;
+  empresa: DadosEmpresa;
+  cliente: DadosCliente;
+  amostra: DadosAmostra;
+  objetivos: string;
+  condicoes: CondicoesEnsaio;
+  local_data: string;
+  assinaturas: Assinatura[];
+  observacoes_finais: string;
   operator_name: string;
   specimen_id: string;
   standard: string;
   format: string;
+  observations: string;
 }
