@@ -148,7 +148,7 @@ export default function ConfigPanel({ onClose }: Props) {
                     ...f,
                     ihm_registers: [
                       ...f.ihm_registers,
-                      { name: "", address: 0, description: "", data_type: "uint16" } as IHMRegister,
+                      { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0 } as IHMRegister,
                     ],
                   }))
                 }
@@ -162,9 +162,18 @@ export default function ConfigPanel({ onClose }: Props) {
               <p className="text-xs text-muted/50 font-mono">Nenhum registrador configurado.</p>
             )}
 
+            {/* Cabeçalho */}
+            {form.ihm_registers.length > 0 && (
+              <div className="grid grid-cols-[80px_1fr_1fr_90px_70px_28px] gap-1.5 mb-1">
+                {["Endereço", "Nome", "Descrição", "Tipo", "Escala", ""].map((h) => (
+                  <span key={h} className="text-[10px] text-muted/60 font-mono uppercase">{h}</span>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-2">
               {form.ihm_registers.map((r: IHMRegister, i: number) => (
-                <div key={i} className="grid grid-cols-[80px_1fr_1fr_90px_28px] gap-1.5 items-center">
+                <div key={i} className="grid grid-cols-[80px_1fr_1fr_90px_70px_28px] gap-1.5 items-center">
                   {/* Endereço */}
                   <input
                     type="number"
@@ -176,7 +185,7 @@ export default function ConfigPanel({ onClose }: Props) {
                         return { ...f, ihm_registers: regs };
                       })
                     }
-                    placeholder="Endereço"
+                    placeholder="Ex: 40000"
                     className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
                                focus:outline-none focus:border-accent transition-colors"
                   />
@@ -222,8 +231,28 @@ export default function ConfigPanel({ onClose }: Props) {
                                focus:outline-none focus:border-accent transition-colors"
                   >
                     <option value="uint16">uint16</option>
+                    <option value="decimal">decimal</option>
                     <option value="float32">float32</option>
                   </select>
+                  {/* Escala — só para uint16/decimal */}
+                  {r.data_type !== "float32" ? (
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={r.scale ?? 1}
+                      onChange={(e) =>
+                        setForm((f) => {
+                          const regs = [...f.ihm_registers];
+                          regs[i] = { ...regs[i], scale: Number(e.target.value) };
+                          return { ...f, ihm_registers: regs };
+                        })
+                      }
+                      className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
+                                 focus:outline-none focus:border-accent transition-colors"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-muted/40 font-mono px-2">—</span>
+                  )}
                   {/* Remover */}
                   <button
                     onClick={() =>
@@ -240,11 +269,14 @@ export default function ConfigPanel({ onClose }: Props) {
               ))}
             </div>
 
-            {form.ihm_registers.some((r: IHMRegister) => r.data_type === "float32") && (
-              <p className="text-[10px] text-muted/60 font-mono mt-2">
-                float32: lê endereço N (HI) + N+1 (LO) como IEEE 754 big-endian
-              </p>
-            )}
+            <p className="text-[10px] text-muted/50 font-mono mt-2 space-y-0.5">
+              {form.ihm_registers.some((r: IHMRegister) => r.data_type === "float32") && (
+                <span className="block">float32: lê N (HI) + N+1 (LO) · IEEE 754 big-endian</span>
+              )}
+              {form.ihm_registers.some((r: IHMRegister) => r.data_type !== "float32" && (r.scale ?? 1) !== 1) && (
+                <span className="block">decimal: valor_real = raw × escala</span>
+              )}
+            </p>
           </div>
         </div>
 

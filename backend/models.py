@@ -44,7 +44,8 @@ class IHMRegister(BaseModel):
     name: str
     address: int
     description: str = ""
-    data_type: str = "uint16"   # "uint16" ou "float32"
+    data_type: str = "uint16"   # "uint16" | "decimal" | "float32"
+    scale: float = 1.0          # aplicado ao uint16/decimal: valor_real = raw * scale
 
 
 class ParametrosIHM(BaseModel):

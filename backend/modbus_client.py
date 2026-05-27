@@ -43,6 +43,7 @@ def capture_registers(
             name      = reg["name"]
             address   = reg["address"]
             data_type = reg.get("data_type", "uint16")
+            scale     = float(reg.get("scale", 1.0))
             try:
                 if data_type == "float32":
                     resp = client.read_holding_registers(address=address, count=2)
@@ -51,9 +52,13 @@ def capture_registers(
                     else:
                         hi, lo = resp.registers[0], resp.registers[1]
                         result[name] = round(_decode_float32(hi, lo), 4)
-                else:
+                else:  # uint16 ou decimal
                     resp = client.read_holding_registers(address=address, count=1)
-                    result[name] = None if resp.isError() else resp.registers[0]
+                    if resp.isError():
+                        result[name] = None
+                    else:
+                        raw = resp.registers[0]
+                        result[name] = round(raw * scale, 6) if scale != 1.0 else raw
             except Exception as e:
                 logger.warning(f"[modbus] Erro no registrador {address} ({name}): {e}")
                 result[name] = None
