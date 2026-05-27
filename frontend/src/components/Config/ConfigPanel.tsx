@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2 } from "lucide-react";
+import { Save, X, Plus, Trash2, Download } from "lucide-react";
 import type { IHMRegister } from "../../types";
-import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
+import { useConfig, useUpdateConfig, useFetchFtpCsv } from "../../hooks/useConfig";
 import { useScan } from "../../hooks/useEnsaios";
 
 interface Props {
@@ -12,6 +12,7 @@ export default function ConfigPanel({ onClose }: Props) {
   const { data: config, isLoading } = useConfig();
   const updateMut = useUpdateConfig();
   const scanMut = useScan();
+  const fetchFtpMut = useFetchFtpCsv();
 
   const [form, setForm] = useState({
     watch_directory: "",
@@ -21,6 +22,11 @@ export default function ConfigPanel({ onClose }: Props) {
     ihm_port: 502,
     ihm_timeout: 3,
     ihm_registers: [] as any[],
+    ftp_port: 21,
+    ftp_user: "",
+    ftp_password: "",
+    ftp_remote_dir: "/",
+    ftp_remote_filename: "",
   });
 
   useEffect(() => {
@@ -135,6 +141,84 @@ export default function ConfigPanel({ onClose }: Props) {
                 className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm
                            text-white focus:outline-none focus:border-accent transition-colors font-mono"
               />
+            </div>
+          </div>
+
+          {/* Transferência de CSV via FTP */}
+          <div className="border-t border-border pt-4 space-y-3">
+            <p className="text-xs text-muted font-semibold">Transferência de CSV (FTP)</p>
+            <p className="text-xs text-muted/70">
+              Baixa o arquivo CSV diretamente da IHM via FTP e importa o ensaio automaticamente.
+              O IP da IHM é compartilhado com a configuração Modbus acima.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Usuário FTP</label>
+                <input
+                  value={form.ftp_user}
+                  onChange={(e) => setForm((f) => ({ ...f, ftp_user: e.target.value }))}
+                  placeholder="ex: ihn"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm
+                             text-white focus:outline-none focus:border-accent transition-colors font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Senha FTP</label>
+                <input
+                  type="password"
+                  value={form.ftp_password}
+                  onChange={(e) => setForm((f) => ({ ...f, ftp_password: e.target.value }))}
+                  placeholder="••••"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm
+                             text-white focus:outline-none focus:border-accent transition-colors font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Diretório remoto</label>
+                <input
+                  value={form.ftp_remote_dir}
+                  onChange={(e) => setForm((f) => ({ ...f, ftp_remote_dir: e.target.value }))}
+                  placeholder="/"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm
+                             text-white focus:outline-none focus:border-accent transition-colors font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1.5">Nome do arquivo</label>
+                <input
+                  value={form.ftp_remote_filename}
+                  onChange={(e) => setForm((f) => ({ ...f, ftp_remote_filename: e.target.value }))}
+                  placeholder="ex: history.csv"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm
+                             text-white focus:outline-none focus:border-accent transition-colors font-mono"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => fetchFtpMut.mutate()}
+                disabled={fetchFtpMut.isPending || !form.ihm_ip || !form.ftp_remote_filename}
+                title={
+                  !form.ihm_ip ? "Configure o IP da IHM primeiro" :
+                  !form.ftp_remote_filename ? "Informe o nome do arquivo remoto" : ""
+                }
+                className="flex items-center gap-2 px-4 py-2 bg-surface border border-border
+                           rounded-lg text-sm text-white hover:border-accent hover:text-accent
+                           transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download size={14} />
+                {fetchFtpMut.isPending ? "Baixando..." : "Buscar CSV via FTP"}
+              </button>
+              {fetchFtpMut.isSuccess && (
+                <p className="text-xs text-green-400">
+                  Importado: {fetchFtpMut.data.filename} ({fetchFtpMut.data.bytes_received} bytes)
+                </p>
+              )}
+              {fetchFtpMut.isError && (
+                <p className="text-xs text-red-400">
+                  {(fetchFtpMut.error as any)?.response?.data?.detail ?? "Erro ao conectar via FTP"}
+                </p>
+              )}
             </div>
           </div>
 

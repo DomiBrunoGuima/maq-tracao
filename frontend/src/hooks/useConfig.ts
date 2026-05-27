@@ -13,3 +13,11 @@ export function useUpdateConfig() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
   });
 }
+
+export function useFetchFtpCsv() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.fetchFtpCsv,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ensaios"] }),
+  });
+}

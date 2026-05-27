@@ -66,6 +66,11 @@ class ConfigModel(BaseModel):
     ihm_port: int = 502
     ihm_timeout: int = 3
     ihm_registers: List[IHMRegister] = []
+    ftp_port: int = 21
+    ftp_user: str = ""
+    ftp_password: str = ""
+    ftp_remote_dir: str = "/"
+    ftp_remote_filename: str = ""
 
 
 class ReportRequest(BaseModel):

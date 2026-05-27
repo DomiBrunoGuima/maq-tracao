@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .calculator import calculate_kpis, format_chart_data
 from .database import EnsaioDB, ParametrosIHMDB, SessionLocal, get_db
 from .models import ConfigModel, EnsaioDetail, EnsaioSummary, ParametrosIHM, ReportRequest
+from .ftp_client import download_csv as ftp_download_csv
 from .modbus_client import capture_registers
 from .parser import parse_csv
 from .report import generate_html_report
@@ -31,6 +32,11 @@ _config: dict = {
     "ihm_port": 502,
     "ihm_timeout": 3,
     "ihm_registers": [],
+    "ftp_port": 21,
+    "ftp_user": "",
+    "ftp_password": "",
+    "ftp_remote_dir": "/",
+    "ftp_remote_filename": "",
 }
 
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
@@ -273,6 +279,48 @@ def scan_directory():
             _load_csv(str(csv_file))
             loaded.append(csv_file.name)
     return {"scanned": loaded}
+
+
+@app.post("/api/ftp/fetch_csv")
+def fetch_csv_via_ftp(db: Session = Depends(get_db)):
+    """Baixa o arquivo CSV da IHM via FTP e importa o ensaio."""
+    from datetime import datetime as _dt
+
+    host          = _config.get("ihm_ip", "")
+    ftp_port      = int(_config.get("ftp_port", 21))
+    user          = _config.get("ftp_user", "")
+    password      = _config.get("ftp_password", "")
+    remote_dir    = _config.get("ftp_remote_dir", "/")
+    remote_fname  = _config.get("ftp_remote_filename", "")
+
+    if not host:
+        raise HTTPException(status_code=400, detail="IP da IHM não configurado")
+    if not remote_fname:
+        raise HTTPException(status_code=400, detail="Nome do arquivo remoto não configurado")
+
+    ts = _dt.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"FTP_{ts}_{remote_fname}"
+    watch_dir = Path(_config["watch_directory"])
+    watch_dir.mkdir(parents=True, exist_ok=True)
+    dest = watch_dir / filename
+
+    try:
+        ftp_download_csv(host, ftp_port, user, password, remote_dir, remote_fname, dest)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    _load_csv(str(dest))
+
+    rec = db.query(EnsaioDB).filter(EnsaioDB.filename == filename).first()
+    if not rec:
+        raise HTTPException(status_code=500, detail="Arquivo recebido mas falhou ao importar")
+
+    return {
+        "status": "ok",
+        "bytes_received": dest.stat().st_size,
+        "filename": filename,
+        "ensaio_id": rec.id,
+    }
 
 
 @app.get("/api/health")

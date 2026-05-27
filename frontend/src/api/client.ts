@@ -5,6 +5,7 @@ import type {
   EnsaioDetail,
   EnsaioSummary,
   KPIs,
+  ModbusFetchResult,
   ParametrosIHM,
   ReportRequest,
 } from "../types";
@@ -37,6 +38,9 @@ export const scanDirectory = (): Promise<{ scanned: string[] }> =>
 
 export const getParametrosIHM = (id: number): Promise<ParametrosIHM | null> =>
   api.get(`/ensaios/${id}/parametros_ihm`).then((r) => r.data);
+
+export const fetchFtpCsv = (): Promise<ModbusFetchResult> =>
+  api.post("/ftp/fetch_csv").then((r) => r.data);
 
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });

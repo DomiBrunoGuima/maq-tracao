@@ -83,6 +83,18 @@ export interface AppConfig {
   ihm_port: number;
   ihm_timeout: number;
   ihm_registers: IHMRegister[];
+  ftp_port: number;
+  ftp_user: string;
+  ftp_password: string;
+  ftp_remote_dir: string;
+  ftp_remote_filename: string;
+}
+
+export interface ModbusFetchResult {
+  status: string;
+  bytes_received: number;
+  filename: string;
+  ensaio_id: number;
 }
 
 export interface ReportRequest {
