@@ -30,11 +30,7 @@ _config: dict = {
     "ihm_ip": "192.168.8.10",
     "ihm_port": 502,
     "ihm_timeout": 3,
-    "ihm_registers": [
-        {"name": "deslocamento_programado", "address": 412, "description": "Deslocamento Programada"},
-        {"name": "velocidade_programada",   "address": 408, "description": "Velocidade Programada"},
-        {"name": "forca_atual",             "address": 92,  "description": "Força Atual"},
-    ],
+    "ihm_registers": [],
 }
 
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))

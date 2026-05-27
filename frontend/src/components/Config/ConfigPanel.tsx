@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Save, X, FolderOpen } from "lucide-react";
+import { Save, X, Plus, Trash2 } from "lucide-react";
+import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 import { useScan } from "../../hooks/useEnsaios";
 
@@ -137,20 +138,114 @@ export default function ConfigPanel({ onClose }: Props) {
             </div>
           </div>
 
-          {/* Registradores configurados (somente leitura) */}
-          {form.ihm_registers.length > 0 && (
-            <div>
-              <p className="text-xs text-muted mb-2">Registradores configurados</p>
-              <div className="space-y-1">
-                {form.ihm_registers.map((r: any) => (
-                  <div key={r.name} className="flex items-center gap-3 text-xs font-mono text-slate-400">
-                    <span className="text-accent w-16">{r.address}</span>
-                    <span>{r.description}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Registradores — editor */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted">Registradores</p>
+              <button
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    ihm_registers: [
+                      ...f.ihm_registers,
+                      { name: "", address: 0, description: "", data_type: "uint16" } as IHMRegister,
+                    ],
+                  }))
+                }
+                className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
+              >
+                <Plus size={12} /> Adicionar
+              </button>
             </div>
-          )}
+
+            {form.ihm_registers.length === 0 && (
+              <p className="text-xs text-muted/50 font-mono">Nenhum registrador configurado.</p>
+            )}
+
+            <div className="space-y-2">
+              {form.ihm_registers.map((r: IHMRegister, i: number) => (
+                <div key={i} className="grid grid-cols-[80px_1fr_1fr_90px_28px] gap-1.5 items-center">
+                  {/* Endereço */}
+                  <input
+                    type="number"
+                    value={r.address}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const regs = [...f.ihm_registers];
+                        regs[i] = { ...regs[i], address: Number(e.target.value) };
+                        return { ...f, ihm_registers: regs };
+                      })
+                    }
+                    placeholder="Endereço"
+                    className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
+                               focus:outline-none focus:border-accent transition-colors"
+                  />
+                  {/* Nome */}
+                  <input
+                    value={r.name}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const regs = [...f.ihm_registers];
+                        regs[i] = { ...regs[i], name: e.target.value };
+                        return { ...f, ihm_registers: regs };
+                      })
+                    }
+                    placeholder="Nome (chave)"
+                    className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
+                               focus:outline-none focus:border-accent transition-colors"
+                  />
+                  {/* Descrição */}
+                  <input
+                    value={r.description}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const regs = [...f.ihm_registers];
+                        regs[i] = { ...regs[i], description: e.target.value };
+                        return { ...f, ihm_registers: regs };
+                      })
+                    }
+                    placeholder="Descrição"
+                    className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
+                               focus:outline-none focus:border-accent transition-colors"
+                  />
+                  {/* Tipo */}
+                  <select
+                    value={r.data_type}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const regs = [...f.ihm_registers];
+                        regs[i] = { ...regs[i], data_type: e.target.value as IHMRegister["data_type"] };
+                        return { ...f, ihm_registers: regs };
+                      })
+                    }
+                    className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
+                               focus:outline-none focus:border-accent transition-colors"
+                  >
+                    <option value="uint16">uint16</option>
+                    <option value="float32">float32</option>
+                  </select>
+                  {/* Remover */}
+                  <button
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        ihm_registers: f.ihm_registers.filter((_: IHMRegister, j: number) => j !== i),
+                      }))
+                    }
+                    className="text-muted hover:text-red-400 transition-colors flex items-center justify-center"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {form.ihm_registers.some((r: IHMRegister) => r.data_type === "float32") && (
+              <p className="text-[10px] text-muted/60 font-mono mt-2">
+                float32: lê endereço N (HI) + N+1 (LO) como IEEE 754 big-endian
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Info */}

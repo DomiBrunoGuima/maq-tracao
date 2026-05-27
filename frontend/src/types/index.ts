@@ -63,6 +63,7 @@ export interface IHMRegister {
   name: string;
   address: number;
   description: string;
+  data_type: "uint16" | "float32";
 }
 
 export interface ParametrosIHM {

@@ -44,6 +44,7 @@ class IHMRegister(BaseModel):
     name: str
     address: int
     description: str = ""
+    data_type: str = "uint16"   # "uint16" ou "float32"
 
 
 class ParametrosIHM(BaseModel):
