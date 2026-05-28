@@ -349,9 +349,9 @@ def fetch_csv_via_ftp(db: Session = Depends(get_db)):
     remote_fname  = _config.get("ftp_remote_filename", "")
 
     if not host:
-        raise HTTPException(status_code=400, detail="IP da IHM não configurado")
+        raise HTTPException(status_code=400, detail="IP da IHM não configurado — preencha o campo 'IP da IHM' em Configurações → Conexão IHM.")
     if not remote_fname:
-        raise HTTPException(status_code=400, detail="Nome do arquivo remoto não configurado")
+        raise HTTPException(status_code=400, detail="Nome do arquivo remoto não configurado — preencha o campo 'Nome do arquivo remoto' em Configurações → FTP.")
 
     ts = _dt.now().strftime("%Y%m%d_%H%M%S")
     filename = f"FTP_{ts}_{remote_fname}"

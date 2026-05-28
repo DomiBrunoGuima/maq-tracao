@@ -53,17 +53,21 @@ export default function Sidebar({
       </div>
 
       {/* Actions */}
-      <div className="p-3 border-b border-border flex gap-2">
+      <div className="p-3 border-b border-border space-y-2">
+        <div className="flex gap-2">
         <button
           onClick={() => fetchMut.mutate()}
           disabled={fetchMut.isPending}
           title="Buscar CSV da IHM via FTP"
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5
-                     bg-accent/10 hover:bg-accent/20 text-accent rounded text-xs
-                     font-medium transition-colors disabled:opacity-50"
+          className={clsx(
+            "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50",
+            fetchMut.isError
+              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400"
+              : "bg-accent/10 hover:bg-accent/20 text-accent"
+          )}
         >
           <RefreshCw size={13} className={fetchMut.isPending ? "animate-spin" : ""} />
-          {fetchMut.isPending ? "Buscando..." : "Buscar CSV"}
+          {fetchMut.isPending ? "Buscando..." : fetchMut.isError ? "Tentar novamente" : "Buscar CSV"}
         </button>
         <button
           onClick={onViewComparison}
@@ -79,6 +83,16 @@ export default function Sidebar({
           <GitCompare size={13} />
           Comparar {compareIds.length > 0 && `(${compareIds.length})`}
         </button>
+        </div>
+
+        {fetchMut.isError && (
+          <p className="text-xs text-red-400 leading-snug px-1">
+            {(fetchMut.error as any)?.response?.data?.detail ?? "Erro ao buscar CSV. Verifique as configurações FTP."}
+          </p>
+        )}
+        {fetchMut.isSuccess && (
+          <p className="text-xs text-green-400 px-1">CSV importado com sucesso.</p>
+        )}
       </div>
 
       {/* Ensaio list */}
