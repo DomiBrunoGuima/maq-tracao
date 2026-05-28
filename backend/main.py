@@ -77,11 +77,13 @@ _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
 # ---------------------------------------------------------------------------
 
 def _fetch_ihm_params() -> dict | None:
-    """Lê registradores da IHM via Modbus. Retorna None se inacessível."""
+    """Lê registradores de configuração da IHM via Modbus. Registros coil (bits de
+    estado transiente) são excluídos — não fazem parte dos parâmetros do ensaio."""
     ip      = _config.get("ihm_ip", "")
     port    = int(_config.get("ihm_port", 502))
     timeout = int(_config.get("ihm_timeout", 3))
-    regs    = _config.get("ihm_registers", [])
+    regs    = [r for r in _config.get("ihm_registers", [])
+               if r.get("data_type", "uint16") != "coil"]
     if not ip or not regs:
         return None
     return capture_registers(ip, port, timeout, regs)
@@ -137,7 +139,6 @@ def _load_csv(filepath: str) -> None:
             metadata_code=metadata.code,
             filepath=str(path.resolve()),
             data_json=df_for_json.to_json(orient="records"),
-            kpis_json=json.dumps(kpis),
         )
         db.add(record)
         db.commit()

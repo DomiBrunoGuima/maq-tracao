@@ -122,20 +122,15 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
             coeffs = np.polyfit(eps_el, sigma_el, 1)
             modulo_regressao_MPa = float(coeffs[0])
 
-    # ── Dados extras da IHM (se disponíveis) ─────────────────────────────────
-    forca_maxima_ihm: float | None = None
+    # ── Velocidade programada da IHM (se disponível) ─────────────────────────
+    # A escala é aplicada pelo capture_registers via o campo scale do registrador.
     velocidade_ihm: float | None = None
-    deslocamento_pico_ihm: float | None = None
     if ihm_params:
-        v = ihm_params.get("forca_maxima")
-        if v is not None:
-            forca_maxima_ihm = float(v)
-        for k in ("velocidade_processamento", "velocidade_programa", "velocidade_pro"):
+        for k in ("velocidade_processamento", "velocidade_programa", "velocidade_pro",
+                  "velocidade_programada"):
             if ihm_params.get(k) is not None:
-                velocidade_ihm = float(ihm_params[k]) / 100; break
-        for k in ("deslocamento_pico", "deslocamento_programado", "deslocamento_p"):
-            if ihm_params.get(k) is not None:
-                deslocamento_pico_ihm = float(ihm_params[k]); break
+                velocidade_ihm = float(ihm_params[k])
+                break
 
     return {
         "forca_max_N": forca_max,
@@ -151,17 +146,12 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
         "energia_J": energia,
         "tensao_escoamento_MPa": tensao_escoamento,
         "cv_modulo": cv_modulo,
-        # Parâmetros do corpo de prova (IHM ou back-calculado)
         "area_secao_mm2": area_mm2,
         "comprimento_inicial_mm": comprimento_inicial_mm,
-        # KPIs recalculados com A e L0 precisos
         "tensao_max_calc_MPa": tensao_max_calc_MPa,
         "alonga_calc_pct": alonga_calc_pct,
         "modulo_regressao_MPa": modulo_regressao_MPa,
-        # Registradores extras da IHM
-        "forca_maxima_ihm": forca_maxima_ihm,
         "velocidade_ihm": velocidade_ihm,
-        "deslocamento_pico_ihm": deslocamento_pico_ihm,
     }
 
 
@@ -182,7 +172,7 @@ def format_chart_data(df: pd.DataFrame) -> dict:
     return {
         "stress_strain": safe_records(
             df,
-            ["Deform_Along", "Tensao_Pa", "Tensao_Max", "fase", "elapsed_seconds"],
+            ["Deform_Along", "Tensao_Pa", "fase", "elapsed_seconds"],
         ),
         "force_displacement": safe_records(
             df, ["Deslocamento", "Forca_N", "fase", "elapsed_seconds"]
@@ -192,7 +182,7 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             df, ["elapsed_seconds", "Modulo_Elast", "fase"]
         ),
         "stress_time": safe_records(
-            df, ["elapsed_seconds", "Tensao_Pa", "Tensao_Max", "fase"]
+            df, ["elapsed_seconds", "Tensao_Pa", "fase"]
         ),
         "rupture": {
             "elapsed_seconds": float(rupture_row["elapsed_seconds"]),

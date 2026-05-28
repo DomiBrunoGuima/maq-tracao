@@ -119,7 +119,10 @@ def capture_registers(
             data_type = reg.get("data_type", "uint16")
             scale     = float(reg.get("scale", 1.0))
             try:
-                if data_type == "float32":
+                if data_type == "coil":
+                    resp = client.read_coils(address=address, count=1)
+                    result[name] = (0 if resp.isError() else (1 if resp.bits[0] else 0))
+                elif data_type == "float32":
                     resp = client.read_holding_registers(address=address, count=2)
                     if resp.isError():
                         result[name] = None

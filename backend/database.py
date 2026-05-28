@@ -30,7 +30,6 @@ class EnsaioDB(Base):
     filepath = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     data_json = Column(Text)
-    kpis_json = Column(Text)
 
 
 class ParametrosIHMDB(Base):

@@ -71,6 +71,11 @@ class ConfigModel(BaseModel):
     ftp_password: str = ""
     ftp_remote_dir: str = "/"
     ftp_remote_filename: str = ""
+    realtime_interval_ms: int = 100
+    realtime_bit_name: str = "teste_ativo_bit"
+    realtime_stop_bit_name: str = "teste_parada_bit"
+    realtime_forca_name: str = "forca_atual"
+    realtime_deslocamento_name: str = "deslocamento_atual"
 
 
 class DadosEmpresa(BaseModel):

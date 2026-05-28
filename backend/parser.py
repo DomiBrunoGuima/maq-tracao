@@ -154,6 +154,7 @@ def parse_csv(filepath: str | Path) -> tuple[EnsaioMetadata, pd.DataFrame]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["Forca_N"])
+    df = df.drop(columns=["Checksum"], errors="ignore")
     df = df.reset_index(drop=True)
 
     # Build full timestamp
