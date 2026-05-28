@@ -132,7 +132,7 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
             forca_maxima_ihm = float(v)
         for k in ("velocidade_processamento", "velocidade_programa", "velocidade_pro"):
             if ihm_params.get(k) is not None:
-                velocidade_ihm = float(ihm_params[k]); break
+                velocidade_ihm = float(ihm_params[k]) / 100; break
         for k in ("deslocamento_pico", "deslocamento_programado", "deslocamento_p"):
             if ihm_params.get(k) is not None:
                 deslocamento_pico_ihm = float(ihm_params[k]); break
