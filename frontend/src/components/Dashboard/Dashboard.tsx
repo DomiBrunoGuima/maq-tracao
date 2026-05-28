@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { FileText, X as XIcon, MousePointerClick } from "lucide-react";
 import { clsx } from "clsx";
 import type { ChartData, DataPoint, RupturePoint } from "../../types";
@@ -125,6 +125,8 @@ export default function Dashboard({ ensaioId }: Props) {
   const [showReport, setShowReport]       = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<DataPoint | null>(null);
   const [activeChart, setActiveChart]     = useState<ChartKey>("ss");
+  const [chartH, setChartH]               = useState(300);
+  const chartBodyRef                      = useRef<HTMLDivElement>(null);
 
   const { data: ensaio }                           = useEnsaio(ensaioId);
   const { data: kpis, isLoading: kpisLoading }     = useKPIs(ensaioId);
@@ -133,6 +135,14 @@ export default function Dashboard({ ensaioId }: Props) {
   const { data: config }                           = useConfig();
 
   useEffect(() => { setSelectedPoint(null); }, [ensaioId]);
+
+  useEffect(() => {
+    const el = chartBodyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setChartH(Math.max(160, el.clientHeight)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const pt = useMemo(() => {
     if (!selectedPoint) return null;
@@ -194,10 +204,10 @@ export default function Dashboard({ ensaioId }: Props) {
   // ── render ──
 
   return (
-    <div className="flex flex-col">
+    <div className="h-full flex flex-col">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-10 bg-bg/95 backdrop-blur-sm border-b border-border
+      <header className="flex-shrink-0 bg-bg/95 backdrop-blur-sm border-b border-border
                          px-6 py-3 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-sm font-semibold text-white truncate">{ensaio?.nome}</h1>
@@ -217,15 +227,15 @@ export default function Dashboard({ ensaioId }: Props) {
         </button>
       </header>
 
-      <div className="p-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_276px] gap-4 items-start">
+      <div className="flex-1 min-h-0 p-4 overflow-hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_276px] gap-4 h-full">
 
           {/* ── Left: chart gallery ──────────────────────── */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3 min-h-0">
 
-            {/* Active chart */}
-            <div className="rounded-xl border border-border bg-surface px-4 pt-3 pb-3">
-              <div className="flex items-baseline gap-3 mb-1">
+            {/* Active chart — flex-1, cresce até preencher o espaço */}
+            <div className="flex-1 min-h-0 rounded-xl border border-border bg-surface px-4 pt-3 pb-3 flex flex-col">
+              <div className="flex items-baseline gap-3 mb-1 flex-shrink-0">
                 <p className="text-sm font-semibold text-white">{activeConfig.label}</p>
                 <p className="text-xs text-muted">{activeConfig.sub}</p>
                 {pt && (
@@ -241,11 +251,14 @@ export default function Dashboard({ ensaioId }: Props) {
                   </div>
                 )}
               </div>
-              <p className="text-[10px] text-muted/50 mb-2 flex items-center gap-1.5">
+              <p className="text-[10px] text-muted/50 mb-2 flex items-center gap-1.5 flex-shrink-0">
                 <MousePointerClick size={10} className="flex-shrink-0" />
                 {pt ? "Clique em outro ponto · × para limpar" : "Clique em qualquer ponto para ver os cálculos detalhados."}
               </p>
-              {renderChart(activeChart, curvas, 240, setSelectedPoint)}
+              {/* Área medida pelo ResizeObserver */}
+              <div ref={chartBodyRef} className="flex-1 min-h-0">
+                {renderChart(activeChart, curvas, chartH, setSelectedPoint)}
+              </div>
             </div>
 
             {/* Thumbnails */}
@@ -277,7 +290,7 @@ export default function Dashboard({ ensaioId }: Props) {
           </div>
 
           {/* ── Right: data panel ────────────────────────── */}
-          <div className="space-y-3">
+          <div className="overflow-y-auto space-y-3 pr-0.5">
 
             {/* KPIs */}
             <div className="rounded-xl border border-border bg-surface p-3">
