@@ -66,7 +66,7 @@ export interface IHMRegister {
   name: string;
   address: number;
   description: string;
-  data_type: "uint16" | "decimal" | "float32";
+  data_type: "uint16" | "decimal" | "float32" | "coil";
   scale: number;
 }
 
@@ -91,6 +91,24 @@ export interface AppConfig {
   ftp_password: string;
   ftp_remote_dir: string;
   ftp_remote_filename: string;
+  realtime_interval_ms: number;
+  realtime_bit_name: string;
+  realtime_forca_name: string;
+  realtime_deslocamento_name: string;
+}
+
+export interface RealtimePoint {
+  t_ms: number;
+  forca: number;
+  deslocamento: number;
+}
+
+export interface RealtimeFrame {
+  ativo: boolean;
+  forca: number | null;
+  deslocamento: number | null;
+  t_ms: number;
+  error?: string;
 }
 
 export interface ModbusFetchResult {

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Sliders, Settings } from "lucide-react";
+import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Radio, Sliders, Settings } from "lucide-react";
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig, useFetchFtpCsv } from "../../hooks/useConfig";
 
-type Section = "geral" | "ihm" | "ftp" | "registradores" | "sobre";
+type Section = "geral" | "ihm" | "ftp" | "registradores" | "realtime" | "sobre";
 
 interface Props {
   onClose: () => void;
@@ -23,6 +23,10 @@ type FormState = {
   ftp_password: string;
   ftp_remote_dir: string;
   ftp_remote_filename: string;
+  realtime_interval_ms: number;
+  realtime_bit_name: string;
+  realtime_forca_name: string;
+  realtime_deslocamento_name: string;
 };
 
 const DEFAULT_FORM: FormState = {
@@ -38,6 +42,10 @@ const DEFAULT_FORM: FormState = {
   ftp_password: "",
   ftp_remote_dir: "/",
   ftp_remote_filename: "",
+  realtime_interval_ms: 100,
+  realtime_bit_name: "teste_ativo_bit",
+  realtime_forca_name: "forca_atual",
+  realtime_deslocamento_name: "deslocamento_atual",
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -425,6 +433,7 @@ function RegistradoresSection({ form, setForm }: { form: FormState; setForm: Rea
                   <option value="uint16">uint16</option>
                   <option value="decimal">decimal</option>
                   <option value="float32">float32</option>
+                  <option value="coil">coil</option>
                 </select>
                 {r.data_type !== "float32" ? (
                   <input
@@ -469,6 +478,78 @@ function RegistradoresSection({ form, setForm }: { form: FormState; setForm: Rea
   );
 }
 
+function RealtimeSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  return (
+    <div>
+      <SectionTitle>Monitoramento em Tempo Real</SectionTitle>
+      <SectionDesc>
+        Configuração dos registradores lidos durante o acompanhamento ao vivo do ensaio.
+        Os nomes devem corresponder exatamente aos campos "Nome" configurados na aba Registradores.
+      </SectionDesc>
+
+      <Field
+        label="Intervalo de leitura (ms)"
+        hint="Intervalo entre leituras Modbus. Mínimo 50 ms. Valores menores que a latência da rede serão ignorados."
+      >
+        <input
+          type="number"
+          min={50}
+          max={2000}
+          step={10}
+          value={form.realtime_interval_ms}
+          onChange={(e) => setForm((f) => ({ ...f, realtime_interval_ms: Number(e.target.value) }))}
+          className={smallInputCls + " w-32"}
+        />
+      </Field>
+
+      <Divider />
+
+      <div className="space-y-5">
+        <Field
+          label="Nome do registrador — Bit de início"
+          hint='Registrador do tipo uint16 ou coil cujo valor > 0 indica que o ensaio está em andamento. Ex: "teste_ativo_bit"'
+        >
+          <input
+            value={form.realtime_bit_name}
+            onChange={(e) => setForm((f) => ({ ...f, realtime_bit_name: e.target.value }))}
+            placeholder="teste_ativo_bit"
+            className={inputCls}
+          />
+        </Field>
+
+        <Field
+          label="Nome do registrador — Força atual"
+          hint='Registrador que contém a força instantânea em Newtons. Ex: "forca_atual"'
+        >
+          <input
+            value={form.realtime_forca_name}
+            onChange={(e) => setForm((f) => ({ ...f, realtime_forca_name: e.target.value }))}
+            placeholder="forca_atual"
+            className={inputCls}
+          />
+        </Field>
+
+        <Field
+          label="Nome do registrador — Deslocamento atual"
+          hint='Registrador que contém o deslocamento instantâneo em mm. Ex: "deslocamento_atual"'
+        >
+          <input
+            value={form.realtime_deslocamento_name}
+            onChange={(e) => setForm((f) => ({ ...f, realtime_deslocamento_name: e.target.value }))}
+            placeholder="deslocamento_atual"
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-6 bg-accent/5 border border-accent/20 rounded-xl px-4 py-3 text-xs text-muted/80 leading-relaxed">
+        Os três registradores acima devem estar cadastrados na aba <strong className="text-slate-300">Registradores</strong> com os mesmos nomes.
+        O tipo de dado (uint16 / float32 / decimal) e a escala são lidos de lá automaticamente.
+      </div>
+    </div>
+  );
+}
+
 function SobreSection() {
   const items = [
     { label: "Software", value: "Analisador de Ensaios de Tração" },
@@ -501,6 +582,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "ihm",            label: "Conexão IHM",      icon: <Cpu size={15} /> },
   { id: "ftp",            label: "FTP",              icon: <Download size={15} /> },
   { id: "registradores",  label: "Registradores",    icon: <Sliders size={15} /> },
+  { id: "realtime",       label: "Tempo Real",       icon: <Radio size={15} /> },
 ];
 
 export default function ConfigPanel({ onClose }: Props) {
@@ -566,6 +648,7 @@ export default function ConfigPanel({ onClose }: Props) {
             {section === "ihm"           && <IHMSection           form={form} setForm={setForm} />}
             {section === "ftp"           && <FTPSection           form={form} setForm={setForm} fetchFtpMut={fetchFtpMut} updateMut={updateMut} />}
             {section === "registradores" && <RegistradoresSection form={form} setForm={setForm} />}
+            {section === "realtime"      && <RealtimeSection      form={form} setForm={setForm} />}
             {section === "sobre"         && <SobreSection />}
           </div>
         </div>

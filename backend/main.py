@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -16,7 +18,7 @@ from .calculator import calculate_kpis, format_chart_data
 from .database import EnsaioDB, ParametrosIHMDB, SessionLocal, get_db
 from .models import ConfigModel, EnsaioDetail, EnsaioSummary, ParametrosIHM, ReportRequest
 from .ftp_client import download_csv as ftp_download_csv
-from .modbus_client import capture_registers
+from .modbus_client import RealtimeModbusReader, capture_registers
 from .parser import parse_csv
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
@@ -40,6 +42,10 @@ _CONFIG_DEFAULTS: dict = {
     "ftp_password": "",
     "ftp_remote_dir": "/",
     "ftp_remote_filename": "",
+    "realtime_interval_ms": 100,
+    "realtime_bit_name": "teste_ativo_bit",
+    "realtime_forca_name": "forca_atual",
+    "realtime_deslocamento_name": "deslocamento_atual",
 }
 
 
@@ -374,6 +380,85 @@ def fetch_csv_via_ftp(db: Session = Depends(get_db)):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Tempo Real — SSE stream
+# ---------------------------------------------------------------------------
+
+@app.get("/api/realtime/stream")
+async def realtime_stream(request: Request):
+    ip           = _config.get("ihm_ip", "")
+    port         = int(_config.get("ihm_port", 502))
+    timeout      = int(_config.get("ihm_timeout", 3))
+    interval_ms  = max(50, int(_config.get("realtime_interval_ms", 100)))
+    bit_name     = _config.get("realtime_bit_name", "teste_ativo_bit")
+    forca_name   = _config.get("realtime_forca_name", "forca_atual")
+    desl_name    = _config.get("realtime_deslocamento_name", "deslocamento_atual")
+
+    all_regs = _config.get("ihm_registers", [])
+    rt_regs  = [r for r in all_regs if r["name"] in (bit_name, forca_name, desl_name)]
+
+    reader = RealtimeModbusReader(ip, port, timeout, rt_regs)
+    loop   = asyncio.get_event_loop()
+
+    async def generate():
+        try:
+            connected = await loop.run_in_executor(None, reader.connect)
+            if not connected:
+                yield f"data: {json.dumps({'error': 'ihm_offline'})}\n\n"
+                return
+
+            t_start:  float | None = None
+            last_bit: bool         = False
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                data = await loop.run_in_executor(None, reader.read)
+
+                if data is None:
+                    yield f"data: {json.dumps({'error': 'reconnecting'})}\n\n"
+                    await asyncio.sleep(1.0)
+                    await loop.run_in_executor(None, reader.connect)
+                    continue
+
+                ativo = bool(data.get(bit_name, 0))
+                forca = data.get(forca_name)
+                desl  = data.get(desl_name)
+
+                if ativo and not last_bit:
+                    t_start = time.time()
+                elif not ativo and last_bit:
+                    t_start = None
+                last_bit = ativo
+
+                elapsed_ms = int((time.time() - t_start) * 1000) if (ativo and t_start) else 0
+
+                payload = json.dumps({
+                    "ativo":        ativo,
+                    "forca":        forca,
+                    "deslocamento": desl,
+                    "t_ms":         elapsed_ms,
+                })
+                yield f"data: {payload}\n\n"
+
+                await asyncio.sleep(interval_ms / 1000)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await loop.run_in_executor(None, reader.close)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":       "keep-alive",
+        },
+    )
 
 
 # Serve frontend dist (built with `npm run build` in frontend/)

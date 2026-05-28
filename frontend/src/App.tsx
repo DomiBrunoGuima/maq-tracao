@@ -3,8 +3,9 @@ import Sidebar from "./components/Sidebar/Sidebar";
 import Dashboard from "./components/Dashboard/Dashboard";
 import ComparisonView from "./components/Comparison/ComparisonView";
 import ConfigPanel from "./components/Config/ConfigPanel";
+import RealtimeMonitor from "./components/Realtime/RealtimeMonitor";
 
-type View = "dashboard" | "comparison" | "config";
+type View = "dashboard" | "comparison" | "config" | "realtime";
 
 export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -31,6 +32,7 @@ export default function App() {
         onToggleCompare={handleToggleCompare}
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
+        onViewRealtime={() => setView("realtime")}
         currentView={view}
       />
 
@@ -43,6 +45,9 @@ export default function App() {
         )}
         {view === "config" && (
           <ConfigPanel onClose={() => setView("dashboard")} />
+        )}
+        {view === "realtime" && (
+          <RealtimeMonitor />
         )}
       </main>
     </div>

@@ -2,6 +2,7 @@ import {
   Activity,
   ChevronRight,
   GitCompare,
+  Radio,
   RefreshCw,
   Settings,
   Trash2,
@@ -18,6 +19,7 @@ interface Props {
   onToggleCompare: (id: number) => void;
   onViewConfig: () => void;
   onViewComparison: () => void;
+  onViewRealtime: () => void;
   currentView: string;
 }
 
@@ -28,6 +30,7 @@ export default function Sidebar({
   onToggleCompare,
   onViewConfig,
   onViewComparison,
+  onViewRealtime,
   currentView,
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
@@ -104,8 +107,23 @@ export default function Sidebar({
         ))}
       </div>
 
-      {/* Config button */}
-      <div className="p-3 border-t border-border">
+      {/* Bottom nav buttons */}
+      <div className="p-3 border-t border-border space-y-1">
+        <button
+          onClick={onViewRealtime}
+          className={clsx(
+            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
+            currentView === "realtime"
+              ? "bg-accent/10 text-accent"
+              : "text-muted hover:text-white hover:bg-border"
+          )}
+        >
+          <Radio size={15} className={currentView === "realtime" ? "text-accent" : ""} />
+          Monitor ao Vivo
+          {currentView === "realtime" && (
+            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          )}
+        </button>
         <button
           onClick={onViewConfig}
           className={clsx(
