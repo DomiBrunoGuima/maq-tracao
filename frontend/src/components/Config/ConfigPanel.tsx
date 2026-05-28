@@ -25,6 +25,7 @@ type FormState = {
   ftp_remote_filename: string;
   realtime_interval_ms: number;
   realtime_bit_name: string;
+  realtime_stop_bit_name: string;
   realtime_forca_name: string;
   realtime_deslocamento_name: string;
 };
@@ -44,6 +45,7 @@ const DEFAULT_FORM: FormState = {
   ftp_remote_filename: "",
   realtime_interval_ms: 100,
   realtime_bit_name: "teste_ativo_bit",
+  realtime_stop_bit_name: "teste_parada_bit",
   realtime_forca_name: "forca_atual",
   realtime_deslocamento_name: "deslocamento_atual",
 };
@@ -507,12 +509,24 @@ function RealtimeSection({ form, setForm }: { form: FormState; setForm: React.Di
       <div className="space-y-5">
         <Field
           label="Nome do registrador — Bit de início"
-          hint='Registrador do tipo uint16 ou coil cujo valor > 0 indica que o ensaio está em andamento. Ex: "teste_ativo_bit"'
+          hint='Pulso (0→1) que dispara o início da gravação. Ex: "teste_ativo_bit"'
         >
           <input
             value={form.realtime_bit_name}
             onChange={(e) => setForm((f) => ({ ...f, realtime_bit_name: e.target.value }))}
             placeholder="teste_ativo_bit"
+            className={inputCls}
+          />
+        </Field>
+
+        <Field
+          label="Nome do registrador — Bit de parada"
+          hint='Pulso (0→1) que encerra a gravação e fecha o monitor. Ex: "teste_parada_bit"'
+        >
+          <input
+            value={form.realtime_stop_bit_name}
+            onChange={(e) => setForm((f) => ({ ...f, realtime_stop_bit_name: e.target.value }))}
+            placeholder="teste_parada_bit"
             className={inputCls}
           />
         </Field>

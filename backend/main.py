@@ -44,6 +44,7 @@ _CONFIG_DEFAULTS: dict = {
     "ftp_remote_filename": "",
     "realtime_interval_ms": 100,
     "realtime_bit_name": "teste_ativo_bit",
+    "realtime_stop_bit_name": "teste_parada_bit",
     "realtime_forca_name": "forca_atual",
     "realtime_deslocamento_name": "deslocamento_atual",
 }
@@ -391,13 +392,14 @@ async def realtime_stream(request: Request):
     ip           = _config.get("ihm_ip", "")
     port         = int(_config.get("ihm_port", 502))
     timeout      = int(_config.get("ihm_timeout", 3))
-    interval_ms  = max(50, int(_config.get("realtime_interval_ms", 100)))
-    bit_name     = _config.get("realtime_bit_name", "teste_ativo_bit")
-    forca_name   = _config.get("realtime_forca_name", "forca_atual")
-    desl_name    = _config.get("realtime_deslocamento_name", "deslocamento_atual")
+    interval_ms   = max(50, int(_config.get("realtime_interval_ms", 100)))
+    bit_name      = _config.get("realtime_bit_name", "teste_ativo_bit")
+    stop_bit_name = _config.get("realtime_stop_bit_name", "teste_parada_bit")
+    forca_name    = _config.get("realtime_forca_name", "forca_atual")
+    desl_name     = _config.get("realtime_deslocamento_name", "deslocamento_atual")
 
     all_regs = _config.get("ihm_registers", [])
-    rt_regs  = [r for r in all_regs if r["name"] in (bit_name, forca_name, desl_name)]
+    rt_regs  = [r for r in all_regs if r["name"] in (bit_name, stop_bit_name, forca_name, desl_name)]
 
     reader = RealtimeModbusReader(ip, port, timeout, rt_regs)
     loop   = asyncio.get_event_loop()
@@ -409,9 +411,10 @@ async def realtime_stream(request: Request):
                 yield f"data: {json.dumps({'error': 'ihm_offline'})}\n\n"
                 return
 
-            t_start:    float | None = None
-            last_bit:   bool         = False
-            recording:  bool         = False
+            t_start:       float | None = None
+            last_bit:      bool         = False
+            last_stop_bit: bool         = False
+            recording:     bool         = False
 
             while True:
                 if await request.is_disconnected():
@@ -425,15 +428,22 @@ async def realtime_stream(request: Request):
                     await loop.run_in_executor(None, reader.connect)
                     continue
 
-                bit   = bool(data.get(bit_name, 0))
-                forca = data.get(forca_name)
-                desl  = data.get(desl_name)
+                bit      = bool(data.get(bit_name, 0))
+                stop_bit = bool(data.get(stop_bit_name, 0))
+                forca    = data.get(forca_name)
+                desl     = data.get(desl_name)
 
-                # Borda de subida (0→1): inicia gravação
+                # Borda de subida no bit de início
                 if bit and not last_bit and not recording:
                     t_start   = time.time()
                     recording = True
                 last_bit = bit
+
+                # Borda de subida no bit de parada
+                if stop_bit and not last_stop_bit and recording:
+                    yield f"data: {json.dumps({'stopped': True})}\n\n"
+                    break
+                last_stop_bit = stop_bit
 
                 elapsed_ms = int((time.time() - t_start) * 1000) if (recording and t_start) else 0
 

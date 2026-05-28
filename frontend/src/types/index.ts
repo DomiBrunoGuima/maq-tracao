@@ -93,6 +93,7 @@ export interface AppConfig {
   ftp_remote_filename: string;
   realtime_interval_ms: number;
   realtime_bit_name: string;
+  realtime_stop_bit_name: string;
   realtime_forca_name: string;
   realtime_deslocamento_name: string;
 }
@@ -110,6 +111,7 @@ export interface RealtimeFrame {
   deslocamento: number | null;
   t_ms: number;
   error?: string;
+  stopped?: boolean;
 }
 
 export interface ModbusFetchResult {

@@ -210,6 +210,7 @@ export default function RealtimeMonitor() {
         const msg: RealtimeFrame = JSON.parse(e.data);
         setFrame(msg);
 
+        if (msg.stopped) { stopStream(); return; }
         if (msg.error) return;
         if (!msg.recording) return;
 
