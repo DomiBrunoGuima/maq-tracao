@@ -104,7 +104,8 @@ export interface RealtimePoint {
 }
 
 export interface RealtimeFrame {
-  ativo: boolean;
+  recording: boolean;
+  bit: boolean;
   forca: number | null;
   deslocamento: number | null;
   t_ms: number;

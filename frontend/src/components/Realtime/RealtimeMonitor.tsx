@@ -211,7 +211,7 @@ export default function RealtimeMonitor() {
         setFrame(msg);
 
         if (msg.error) return;
-        if (!msg.ativo) return;
+        if (!msg.recording) return;
 
         const f = msg.forca ?? 0;
         const d = msg.deslocamento ?? 0;
@@ -251,8 +251,9 @@ export default function RealtimeMonitor() {
     return () => { esRef.current?.close(); };
   }, []);
 
-  const ativo   = frame?.ativo ?? false;
-  const elapsed = frame?.t_ms ?? 0;
+  const recording = frame?.recording ?? false;
+  const bit       = frame?.bit ?? false;
+  const elapsed   = frame?.t_ms ?? 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -276,15 +277,17 @@ export default function RealtimeMonitor() {
             {connected ? "Conectado" : "Desconectado"}
           </div>
 
-          {/* Test active badge */}
+          {/* Recording / waiting badge */}
           {connected && (
             <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
-              ativo
-                ? "border-accent/50 bg-accent/10 text-accent animate-pulse"
+              recording
+                ? "border-accent/50 bg-accent/10 text-accent"
+                : bit
+                ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
                 : "border-border bg-surface text-muted"
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${ativo ? "bg-accent" : "bg-muted"}`} />
-              {ativo ? "Ensaio em andamento" : "Aguardando início"}
+              <span className={`w-1.5 h-1.5 rounded-full ${recording ? "bg-accent animate-ping" : bit ? "bg-yellow-400" : "bg-muted"}`} />
+              {recording ? "Gravando" : "Aguardando início"}
             </div>
           )}
 
@@ -314,13 +317,13 @@ export default function RealtimeMonitor() {
           icon={<Zap size={20} />}
           label="Força atual"
           value={fmtNum(frame?.forca, 1, "N")}
-          color={ativo ? "text-sky-300" : "text-muted"}
+          color={recording ? "text-sky-300" : "text-muted"}
         />
         <KpiCard
           icon={<MoveHorizontal size={20} />}
           label="Deslocamento atual"
           value={fmtNum(frame?.deslocamento, 2, "mm")}
-          color={ativo ? "text-violet-300" : "text-muted"}
+          color={recording ? "text-violet-300" : "text-muted"}
         />
         <KpiCard
           icon={<Zap size={20} />}
@@ -331,7 +334,7 @@ export default function RealtimeMonitor() {
         <KpiCard
           icon={<Timer size={20} />}
           label="Tempo decorrido"
-          value={ativo && elapsed > 0 ? fmtMs(elapsed) : "—"}
+          value={recording && elapsed > 0 ? fmtMs(elapsed) : "—"}
         />
       </div>
 
@@ -347,7 +350,7 @@ export default function RealtimeMonitor() {
       )}
 
       {/* Waiting for test */}
-      {connected && !ativo && chartData.length === 0 && (
+      {connected && !recording && chartData.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-12 h-12 rounded-full border-2 border-border flex items-center justify-center mb-4">
             <span className="w-3 h-3 rounded-full bg-muted/40" />

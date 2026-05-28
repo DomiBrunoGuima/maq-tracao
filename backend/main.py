@@ -409,8 +409,9 @@ async def realtime_stream(request: Request):
                 yield f"data: {json.dumps({'error': 'ihm_offline'})}\n\n"
                 return
 
-            t_start:  float | None = None
-            last_bit: bool         = False
+            t_start:    float | None = None
+            last_bit:   bool         = False
+            recording:  bool         = False
 
             while True:
                 if await request.is_disconnected():
@@ -424,20 +425,21 @@ async def realtime_stream(request: Request):
                     await loop.run_in_executor(None, reader.connect)
                     continue
 
-                ativo = bool(data.get(bit_name, 0))
+                bit   = bool(data.get(bit_name, 0))
                 forca = data.get(forca_name)
                 desl  = data.get(desl_name)
 
-                if ativo and not last_bit:
-                    t_start = time.time()
-                elif not ativo and last_bit:
-                    t_start = None
-                last_bit = ativo
+                # Borda de subida (0→1): inicia gravação
+                if bit and not last_bit and not recording:
+                    t_start   = time.time()
+                    recording = True
+                last_bit = bit
 
-                elapsed_ms = int((time.time() - t_start) * 1000) if (ativo and t_start) else 0
+                elapsed_ms = int((time.time() - t_start) * 1000) if (recording and t_start) else 0
 
                 payload = json.dumps({
-                    "ativo":        ativo,
+                    "recording":    recording,
+                    "bit":          bit,
                     "forca":        forca,
                     "deslocamento": desl,
                     "t_ms":         elapsed_ms,
