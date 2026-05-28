@@ -36,16 +36,17 @@ interface Props {
   rupture: RupturePoint;
   height?: number;
   onPointClick?: (point: DataPoint) => void;
+  thumbnail?: boolean;
 }
 
-export default function StressStrainChart({ data, rupture, height = 280, onPointClick }: Props) {
+export default function StressStrainChart({ data, rupture, height = 280, onPointClick, thumbnail = false }: Props) {
   const groups = splitByStage(data);
   const active = ORDERED_STAGES.filter((s) => groups[s].length > 1);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        margin={{ top: 8, right: 24, left: 4, bottom: 20 }}
+        margin={thumbnail ? { top: 4, right: 4, left: 0, bottom: 4 } : { top: 8, right: 24, left: 4, bottom: 20 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
@@ -54,19 +55,21 @@ export default function StressStrainChart({ data, rupture, height = 280, onPoint
           dataKey="Deform_Along"
           type="number"
           domain={["auto", "auto"]}
+          hide={thumbnail}
           tickFormatter={(v) => v.toFixed(2)}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "Deformação ε", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 11 }}
+          label={thumbnail ? undefined : { value: "Deformação ε", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 11 }}
         />
         <YAxis
+          hide={thumbnail}
           tickFormatter={(v) => v.toFixed(0)}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "σ (MPa)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 11 }}
+          label={thumbnail ? undefined : { value: "σ (MPa)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 11 }}
         />
-        <Tooltip content={<Tooltip_ />} />
-        <Legend wrapperStyle={{ fontSize: 11, color: "#64748b", paddingTop: 8 }} />
+        {!thumbnail && <Tooltip content={<Tooltip_ />} />}
+        {!thumbnail && <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 10, color: "#64748b", paddingBottom: 6 }} />}
 
         {active.map((stage) => (
           <Area
@@ -75,21 +78,23 @@ export default function StressStrainChart({ data, rupture, height = 280, onPoint
             dataKey="Tensao_Pa"
             name={STAGE_LABELS[stage]}
             stroke={STAGE_COLORS[stage]}
-            strokeWidth={2}
+            strokeWidth={thumbnail ? 1.5 : 2}
             fill={STAGE_COLORS[stage]}
-            fillOpacity={0.07}
+            fillOpacity={thumbnail ? 0.12 : 0.07}
             dot={false}
-            activeDot={{ r: 4, strokeWidth: 0 }}
+            activeDot={thumbnail ? false : { r: 4, strokeWidth: 0 }}
             type="monotone"
-            animationDuration={600}
+            isAnimationActive={!thumbnail}
           />
         ))}
 
-        <Customized
-          component={(p: any) => (
-            <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.Deform_Along} />
-          )}
-        />
+        {!thumbnail && (
+          <Customized
+            component={(p: any) => (
+              <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.Deform_Along} />
+            )}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

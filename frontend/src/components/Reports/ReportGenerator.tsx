@@ -19,7 +19,7 @@ const EMPTY_EMPRESA: DadosEmpresa = { nome: "", endereco: "", telefone: "", emai
 const EMPTY_CLIENTE: DadosCliente = { nome: "", os: "", contato: "", email_cliente: "", telefone_cliente: "", endereco: "", bairro: "", cidade_uf: "", cep: "", data_recebimento: "", periodo_realizacao: "" };
 const EMPTY_AMOSTRA: DadosAmostra = { id_interno: "", id_cliente: "", imagem_data_url: "" };
 const EMPTY_CONDICOES: CondicoesEnsaio = {
-  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "Tamb",
+  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "",
   num_corpos_prova: "1", celula_carga: "", comprimento_inicial_mm: "",
   velocidade_ensaio: "", tipo_corpo_prova: "", distancia_garras_mm: "",
   extensometro: "", largura_cp_mm: "", espessura_cp_mm: "",
@@ -106,6 +106,7 @@ function SectionCard({ title, enabled, onToggle, children }: {
 
 export default function ReportGenerator({ ensaioId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [flags, setFlags] = useState({
     include_empresa: true,
@@ -162,6 +163,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
 
   async function handleGenerate() {
     setLoading(true);
+    setError(null);
     try {
       const req: ReportRequest = {
         ensaio_id: ensaioId,
@@ -173,6 +175,9 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
         operator_name: "", specimen_id: "", standard: "", format: "html", observations: "",
       };
       await generateReport(req);
+    } catch (err: any) {
+      const detail = err?.response?.data ? await err.response.data.text?.() : null;
+      setError(detail ?? err?.message ?? "Erro desconhecido ao gerar relatório");
     } finally {
       setLoading(false);
     }
@@ -345,6 +350,11 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
         </div>
 
         {/* Footer */}
+        {error && (
+          <div className="mx-5 mb-0 mt-2 px-3 py-2 bg-red-900/30 border border-red-700/50 rounded-lg text-xs text-red-300 font-mono shrink-0">
+            {error}
+          </div>
+        )}
         <div className="flex items-center justify-end gap-3 p-5 border-t border-border shrink-0">
           <button onClick={onClose}
             className="px-4 py-2 text-sm text-muted hover:text-white transition-colors">

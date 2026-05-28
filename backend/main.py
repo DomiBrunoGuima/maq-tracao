@@ -9,6 +9,7 @@ import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from .calculator import calculate_kpis, format_chart_data
@@ -24,7 +25,9 @@ from .watcher import DirectoryWatcher
 # State
 # ---------------------------------------------------------------------------
 
-_config: dict = {
+_CONFIG_FILE = Path(__file__).resolve().parent / "config.json"
+
+_CONFIG_DEFAULTS: dict = {
     "watch_directory": str(Path("data").resolve()),
     "auto_load": True,
     "refresh_interval_s": 5,
@@ -38,6 +41,26 @@ _config: dict = {
     "ftp_remote_dir": "/",
     "ftp_remote_filename": "",
 }
+
+
+def _load_config() -> dict:
+    if _CONFIG_FILE.exists():
+        try:
+            saved = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
+            return {**_CONFIG_DEFAULTS, **saved}
+        except Exception as exc:
+            print(f"[config] Erro ao ler config.json: {exc}", flush=True)
+    return dict(_CONFIG_DEFAULTS)
+
+
+def _save_config(cfg: dict) -> None:
+    try:
+        _CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        print(f"[config] Erro ao salvar config.json: {exc}", flush=True)
+
+
+_config: dict = _load_config()
 
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
 
@@ -248,8 +271,11 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
     df = pd.read_json(io.StringIO(r.data_json))
+    print(f"[relatorio] id={req.ensaio_id} colunas={list(df.columns)}", flush=True)
+    print(f"[relatorio] include_ss={req.include_stress_strain} include_fd={req.include_graficos_adicionais}", flush=True)
     kpis = json.loads(r.kpis_json)
     html = generate_html_report(r, df, kpis, req)
+    print(f"[relatorio] html gerado: {len(html)} chars", flush=True)
     return HTMLResponse(content=html)
 
 
@@ -261,6 +287,7 @@ def get_config():
 @app.put("/api/config")
 def update_config(body: ConfigModel):
     _config.update(body.model_dump())
+    _save_config(_config)
     if body.auto_load:
         _watcher.start(body.watch_directory)
         for csv_file in sorted(Path(body.watch_directory).glob("*.csv")):
@@ -326,6 +353,14 @@ def fetch_csv_via_ftp(db: Session = Depends(get_db)):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve frontend dist (built with `npm run build` in frontend/)
+_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _dist.exists():
+    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="static")
+else:
+    print(f"[main] dist não encontrado em {_dist}", flush=True)
 
 
 if __name__ == "__main__":

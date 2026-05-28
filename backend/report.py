@@ -4,6 +4,10 @@ import base64
 import io
 from datetime import datetime
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 import pandas as pd
 
 
@@ -13,64 +17,60 @@ import pandas as pd
 
 def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
     try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
+        fig, ax = plt.subplots(figsize=(8, 4.8))
+
+        x = df["Deform_Along"].values * 100   # dimensionless → %
+        y = df["Tensao_Pa"].values             # já em MPa
+
+        ax.plot(x, y, color="#1e3a5f", linewidth=1.8, label="Tensão")
+
+        rup_pos = int(df["Forca_N"].values.argmax())
+        ax.scatter([x[rup_pos]], [y[rup_pos]], color="#c0392b", s=60, zorder=5,
+                   label=f"Ruptura  {y[rup_pos]:.1f} MPa / {x[rup_pos]:.2f}%")
+
+        ax.set_xlabel("Deformação (%)", fontsize=10)
+        ax.set_ylabel("Tensão (MPa)", fontsize=10)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, alpha=0.25, linestyle="--", color="gray")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(fontsize=9)
+        plt.tight_layout(pad=0.5)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        data = base64.b64encode(buf.read()).decode("utf-8")
+        print(f"[report] stress_strain chart gerado: {len(data)} chars", flush=True)
+        return data
+    except Exception as exc:
+        print(f"[report] _chart_stress_strain_b64 falhou: {exc}", flush=True)
         return ""
-
-    fig, ax = plt.subplots(figsize=(8, 4.8))
-
-    x = df["Deform_Along"].values * 100   # dimensionless → %
-    y = df["Tensao_Pa"].values             # já em MPa
-
-    ax.plot(x, y, color="#1e3a5f", linewidth=1.8, label="Tensão")
-
-    rup_idx = int(df["Forca_N"].idxmax())
-    ax.scatter([x[rup_idx]], [y[rup_idx]], color="#c0392b", s=60, zorder=5,
-               label=f"Ruptura  {y[rup_idx]:.1f} MPa / {x[rup_idx]:.2f}%")
-
-    ax.set_xlabel("Deformação (%)", fontsize=10)
-    ax.set_ylabel("Tensão (MPa)", fontsize=10)
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-    ax.grid(True, alpha=0.25, linestyle="--", color="gray")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.legend(fontsize=9)
-    plt.tight_layout(pad=0.5)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
 
 
 def _chart_force_displacement_b64(df: pd.DataFrame) -> str:
     try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(df["Deslocamento"].values, df["Forca_N"].values,
+                color="#2e6da4", linewidth=1.6)
+        ax.set_xlabel("Deslocamento (mm)", fontsize=10)
+        ax.set_ylabel("Força (N)", fontsize=10)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, alpha=0.25, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        plt.tight_layout(pad=0.5)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+    except Exception as exc:
+        print(f"[report] _chart_force_displacement_b64 falhou: {exc}", flush=True)
         return ""
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(df["Deslocamento"].values, df["Forca_N"].values,
-            color="#2e6da4", linewidth=1.6)
-    ax.set_xlabel("Deslocamento (mm)", fontsize=10)
-    ax.set_ylabel("Força (N)", fontsize=10)
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-    ax.grid(True, alpha=0.25, linestyle="--")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    plt.tight_layout(pad=0.5)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
 
 
 # ──────────────────────────────────────────────
@@ -305,6 +305,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
 
         if req.include_stress_strain:
             chart_b64 = _chart_stress_strain_b64(df)
+            print(f"[relatorio] ss chart len={len(chart_b64)} include_ss={req.include_stress_strain}", flush=True)
             if chart_b64:
                 body_parts.append(
                     f'<p style="margin-bottom:8px">Na Figura {fig_num} estão apresentadas as curvas de tensão em função da deformação.</p>'
@@ -314,6 +315,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
                     f"Figura {fig_num} – Curva Tensão × Deformação — {ensaio.nome}."
                 ))
                 fig_num += 1
+            else:
+                body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico σ×ε: falha na geração — ver terminal do backend]</p>')
 
         if req.include_graficos_adicionais:
             chart2 = _chart_force_displacement_b64(df)
@@ -323,6 +326,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
                     f"Figura {fig_num} – Curva Força × Deslocamento — {ensaio.nome}."
                 ))
                 fig_num += 1
+            else:
+                body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico F×d: falha na geração]</p>')
 
         if req.include_resultados:
             res_table_num = sec_num
@@ -478,6 +483,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
     )
 
     return f"""<!DOCTYPE html>
+<!-- REPORT-ENGINE-V2 -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">

@@ -35,17 +35,19 @@ const Tooltip_ = ({ active, payload, label }: any) => {
 interface Props {
   data: DataPoint[];
   rupture: RupturePoint;
+  height?: number;
   onPointClick?: (point: DataPoint) => void;
+  thumbnail?: boolean;
 }
 
-export default function StressTimeChart({ data, rupture, onPointClick }: Props) {
+export default function StressTimeChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
   const groups = splitByStage(data);
   const active = ORDERED_STAGES.filter((s) => groups[s].length > 1);
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        margin={{ top: 8, right: 24, left: 4, bottom: 20 }}
+        margin={thumbnail ? { top: 4, right: 4, left: 0, bottom: 4 } : { top: 8, right: 24, left: 4, bottom: 20 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
@@ -54,19 +56,21 @@ export default function StressTimeChart({ data, rupture, onPointClick }: Props) 
           dataKey="elapsed_seconds"
           type="number"
           domain={["auto", "auto"]}
+          hide={thumbnail}
           tickFormatter={(v) => `${Number(v).toFixed(0)}s`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "Tempo (s)", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : { value: "Tempo (s)", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 10 }}
         />
         <YAxis
+          hide={thumbnail}
           tickFormatter={(v) => Number(v).toFixed(0)}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "σ (MPa)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : { value: "σ (MPa)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 10 }}
         />
-        <Tooltip content={<Tooltip_ />} />
-        <Legend wrapperStyle={{ fontSize: 10, color: "#64748b", paddingTop: 8 }} />
+        {!thumbnail && <Tooltip content={<Tooltip_ />} />}
+        {!thumbnail && <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 10, color: "#64748b", paddingBottom: 6 }} />}
 
         {active.map((stage) => (
           <Area
@@ -80,28 +84,32 @@ export default function StressTimeChart({ data, rupture, onPointClick }: Props) 
             fillOpacity={0.07}
             dot={false}
             type="monotone"
-            animationDuration={600}
+            isAnimationActive={!thumbnail}
           />
         ))}
 
-        <Line
-          data={data}
-          dataKey="Tensao_Max"
-          name="σmax envelope"
-          stroke="#64748b"
-          strokeWidth={1.5}
-          strokeDasharray="6 3"
-          dot={false}
-          type="monotone"
-          animationDuration={600}
-          legendType="plainline"
-        />
+        {!thumbnail && (
+          <Line
+            data={data}
+            dataKey="Tensao_Max"
+            name="σmax envelope"
+            stroke="#64748b"
+            strokeWidth={1.5}
+            strokeDasharray="6 3"
+            dot={false}
+            type="monotone"
+            isAnimationActive={false}
+            legendType="plainline"
+          />
+        )}
 
-        <Customized
-          component={(p: any) => (
-            <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.elapsed_seconds} />
-          )}
-        />
+        {!thumbnail && (
+          <Customized
+            component={(p: any) => (
+              <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.elapsed_seconds} />
+            )}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

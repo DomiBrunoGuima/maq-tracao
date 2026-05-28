@@ -7,7 +7,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { useEnsaios, useDeleteEnsaio, useScan } from "../../hooks/useEnsaios";
+import { useEnsaios, useDeleteEnsaio } from "../../hooks/useEnsaios";
+import { useFetchFtpCsv } from "../../hooks/useConfig";
 import type { EnsaioSummary } from "../../types";
 
 interface Props {
@@ -31,7 +32,7 @@ export default function Sidebar({
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
   const deleteMut = useDeleteEnsaio();
-  const scanMut = useScan();
+  const fetchMut = useFetchFtpCsv();
 
   return (
     <aside className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-surface h-full">
@@ -51,15 +52,15 @@ export default function Sidebar({
       {/* Actions */}
       <div className="p-3 border-b border-border flex gap-2">
         <button
-          onClick={() => scanMut.mutate()}
-          disabled={scanMut.isPending}
-          title="Reescanear diretório"
+          onClick={() => fetchMut.mutate()}
+          disabled={fetchMut.isPending}
+          title="Buscar CSV da IHM via FTP"
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5
                      bg-accent/10 hover:bg-accent/20 text-accent rounded text-xs
                      font-medium transition-colors disabled:opacity-50"
         >
-          <RefreshCw size={13} className={scanMut.isPending ? "animate-spin" : ""} />
-          Escanear
+          <RefreshCw size={13} className={fetchMut.isPending ? "animate-spin" : ""} />
+          {fetchMut.isPending ? "Buscando..." : "Buscar CSV"}
         </button>
         <button
           onClick={onViewComparison}
@@ -86,7 +87,7 @@ export default function Sidebar({
           <div className="text-center mt-8 px-4">
             <p className="text-xs text-muted">Nenhum ensaio carregado.</p>
             <p className="text-xs text-muted mt-1">
-              Adicione arquivos CSV ao diretório monitorado.
+              Use "Buscar CSV" para importar da IHM.
             </p>
           </div>
         )}

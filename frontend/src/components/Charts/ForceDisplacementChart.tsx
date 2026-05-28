@@ -34,17 +34,19 @@ const Tooltip_ = ({ active, payload, label }: any) => {
 interface Props {
   data: DataPoint[];
   rupture: RupturePoint;
+  height?: number;
   onPointClick?: (point: DataPoint) => void;
+  thumbnail?: boolean;
 }
 
-export default function ForceDisplacementChart({ data, rupture, onPointClick }: Props) {
+export default function ForceDisplacementChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
   const groups = splitByStage(data);
   const active = ORDERED_STAGES.filter((s) => groups[s].length > 1);
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        margin={{ top: 8, right: 24, left: 4, bottom: 20 }}
+        margin={thumbnail ? { top: 4, right: 4, left: 0, bottom: 4 } : { top: 8, right: 24, left: 4, bottom: 20 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
@@ -53,19 +55,21 @@ export default function ForceDisplacementChart({ data, rupture, onPointClick }: 
           dataKey="Deslocamento"
           type="number"
           domain={["auto", "auto"]}
+          hide={thumbnail}
           tickFormatter={(v) => `${Number(v).toFixed(1)}`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "d (mm)", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : { value: "d (mm)", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 10 }}
         />
         <YAxis
+          hide={thumbnail}
           tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={{ value: "F (N)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : { value: "F (N)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 10 }}
         />
-        <Tooltip content={<Tooltip_ />} />
-        <Legend wrapperStyle={{ fontSize: 10, color: "#64748b", paddingTop: 8 }} />
+        {!thumbnail && <Tooltip content={<Tooltip_ />} />}
+        {!thumbnail && <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 10, color: "#64748b", paddingBottom: 6 }} />}
 
         {active.map((stage) => (
           <Area
@@ -74,20 +78,22 @@ export default function ForceDisplacementChart({ data, rupture, onPointClick }: 
             dataKey="Forca_N"
             name={STAGE_LABELS[stage]}
             stroke={STAGE_COLORS[stage]}
-            strokeWidth={2}
+            strokeWidth={thumbnail ? 1.5 : 2}
             fill={STAGE_COLORS[stage]}
-            fillOpacity={0.07}
+            fillOpacity={thumbnail ? 0.12 : 0.07}
             dot={false}
             type="monotone"
-            animationDuration={600}
+            isAnimationActive={!thumbnail}
           />
         ))}
 
-        <Customized
-          component={(p: any) => (
-            <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.Deslocamento} />
-          )}
-        />
+        {!thumbnail && (
+          <Customized
+            component={(p: any) => (
+              <RuptureMarker xAxisMap={p.xAxisMap} offset={p.offset} ruptureValue={rupture.Deslocamento} />
+            )}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );
