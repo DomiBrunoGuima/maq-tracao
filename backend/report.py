@@ -104,9 +104,10 @@ def _td2(label1: str, val1: str, label2: str, val2: str) -> str:
 
 def _section_header(num: int, title: str) -> str:
     return (
-        f'<h2 style="font-size:12pt;font-weight:bold;margin:28px 0 10px;'
-        f'text-transform:uppercase;letter-spacing:0.5px;'
-        f'border-bottom:1px solid #ccc;padding-bottom:6px">'
+        f'<h2 style="font-size:10.5pt;font-weight:bold;margin:28px 0 12px;'
+        f'text-transform:uppercase;letter-spacing:0.6px;color:#1e3a5f;'
+        f'background:#f4f6f9;border-left:4px solid #1e3a5f;'
+        f'padding:8px 12px">'
         f'{num}&nbsp;&nbsp;{_esc(title)}</h2>'
     )
 
@@ -163,18 +164,29 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
         if req.empresa.site:     parts.append(req.empresa.site)
         empresa_endereco = " &nbsp;|&nbsp; ".join(parts)
 
+    numero_html = (
+        f'<div style="font-size:9pt;color:#444;margin-top:3px">N°&nbsp;{_esc(numero_rel)}</div>'
+        if numero_rel else ""
+    )
+    emitido_html = f'<div style="font-size:7.5pt;color:#888;margin-top:6px">Emitido em {now}</div>'
+
     header_html = f"""
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;
-                margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1e3a5f">
-      <div style="min-width:110px">{logo_html}</div>
-      <div style="text-align:center;flex:1">
-        <div style="font-size:13pt;font-weight:bold">Relatório de Ensaio</div>
-        {"<div style='font-size:12pt;font-weight:bold'>" + _esc(numero_rel) + "</div>" if numero_rel else ""}
+    <div style="border-top:5px solid #1e3a5f;padding-top:16px;margin-bottom:0">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:14px">
+          {logo_html}
+          <div>
+            <div style="font-size:11pt;font-weight:bold;color:#1e3a5f">{_esc(empresa_nome)}</div>
+            {"<div style='font-size:8pt;color:#555;margin-top:3px'>" + empresa_endereco + "</div>" if empresa_endereco else ""}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#1e3a5f">Relatório de Ensaio de Tração</div>
+          {numero_html}
+          {emitido_html}
+        </div>
       </div>
-      <div style="text-align:right;font-size:8pt;color:#444;min-width:200px;line-height:1.7">
-        {_esc(empresa_nome)}<br/>
-        {empresa_endereco}
-      </div>
+      <div style="border-top:1px solid #c8d0dc;margin-bottom:20px"></div>
     </div>
     """
     body_parts.append(header_html)
@@ -211,13 +223,22 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
     if req.include_conclusao: toc_items.append("CONCLUSÃO")
     if toc_items:
         toc_rows = "".join(
-            f'<tr><td style="padding:3px 0">{i+1}&nbsp;&nbsp;{_esc(t)}</td></tr>'
+            f'<tr>'
+            f'<td style="padding:7px 14px;width:30px;font-weight:bold;color:#1e3a5f;'
+            f'vertical-align:top;{"border-bottom:1px solid #eee;" if i < len(toc_items)-1 else ""}">'
+            f'{i+1}</td>'
+            f'<td style="padding:7px 0 7px 4px;font-size:10pt;'
+            f'{"border-bottom:1px solid #eee;" if i < len(toc_items)-1 else ""}">'
+            f'{_esc(t.title())}</td>'
+            f'</tr>'
             for i, t in enumerate(toc_items)
         )
         body_parts.append(
-            f'<div style="margin:20px 0">'
-            f'<div style="font-weight:bold;margin-bottom:8px">SUMÁRIO</div>'
-            f'<table style="width:100%;font-size:10pt">{toc_rows}</table>'
+            f'<div style="margin:24px 0;border:1px solid #d0d7e3;border-radius:2px;overflow:hidden">'
+            f'<div style="background:#1e3a5f;color:#fff;padding:7px 14px;'
+            f'font-size:8.5pt;font-weight:bold;letter-spacing:1px;text-transform:uppercase">'
+            f'Sumário</div>'
+            f'<table style="width:100%;border-collapse:collapse">{toc_rows}</table>'
             f'</div>'
         )
 
@@ -337,20 +358,24 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
                 f'Tabela {res_table_num} – Resultados do ensaio de Tração.</p>'
             )
             kpi_rows = [
-                ("Módulo de Elasticidade", f'{kpis["modulo_elasticidade_GPa"]:.3f}', "GPa"),
-                ("Módulo de Elasticidade", f'{kpis["modulo_elasticidade_MPa"]:.1f}', "MPa"),
-                ("Tensão Máxima (σmax)", f'{kpis["tensao_max_MPa"]:.2f}', "MPa"),
+                ("Área da Seção Transversal (A)", f'{kpis["area_secao_mm2"]:.4f}', "mm²") if kpis.get("area_secao_mm2") else None,
+                ("Comprimento Inicial (L₀)", f'{kpis["comprimento_inicial_mm"]:.2f}', "mm") if kpis.get("comprimento_inicial_mm") else None,
+                ("Módulo de Elasticidade (E)", f'{kpis["modulo_elasticidade_GPa"]:.3f}', "GPa"),
+                ("Módulo de Elasticidade (E)", f'{kpis["modulo_elasticidade_MPa"]:.1f}', "MPa"),
+                ("Tensão Máxima (σmax = Fmax/A)", f'{kpis["tensao_max_calc_MPa"]:.2f}', "MPa") if kpis.get("tensao_max_calc_MPa") else ("Tensão Máxima (σmax)", f'{kpis["tensao_max_MPa"]:.2f}', "MPa"),
                 ("Força Máxima (Fmax)", f'{kpis["forca_max_N"]:.1f}', "N"),
                 ("Força Máxima (Fmax)", f'{kpis["forca_max_kN"]:.4f}', "kN"),
-                ("Alongamento na Ruptura (δ)", f'{kpis["alonga_ruptura_pct"]:.2f}', "%"),
+                ("Alongamento na Ruptura (A% = d/L₀×100)", f'{kpis["alonga_calc_pct"]:.2f}', "%") if kpis.get("alonga_calc_pct") else ("Alongamento na Ruptura (δ)", f'{kpis["alonga_ruptura_pct"]:.2f}', "%"),
                 ("Deslocamento Máximo", f'{kpis["deslocamento_max_mm"]:.2f}', "mm"),
                 ("Tempo até a Ruptura", f'{kpis["tempo_ruptura_s"]:.1f}', "s"),
                 ("Rigidez (k)", f'{kpis["rigidez_N_mm"]:.2f}', "N/mm"),
                 ("Energia Absorvida até Ruptura", f'{kpis["energia_J"]:.2f}', "J"),
                 ("Taxa de Carregamento Média", f'{kpis["taxa_carregamento_N_s"]:.2f}', "N/s"),
             ]
+            kpi_rows = [r for r in kpi_rows if r is not None]
             if kpis.get("tensao_escoamento_MPa") is not None:
-                kpi_rows.insert(2, ("Tensão de Escoamento (est.)", f'{kpis["tensao_escoamento_MPa"]:.2f}', "MPa"))
+                # Insere após o módulo de elasticidade (índice 3)
+                kpi_rows.insert(3, ("Tensão de Escoamento (est.)", f'{kpis["tensao_escoamento_MPa"]:.2f}', "MPa"))
             kpi_html = "".join(
                 f'<tr>'
                 f'<td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
@@ -455,30 +480,32 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
 
     # ── OBSERVAÇÕES FINAIS ────────────────────
     if req.include_observacoes_finais and req.observacoes_finais:
-        body_parts.append(
-            f'<div style="margin-top:30px;border-top:1px solid #ccc;padding-top:16px">'
-            f'<div style="font-weight:bold;margin-bottom:8px">Observações Finais</div>'
+        lines_html = "".join(
+            f'<p style="margin:5px 0;font-size:9pt;color:#444;padding-left:12px;'
+            f'border-left:2px solid #ddd">{_esc(line.strip())}</p>'
+            for line in req.observacoes_finais.splitlines() if line.strip()
         )
-        for line in req.observacoes_finais.splitlines():
-            if line.strip():
-                body_parts.append(f'<p style="margin:4px 0">— {_esc(line.strip())}</p>')
         body_parts.append(
-            f'<p style="text-align:center;margin-top:20px;font-weight:bold">— Fim do Relatório —</p>'
+            f'<div style="margin-top:32px;border-top:1px solid #ddd;padding-top:14px">'
+            f'<div style="font-size:8.5pt;font-weight:bold;letter-spacing:0.8px;'
+            f'text-transform:uppercase;color:#666;margin-bottom:10px">Observações</div>'
+            f'{lines_html}'
             f'</div>'
         )
 
     # ── FOOTER ────────────────────────────────
-    footer_parts = [empresa_nome]
+    footer_parts = []
     if req.include_empresa:
-        if req.empresa.endereco: footer_parts.append(req.empresa.endereco)
-        if req.empresa.telefone: footer_parts.append(f"Tel. {req.empresa.telefone}")
-        if req.empresa.email:    footer_parts.append(f"E-mail {req.empresa.email}")
-    footer_line = " &nbsp;|&nbsp; ".join(footer_parts)
+        if req.empresa.nome:     footer_parts.append(_esc(req.empresa.nome))
+        if req.empresa.endereco: footer_parts.append(_esc(req.empresa.endereco))
+        if req.empresa.telefone: footer_parts.append(f"Tel.&nbsp;{_esc(req.empresa.telefone)}")
+        if req.empresa.email:    footer_parts.append(_esc(req.empresa.email))
+    footer_company = " &nbsp;&nbsp;·&nbsp;&nbsp; ".join(footer_parts) if footer_parts else ""
     body_parts.append(
-        f'<div style="margin-top:40px;border-top:1px solid #ccc;padding-top:8px;'
-        f'font-size:8pt;text-align:center;color:#666">'
-        f'{footer_line}<br/>'
-        f'<span style="font-size:7.5pt">Gerado em {now}</span>'
+        f'<div style="margin-top:40px;border-top:2px solid #1e3a5f;padding-top:10px;'
+        f'font-size:8pt;color:#666;display:flex;justify-content:space-between;align-items:center">'
+        f'<span>{footer_company}</span>'
+        f'<span style="color:#999;font-size:7.5pt">Gerado em {now}</span>'
         f'</div>'
     )
 

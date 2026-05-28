@@ -14,7 +14,7 @@ _PRE_UTS = frozenset([
 ])
 
 
-def calculate_kpis(df: pd.DataFrame) -> dict:
+def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
     rupture_loc = df["Forca_N"].idxmax()
     rupture_row = df.loc[rupture_loc]
 
@@ -27,6 +27,7 @@ def calculate_kpis(df: pd.DataFrame) -> dict:
     tensao_max = float(df["Tensao_Max"].max())
     alonga_ruptura = float(rupture_row["Alonga_Ruptura"])
     deslocamento_max = float(df["Deslocamento"].max())
+    deslocamento_ruptura = float(rupture_row["Deslocamento"])
     tempo_ruptura = float(rupture_row["elapsed_seconds"])
 
     modulo_medio = float(elastic_df["Modulo_Elast"].mean()) if len(elastic_df) > 0 else 0.0
@@ -70,42 +71,71 @@ def calculate_kpis(df: pd.DataFrame) -> dict:
             elastic_df["Modulo_Elast"].std() / elastic_df["Modulo_Elast"].mean()
         )
 
-    # Back-calculate cross-section area: A = F/σ  (Tensao_Pa in MPa = N/mm²)
-    mask_stress = loading_df["Tensao_Pa"] > 0.5
-    if mask_stress.sum() >= 3:
-        a_series = loading_df.loc[mask_stress, "Forca_N"] / loading_df.loc[mask_stress, "Tensao_Pa"]
-        area_mm2: float | None = float(a_series.median())
-    else:
-        area_mm2 = None
+    # ── Área da seção e comprimento inicial ─────────────────────────────────
+    # Prioridade 1: registrador da IHM (valor configurado diretamente na máquina)
+    # Prioridade 2: back-cálculo pela série CSV (F/σ e ΔL/ε)
+    area_mm2: float | None = None
+    comprimento_inicial_mm: float | None = None
 
-    # Back-calculate gauge length: L₀ = ΔL/ε  (Deslocamento in mm, Deform_Along dimensionless)
-    mask_strain = loading_df["Deform_Along"] > 0.0001
-    if mask_strain.sum() >= 3:
-        l0_series = loading_df.loc[mask_strain, "Deslocamento"] / loading_df.loc[mask_strain, "Deform_Along"]
-        comprimento_inicial_mm: float | None = float(l0_series.median())
-    else:
-        comprimento_inicial_mm = None
+    if ihm_params:
+        v = ihm_params.get("area_seccao")
+        if v is not None:
+            area_mm2 = float(v)
+        v = ihm_params.get("comprimento_inicial")
+        if v is not None:
+            comprimento_inicial_mm = float(v)
 
-    # Independent σmáx = Fmáx / A
+    if area_mm2 is None:
+        mask_stress = loading_df["Tensao_Pa"] > 0.5
+        if mask_stress.sum() >= 3:
+            a_series = loading_df.loc[mask_stress, "Forca_N"] / loading_df.loc[mask_stress, "Tensao_Pa"]
+            area_mm2 = float(a_series.median())
+
+    if comprimento_inicial_mm is None:
+        mask_strain = loading_df["Deform_Along"] > 0.0001
+        if mask_strain.sum() >= 3:
+            l0_series = loading_df.loc[mask_strain, "Deslocamento"] / loading_df.loc[mask_strain, "Deform_Along"]
+            comprimento_inicial_mm = float(l0_series.median())
+
+    # ── σmáx = Fmáx / A  (fórmula da imagem) ────────────────────────────────
     tensao_max_calc_MPa: float | None = (forca_max / area_mm2) if area_mm2 else None
 
-    # Independent A% = (d_ruptura / L₀) × 100
-    deslocamento_ruptura = float(rupture_row["Deslocamento"])
+    # ── A% = ((Lf − L0) / L0) × 100  ────────────────────────────────────────
+    # Lf = L0 + deslocamento_ruptura  →  A% = (d_ruptura / L0) × 100
     alonga_calc_pct: float | None = (
         (deslocamento_ruptura / comprimento_inicial_mm) * 100
-        if comprimento_inicial_mm
-        else None
+        if comprimento_inicial_mm else None
     )
 
-    # E via linear regression on elastic region: slope of σ vs ε
+    # ── E via regressão linear na região elástica  ───────────────────────────
+    # Se A e L0 da IHM estiverem disponíveis, recalcula σ e ε diretamente de
+    # Forca_N e Deslocamento para máxima precisão
     modulo_regressao_MPa: float | None = None
-    if len(elastic_df) >= 3 and elastic_df["Deform_Along"].std() > 0:
-        coeffs = np.polyfit(
-            elastic_df["Deform_Along"].values,
-            elastic_df["Tensao_Pa"].values,
-            1,
-        )
-        modulo_regressao_MPa = float(coeffs[0])
+    if len(elastic_df) >= 3:
+        if area_mm2 and comprimento_inicial_mm:
+            sigma_el = elastic_df["Forca_N"].values / area_mm2
+            eps_el   = elastic_df["Deslocamento"].values / comprimento_inicial_mm
+        else:
+            sigma_el = elastic_df["Tensao_Pa"].values
+            eps_el   = elastic_df["Deform_Along"].values
+        if float(np.std(eps_el)) > 0:
+            coeffs = np.polyfit(eps_el, sigma_el, 1)
+            modulo_regressao_MPa = float(coeffs[0])
+
+    # ── Dados extras da IHM (se disponíveis) ─────────────────────────────────
+    forca_maxima_ihm: float | None = None
+    velocidade_ihm: float | None = None
+    deslocamento_pico_ihm: float | None = None
+    if ihm_params:
+        v = ihm_params.get("forca_maxima")
+        if v is not None:
+            forca_maxima_ihm = float(v)
+        for k in ("velocidade_processamento", "velocidade_programa", "velocidade_pro"):
+            if ihm_params.get(k) is not None:
+                velocidade_ihm = float(ihm_params[k]); break
+        for k in ("deslocamento_pico", "deslocamento_programado", "deslocamento_p"):
+            if ihm_params.get(k) is not None:
+                deslocamento_pico_ihm = float(ihm_params[k]); break
 
     return {
         "forca_max_N": forca_max,
@@ -121,12 +151,17 @@ def calculate_kpis(df: pd.DataFrame) -> dict:
         "energia_J": energia,
         "tensao_escoamento_MPa": tensao_escoamento,
         "cv_modulo": cv_modulo,
-        # Derived specimen parameters
+        # Parâmetros do corpo de prova (IHM ou back-calculado)
         "area_secao_mm2": area_mm2,
         "comprimento_inicial_mm": comprimento_inicial_mm,
+        # KPIs recalculados com A e L0 precisos
         "tensao_max_calc_MPa": tensao_max_calc_MPa,
         "alonga_calc_pct": alonga_calc_pct,
         "modulo_regressao_MPa": modulo_regressao_MPa,
+        # Registradores extras da IHM
+        "forca_maxima_ihm": forca_maxima_ihm,
+        "velocidade_ihm": velocidade_ihm,
+        "deslocamento_pico_ihm": deslocamento_pico_ihm,
     }
 
 

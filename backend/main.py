@@ -69,6 +69,28 @@ _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
 # CSV loading helper (called at startup and by watcher)
 # ---------------------------------------------------------------------------
 
+def _fetch_ihm_params() -> dict | None:
+    """Lê registradores da IHM via Modbus. Retorna None se inacessível."""
+    ip      = _config.get("ihm_ip", "")
+    port    = int(_config.get("ihm_port", 502))
+    timeout = int(_config.get("ihm_timeout", 3))
+    regs    = _config.get("ihm_registers", [])
+    if not ip or not regs:
+        return None
+    return capture_registers(ip, port, timeout, regs)
+
+
+def _save_ihm_params(filename: str, db, params: dict) -> None:
+    record = ParametrosIHMDB(
+        ensaio_filename=filename,
+        ihm_ip=_config.get("ihm_ip", ""),
+        params_json=json.dumps(params),
+    )
+    db.add(record)
+    db.commit()
+    print(f"[modbus] Parâmetros capturados para {filename}: {params}", flush=True)
+
+
 def _load_csv(filepath: str) -> None:
     db = SessionLocal()
     try:
@@ -81,7 +103,11 @@ def _load_csv(filepath: str) -> None:
             return
 
         metadata, df = parse_csv(filepath)
-        kpis = calculate_kpis(df)
+
+        # Busca parâmetros da IHM ANTES de calcular KPIs (area_seccao e comprimento_inicial
+        # entram diretamente nas fórmulas σ = F/A, ε = ΔL/L₀, A% = (d/L₀)×100)
+        ihm_params = _fetch_ihm_params()
+        kpis = calculate_kpis(df, ihm_params=ihm_params)
 
         data_ensaio = df["DATA"].iloc[0].strip() if len(df) > 0 else "01/01/2026"
 
@@ -108,10 +134,12 @@ def _load_csv(filepath: str) -> None:
         )
         db.add(record)
         db.commit()
-        print(f"[loader] Loaded: {path.name}")
+        print(f"[loader] Loaded: {path.name}", flush=True)
 
-        # Captura parâmetros da IHM via Modbus (falha silenciosa)
-        _capture_ihm_params(path.name, db)
+        if ihm_params is not None:
+            _save_ihm_params(path.name, db, ihm_params)
+        elif _config.get("ihm_ip"):
+            print(f"[modbus] IHM inacessível — parâmetros não capturados para {path.name}", flush=True)
 
     except Exception as exc:
         print(f"[loader] Error loading {filepath}: {exc}")
@@ -120,31 +148,15 @@ def _load_csv(filepath: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# IHM Modbus capture
+# IHM helpers (mantidos para compatibilidade com chamadas externas)
 # ---------------------------------------------------------------------------
 
 def _capture_ihm_params(filename: str, db) -> None:
-    ip      = _config.get("ihm_ip", "")
-    port    = int(_config.get("ihm_port", 502))
-    timeout = int(_config.get("ihm_timeout", 3))
-    regs    = _config.get("ihm_registers", [])
-
-    if not ip:
-        return
-
-    params = capture_registers(ip, port, timeout, regs)
+    params = _fetch_ihm_params()
     if params is None:
-        print(f"[modbus] IHM inacessível — parâmetros não capturados para {filename}")
+        print(f"[modbus] IHM inacessível — parâmetros não capturados para {filename}", flush=True)
         return
-
-    record = ParametrosIHMDB(
-        ensaio_filename=filename,
-        ihm_ip=ip,
-        params_json=json.dumps(params),
-    )
-    db.add(record)
-    db.commit()
-    print(f"[modbus] Parâmetros capturados para {filename}: {params}")
+    _save_ihm_params(filename, db, params)
 
 
 # ---------------------------------------------------------------------------
@@ -216,13 +228,24 @@ def get_ensaio(id: int, db: Session = Depends(get_db)):
     )
 
 
+def _load_ihm_params_for(ensaio_filename: str, db) -> dict | None:
+    rec = (
+        db.query(ParametrosIHMDB)
+        .filter(ParametrosIHMDB.ensaio_filename == ensaio_filename)
+        .order_by(ParametrosIHMDB.captured_at.desc())
+        .first()
+    )
+    return json.loads(rec.params_json) if rec else None
+
+
 @app.get("/api/ensaios/{id}/kpis")
 def get_kpis(id: int, db: Session = Depends(get_db)):
     r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
     df = pd.read_json(io.StringIO(r.data_json))
-    return JSONResponse(content=calculate_kpis(df))
+    ihm_params = _load_ihm_params_for(r.filename, db)
+    return JSONResponse(content=calculate_kpis(df, ihm_params=ihm_params))
 
 
 @app.get("/api/ensaios/{id}/curvas")
@@ -271,11 +294,9 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
     df = pd.read_json(io.StringIO(r.data_json))
-    print(f"[relatorio] id={req.ensaio_id} colunas={list(df.columns)}", flush=True)
-    print(f"[relatorio] include_ss={req.include_stress_strain} include_fd={req.include_graficos_adicionais}", flush=True)
-    kpis = json.loads(r.kpis_json)
+    ihm_params = _load_ihm_params_for(r.filename, db)
+    kpis = calculate_kpis(df, ihm_params=ihm_params)
     html = generate_html_report(r, df, kpis, req)
-    print(f"[relatorio] html gerado: {len(html)} chars", flush=True)
     return HTMLResponse(content=html)
 
 
