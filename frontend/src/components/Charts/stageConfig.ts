@@ -1,14 +1,13 @@
 import type { DataPoint } from "../../types";
 
 export const STAGE_COLORS: Record<string, string> = {
-  elastico_linear:     "#00d4ff",
+  elastico_linear:     "#38bdf8",
   escoamento_superior: "#f59e0b",
   patamar_escoamento:  "#10b981",
-  encruamento:         "#8b5cf6",
+  encruamento:         "#a78bfa",
   estriccao:           "#f97316",
   ruptura:             "#ef4444",
-  // retrocompatibilidade
-  carregamento:        "#00d4ff",
+  carregamento:        "#38bdf8",
   pos_ruptura:         "#f97316",
 };
 
@@ -43,10 +42,28 @@ export function splitByStage(data: DataPoint[]): Record<string, DataPoint[]> {
   for (let i = 0; i < data.length; i++) {
     const stage = String(data[i].fase ?? "");
     if (!(stage in groups)) continue;
+    // Include bridge point from previous stage to ensure visual continuity
     if (groups[stage].length === 0 && i > 0) {
       groups[stage].push(data[i - 1]);
     }
     groups[stage].push(data[i]);
   }
   return groups;
+}
+
+/** Returns X ranges per stage for use as ReferenceArea bands. */
+export function stageRanges(data: DataPoint[], xKey: string): { stage: string; x1: number; x2: number }[] {
+  const ranges: { stage: string; x1: number; x2: number }[] = [];
+  for (const pt of data) {
+    const stage = String(pt.fase ?? "");
+    const x = typeof pt[xKey] === "number" ? (pt[xKey] as number) : null;
+    if (x == null) continue;
+    const last = ranges[ranges.length - 1];
+    if (!last || last.stage !== stage) {
+      ranges.push({ stage, x1: x, x2: x });
+    } else {
+      last.x2 = x;
+    }
+  }
+  return ranges;
 }

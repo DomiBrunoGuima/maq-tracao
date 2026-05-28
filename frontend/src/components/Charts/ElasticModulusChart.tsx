@@ -1,30 +1,32 @@
 import {
-  Area,
   CartesianGrid,
   ComposedChart,
   Customized,
-  Legend,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
+  Line,
 } from "recharts";
+import { useMemo } from "react";
 import type { DataPoint, RupturePoint } from "../../types";
 import { RuptureMarker } from "./RuptureMarker";
-import { ORDERED_STAGES, STAGE_COLORS, STAGE_LABELS, splitByStage } from "./stageConfig";
 
 const Tooltip_ = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-[#0a0c14] border border-border rounded-xl px-3 py-2.5 shadow-2xl text-xs font-mono">
-      <p className="text-muted mb-2 pb-1.5 border-b border-border/60">
-        t = <span className="text-white">{Number(label).toFixed(0)} s</span>
+      <p className="text-muted mb-1.5 pb-1.5 border-b border-border/60">
+        t = <span className="text-white">{Number(label).toFixed(1)} s</span>
       </p>
       {payload.map((p: any) => (
-        <div key={p.dataKey + p.name} className="flex items-center gap-2 mt-1">
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: p.stroke ?? p.color }} />
+        <div key={p.dataKey} className="flex items-center gap-2 mt-1">
+          <span className="w-2 h-0.5 rounded-full flex-shrink-0" style={{ background: p.stroke }} />
           <span className="text-slate-400">{p.name}</span>
-          <span className="text-white font-semibold ml-auto pl-4">{Number(p.value).toFixed(1)} MPa</span>
+          <span className="text-white font-semibold ml-auto pl-4">
+            {Number(p.value).toFixed(0)} MPa
+          </span>
         </div>
       ))}
     </div>
@@ -40,52 +42,96 @@ interface Props {
 }
 
 export default function ElasticModulusChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
-  const groups = splitByStage(data);
-  const active = ORDERED_STAGES.filter((s) => groups[s].length > 1);
+  const { filtered, median, yMax } = useMemo(() => {
+    // Extract valid numeric E values from the loading phases only
+    const loadingPhases = new Set(["elastico_linear", "escoamento_superior", "patamar_escoamento", "encruamento", "carregamento"]);
+    const vals = data
+      .filter(pt => loadingPhases.has(String(pt.fase ?? "")))
+      .map(pt => typeof pt.Modulo_Elast === "number" ? pt.Modulo_Elast : null)
+      .filter((v): v is number => v !== null && v > 0);
+
+    if (!vals.length) return { filtered: data, median: null, yMax: undefined };
+
+    // IQR-based outlier filter: keep values within [Q1 - 1.5×IQR, Q3 + 1.5×IQR]
+    const sorted = [...vals].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length * 0.25)];
+    const q3 = sorted[Math.floor(sorted.length * 0.75)];
+    const iqr = q3 - q1;
+    const lo  = Math.max(0, q1 - 1.5 * iqr);
+    const hi  = q3 + 1.5 * iqr;
+    const med = sorted[Math.floor(sorted.length / 2)];
+
+    const filtered = data.map(pt => {
+      const v = typeof pt.Modulo_Elast === "number" ? pt.Modulo_Elast : null;
+      if (v === null || v < lo || v > hi) return { ...pt, Modulo_Elast: null };
+      return pt;
+    });
+
+    return { filtered, median: med, yMax: hi * 1.1 };
+  }, [data]);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        margin={thumbnail ? { top: 4, right: 4, left: 0, bottom: 4 } : { top: 8, right: 24, left: 4, bottom: 20 }}
+        data={filtered}
+        margin={thumbnail ? { top: 2, right: 2, left: 0, bottom: 2 } : { top: 8, right: 24, left: 8, bottom: 24 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="#1a1e2e" vertical={false} />
+
         <XAxis
           dataKey="elapsed_seconds"
           type="number"
-          domain={["auto", "auto"]}
+          domain={[0, "auto"]}
           hide={thumbnail}
           tickFormatter={(v) => `${Number(v).toFixed(0)}s`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={thumbnail ? undefined : { value: "Tempo (s)", position: "insideBottom", offset: -12, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : {
+            value: "Tempo (s)",
+            position: "insideBottom", offset: -14,
+            fill: "#475569", fontSize: 10,
+          }}
         />
         <YAxis
+          domain={[0, yMax ?? "auto"]}
           hide={thumbnail}
-          tickFormatter={(v) => Number(v).toFixed(0)}
+          tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={thumbnail ? undefined : { value: "E (MPa)", angle: -90, position: "insideLeft", offset: 10, fill: "#475569", fontSize: 10 }}
+          label={thumbnail ? undefined : {
+            value: "E (MPa)", angle: -90,
+            position: "insideLeft", offset: 14,
+            fill: "#475569", fontSize: 10,
+          }}
         />
-        {!thumbnail && <Tooltip content={<Tooltip_ />} />}
-        {!thumbnail && <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 10, color: "#64748b", paddingBottom: 6 }} />}
 
-        {active.map((stage) => (
-          <Area
-            key={stage}
-            data={groups[stage]}
-            dataKey="Modulo_Elast"
-            name={STAGE_LABELS[stage]}
-            stroke={STAGE_COLORS[stage]}
-            strokeWidth={thumbnail ? 1.5 : 2}
-            fill={STAGE_COLORS[stage]}
-            fillOpacity={thumbnail ? 0.12 : 0.07}
-            dot={false}
-            type="monotone"
-            isAnimationActive={!thumbnail}
+        {/* Median reference line */}
+        {!thumbnail && median != null && (
+          <ReferenceLine
+            y={median}
+            stroke="#38bdf8"
+            strokeDasharray="6 3"
+            strokeWidth={1}
+            label={{ value: `E̅ ${median.toFixed(0)} MPa`, position: "insideTopRight", fill: "#38bdf8", fontSize: 9 }}
           />
-        ))}
+        )}
+
+        {!thumbnail && <Tooltip content={<Tooltip_ />} />}
+
+        <Line
+          dataKey="Modulo_Elast"
+          name="Módulo de Elasticidade"
+          stroke="#38bdf8"
+          strokeWidth={thumbnail ? 1.5 : 2}
+          dot={false}
+          activeDot={thumbnail ? false : { r: 4, strokeWidth: 0, fill: "#38bdf8" }}
+          type="monotone"
+          connectNulls={false}
+          isAnimationActive={!thumbnail}
+          legendType="plainline"
+        />
 
         {!thumbnail && (
           <Customized
