@@ -113,6 +113,12 @@ def _load_csv(filepath: str) -> None:
 
         metadata, df = parse_csv(filepath)
 
+        # Arquivo pode ser detectado pelo watcher enquanto ainda está sendo escrito.
+        # Menos de 10 amostras válidas indica arquivo incompleto — ignora silenciosamente.
+        if df["Forca_N"].dropna().shape[0] < 10:
+            print(f"[loader] Ignorando {path.name}: {df['Forca_N'].dropna().shape[0]} amostras (arquivo incompleto?)", flush=True)
+            return
+
         # Busca parâmetros da IHM ANTES de calcular KPIs (area_seccao e comprimento_inicial
         # entram diretamente nas fórmulas σ = F/A, ε = ΔL/L₀, A% = (d/L₀)×100)
         ihm_params = _fetch_ihm_params()

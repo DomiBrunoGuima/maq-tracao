@@ -15,6 +15,10 @@ _PRE_UTS = frozenset([
 
 
 def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
+    valid_forca = df["Forca_N"].dropna()
+    if valid_forca.empty:
+        raise ValueError(f"CSV sem dados de força válidos ({len(df)} amostras) — arquivo incompleto ou corrompido")
+
     rupture_loc = df["Forca_N"].idxmax()
     rupture_row = df.loc[rupture_loc]
 
