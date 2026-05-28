@@ -4,11 +4,12 @@ import {
   GitCompare,
   Radio,
   RefreshCw,
+  RotateCcw,
   Settings,
   Trash2,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { useEnsaios, useDeleteEnsaio } from "../../hooks/useEnsaios";
+import { useEnsaios, useDeleteEnsaio, useReimportAll } from "../../hooks/useEnsaios";
 import { useFetchFtpCsv } from "../../hooks/useConfig";
 import type { EnsaioSummary } from "../../types";
 
@@ -36,6 +37,7 @@ export default function Sidebar({
   const { data: ensaios, isLoading } = useEnsaios();
   const deleteMut = useDeleteEnsaio();
   const fetchMut = useFetchFtpCsv();
+  const reimportMut = useReimportAll();
 
   return (
     <aside className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-surface h-full">
@@ -93,6 +95,20 @@ export default function Sidebar({
         {fetchMut.isSuccess && (
           <p className="text-xs text-green-400 px-1">CSV importado com sucesso.</p>
         )}
+        <button
+          onClick={() => reimportMut.mutate()}
+          disabled={reimportMut.isPending}
+          title="Reprocessa todos os ensaios com o parser atual (aplica trim de pré-contato, etc.)"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium
+                     bg-border/40 hover:bg-border text-muted hover:text-white transition-colors disabled:opacity-50"
+        >
+          <RotateCcw size={12} className={reimportMut.isPending ? "animate-spin" : ""} />
+          {reimportMut.isPending
+            ? "Reimportando..."
+            : reimportMut.isSuccess
+            ? `✓ ${(reimportMut.data as any)?.reimported ?? 0} reimportados`
+            : "Reimportar todos"}
+        </button>
       </div>
 
       {/* Ensaio list */}

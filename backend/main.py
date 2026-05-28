@@ -302,6 +302,42 @@ def delete_ensaio(id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@app.post("/api/ensaios/{id}/reimport")
+def reimport_ensaio(id: int, db: Session = Depends(get_db)):
+    """Apaga o ensaio do banco e o re-importa a partir do arquivo CSV original."""
+    r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio não encontrado")
+    filepath = r.filepath
+    if not filepath or not Path(filepath).exists():
+        raise HTTPException(status_code=422, detail=f"Arquivo não encontrado: {filepath}")
+    db.delete(r)
+    db.commit()
+    _load_csv(filepath)
+    new_r = db.query(EnsaioDB).filter(EnsaioDB.filename == Path(filepath).name).first()
+    if not new_r:
+        raise HTTPException(status_code=500, detail="Falha ao reimportar — verifique os logs do servidor")
+    return {"id": new_r.id, "nome": new_r.nome, "num_amostras": new_r.num_amostras}
+
+
+@app.post("/api/reimport-all")
+def reimport_all(db: Session = Depends(get_db)):
+    """Apaga todos os ensaios do banco e os re-importa a partir dos arquivos CSV."""
+    rows = db.query(EnsaioDB).all()
+    filepaths = [r.filepath for r in rows if r.filepath and Path(r.filepath).exists()]
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    results = []
+    for fp in filepaths:
+        try:
+            _load_csv(fp)
+            results.append({"file": Path(fp).name, "ok": True})
+        except Exception as exc:
+            results.append({"file": Path(fp).name, "ok": False, "error": str(exc)})
+    return {"reimported": len([r for r in results if r["ok"]]), "details": results}
+
+
 @app.post("/api/relatorio")
 def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     r = db.query(EnsaioDB).filter(EnsaioDB.id == req.ensaio_id).first()

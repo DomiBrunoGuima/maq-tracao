@@ -42,6 +42,9 @@ export const getParametrosIHM = (id: number): Promise<ParametrosIHM | null> =>
 export const fetchFtpCsv = (): Promise<ModbusFetchResult> =>
   api.post("/ftp/fetch_csv").then((r) => r.data);
 
+export const reimportAll = (): Promise<{ reimported: number; details: { file: string; ok: boolean }[] }> =>
+  api.post("/reimport-all").then((r) => r.data);
+
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });
   const url = URL.createObjectURL(

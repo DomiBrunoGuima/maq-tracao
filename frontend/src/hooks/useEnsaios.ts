@@ -49,6 +49,14 @@ export function useScan() {
   });
 }
 
+export function useReimportAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.reimportAll,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ensaios"] }),
+  });
+}
+
 export function useParametrosIHM(id: number | null) {
   return useQuery({
     queryKey: ["parametros_ihm", id],
