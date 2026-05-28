@@ -163,6 +163,17 @@ def parse_csv(filepath: str | Path) -> tuple[EnsaioMetadata, pd.DataFrame]:
         errors="coerce",
     )
 
+    # Sort by timestamp and keep only the monotonically increasing sequence.
+    # The IHM occasionally writes rows out of order or appends old records at
+    # the end of the file; sorting + deduplication fixes the chart X-axis.
+    valid_ts = df["timestamp"].notna()
+    if valid_ts.any():
+        df = df.sort_values("timestamp", kind="stable").reset_index(drop=True)
+        # Drop rows whose timestamp goes backwards relative to the running max
+        # (handles old data spliced into the middle/end of the file).
+        ts_max = df["timestamp"].cummax()
+        df = df[df["timestamp"] >= ts_max].reset_index(drop=True)
+
     # Elapsed seconds from first valid timestamp
     t0 = df["timestamp"].dropna().iloc[0] if not df["timestamp"].dropna().empty else None
     if t0 is not None:
