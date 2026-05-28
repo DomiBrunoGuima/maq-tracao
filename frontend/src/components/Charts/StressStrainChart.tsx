@@ -115,9 +115,9 @@ export default function StressStrainChart({ data, rupture, height = 280, onPoint
   return (
     <div className="flex flex-col" style={{ height }}>
       {active.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1.5 pl-[50px] flex-shrink-0">
+        <div className="flex gap-x-3 mb-1.5 pl-[50px] flex-shrink-0 overflow-x-auto">
           {active.map(s => (
-            <span key={s} className="flex items-center gap-1.5 text-[10px] text-muted/70">
+            <span key={s} className="flex items-center gap-1.5 text-[10px] text-muted/70 whitespace-nowrap flex-shrink-0">
               <span className="w-5 h-[2px] rounded-full inline-block flex-shrink-0" style={{ background: STAGE_COLORS[s] }} />
               {STAGE_LABELS[s]}
             </span>
