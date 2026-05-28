@@ -14,6 +14,19 @@ export function RuptureMarker({ xAxisMap, offset, ruptureValue }: Props) {
   const y1 = offset.top;
   const y2 = offset.top + offset.height;
 
+  // Flip badge to the left when rupture is past 55% of chart width to avoid clipping
+  const range: [number, number] =
+    typeof axis.scale.range === "function" ? axis.scale.range() : [0, 1];
+  const chartWidth = Math.abs(range[1] - range[0]);
+  const xRelative = x - Math.min(range[0], range[1]);
+  const flipLeft = xRelative > chartWidth * 0.55;
+
+  const BADGE_W = 58;
+  const BADGE_H = 16;
+  const badgeX = flipLeft ? -(BADGE_W + 5) : 5;
+  // Place badge near the bottom of the chart area so it doesn't cover the curve peak
+  const badgeY = y2 - BADGE_H - 8;
+
   return (
     <g
       style={{
@@ -38,8 +51,8 @@ export function RuptureMarker({ xAxisMap, offset, ruptureValue }: Props) {
         opacity={0.75}
       />
       {/* Badge */}
-      <g transform={`translate(5, ${y1 + 6})`}>
-        <rect width={58} height={16} rx={4} fill="#ff6b35" opacity={0.9} />
+      <g transform={`translate(${badgeX}, ${badgeY})`}>
+        <rect width={BADGE_W} height={BADGE_H} rx={4} fill="#ff6b35" opacity={0.9} />
         <text
           x={6} y={12}
           fill="white"
