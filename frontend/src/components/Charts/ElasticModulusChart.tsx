@@ -74,7 +74,7 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
         data={filtered}
-        margin={thumbnail ? { top: 2, right: 2, left: 0, bottom: 2 } : { top: 8, right: 24, left: 8, bottom: 24 }}
+        margin={thumbnail ? { top: 2, right: 2, left: 0, bottom: 2 } : { top: 6, right: 16, left: 0, bottom: 6 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
@@ -88,23 +88,15 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
           tickFormatter={(v) => `${Number(v).toFixed(0)}s`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={thumbnail ? undefined : {
-            value: "Tempo (s)",
-            position: "insideBottom", offset: -14,
-            fill: "#475569", fontSize: 10,
-          }}
+          minTickGap={50}
         />
         <YAxis
           domain={[0, yMax ?? "auto"]}
           hide={thumbnail}
+          width={50}
           tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
-          label={thumbnail ? undefined : {
-            value: "E (MPa)", angle: -90,
-            position: "insideLeft", offset: 14,
-            fill: "#475569", fontSize: 10,
-          }}
         />
 
         {/* Median reference line */}
