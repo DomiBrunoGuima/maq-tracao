@@ -36,6 +36,9 @@ export interface KPIs {
   tensao_max_calc_MPa: number | null;
   alonga_calc_pct: number | null;
   modulo_regressao_MPa: number | null;
+  forca_maxima_ihm: number | null;
+  velocidade_ihm: number | null;
+  deslocamento_pico_ihm: number | null;
 }
 
 export interface DataPoint {

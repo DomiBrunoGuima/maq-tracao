@@ -125,12 +125,15 @@ def _figure(img_src: str, caption: str) -> str:
 _CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a;
-       line-height: 1.5; background: #fff; }
-.page { max-width: 21cm; margin: 0 auto; padding: 2cm 2.5cm 2.5cm; }
+       line-height: 1.6; background: #edf0f4; }
+.page { max-width: 1040px; margin: 28px auto; padding: 52px 72px 72px;
+        background: #fff; box-shadow: 0 2px 16px rgba(0,0,0,0.10); border-radius: 2px; }
 table { border-collapse: collapse; }
 p { margin: 6px 0; }
 @media print {
-  .page { padding: 1.5cm 2cm; }
+  body { background: #fff; }
+  .page { max-width: 21cm; margin: 0; padding: 1.5cm 2cm;
+          box-shadow: none; border-radius: 0; }
   .page-break { page-break-before: always; }
 }
 """

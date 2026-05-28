@@ -10,6 +10,7 @@ import ForceTimeChart from "../Charts/ForceTimeChart";
 import ElasticModulusChart from "../Charts/ElasticModulusChart";
 import StressTimeChart from "../Charts/StressTimeChart";
 import ReportGenerator from "../Reports/ReportGenerator";
+import PointInspectorModal from "../Charts/PointInspectorModal";
 
 // ── chart registry ────────────────────────────────────────────
 
@@ -224,10 +225,11 @@ export default function Dashboard({ ensaioId }: Props) {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted/50 mb-4">
+              <p className="text-xs text-muted/50 mb-4 flex items-center gap-1.5">
+                <MousePointerClick size={11} className="flex-shrink-0" />
                 {pt
-                  ? "Clique em outro ponto para atualizar · × para limpar"
-                  : "Clique em qualquer ponto do gráfico para inspecionar os valores."}
+                  ? "Clique em outro ponto · × para limpar"
+                  : "Clique em qualquer ponto para ver os cálculos detalhados."}
               </p>
               {renderChart(activeChart, curvas, 380, setSelectedPoint)}
             </div>
@@ -385,6 +387,15 @@ export default function Dashboard({ ensaioId }: Props) {
 
       {showReport && ensaioId && (
         <ReportGenerator ensaioId={ensaioId} onClose={() => setShowReport(false)} />
+      )}
+
+      {selectedPoint && kpis && (
+        <PointInspectorModal
+          point={selectedPoint}
+          kpis={kpis}
+          ihmParams={ihmParams}
+          onClose={() => setSelectedPoint(null)}
+        />
       )}
     </div>
   );
