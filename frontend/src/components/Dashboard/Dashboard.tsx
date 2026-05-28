@@ -3,6 +3,7 @@ import { FileText, X as XIcon, MousePointerClick } from "lucide-react";
 import { clsx } from "clsx";
 import type { ChartData, DataPoint, RupturePoint } from "../../types";
 import { useKPIs, useCurvas, useEnsaio, useParametrosIHM } from "../../hooks/useEnsaios";
+import { useConfig } from "../../hooks/useConfig";
 import KPICard from "./KPICard";
 import StressStrainChart from "../Charts/StressStrainChart";
 import ForceDisplacementChart from "../Charts/ForceDisplacementChart";
@@ -125,10 +126,11 @@ export default function Dashboard({ ensaioId }: Props) {
   const [selectedPoint, setSelectedPoint] = useState<DataPoint | null>(null);
   const [activeChart, setActiveChart]     = useState<ChartKey>("ss");
 
-  const { data: ensaio }                       = useEnsaio(ensaioId);
-  const { data: kpis, isLoading: kpisLoading } = useKPIs(ensaioId);
+  const { data: ensaio }                           = useEnsaio(ensaioId);
+  const { data: kpis, isLoading: kpisLoading }     = useKPIs(ensaioId);
   const { data: curvas, isLoading: curvasLoading } = useCurvas(ensaioId);
-  const { data: ihmParams }                    = useParametrosIHM(ensaioId);
+  const { data: ihmParams }                        = useParametrosIHM(ensaioId);
+  const { data: config }                           = useConfig();
 
   useEffect(() => { setSelectedPoint(null); }, [ensaioId]);
 
@@ -172,8 +174,22 @@ export default function Dashboard({ ensaioId }: Props) {
 
   if (!kpis || !curvas) return null;
 
-  const activeConfig  = CHARTS.find((c) => c.key === activeChart)!;
-  const thumbCharts   = CHARTS.filter((c) => c.key !== activeChart);
+  const activeConfig = CHARTS.find((c) => c.key === activeChart)!;
+  const thumbCharts  = CHARTS.filter((c) => c.key !== activeChart);
+
+  // Registradores de tempo real não devem aparecer nos parâmetros estáticos da IHM
+  const realtimeNames = new Set([
+    config?.realtime_bit_name,
+    config?.realtime_stop_bit_name,
+    config?.realtime_forca_name,
+    config?.realtime_deslocamento_name,
+  ].filter(Boolean) as string[]);
+
+  const ihmParamsFiltered = ihmParams
+    ? Object.fromEntries(
+        Object.entries(ihmParams.params).filter(([k]) => !realtimeNames.has(k))
+      )
+    : null;
 
   // ── render ──
 
@@ -201,14 +217,14 @@ export default function Dashboard({ ensaioId }: Props) {
         </button>
       </header>
 
-      <div className="p-5">
-        <div className="grid grid-cols-[minmax(0,1fr)_290px] gap-5 items-start">
+      <div className="p-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_276px] gap-4 items-start">
 
           {/* ── Left: chart gallery ──────────────────────── */}
           <div className="space-y-3">
 
             {/* Active chart */}
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <div className="rounded-xl border border-border bg-surface px-4 pt-3 pb-3">
               <div className="flex items-baseline gap-3 mb-1">
                 <p className="text-sm font-semibold text-white">{activeConfig.label}</p>
                 <p className="text-xs text-muted">{activeConfig.sub}</p>
@@ -225,40 +241,48 @@ export default function Dashboard({ ensaioId }: Props) {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted/50 mb-4 flex items-center gap-1.5">
-                <MousePointerClick size={11} className="flex-shrink-0" />
-                {pt
-                  ? "Clique em outro ponto · × para limpar"
-                  : "Clique em qualquer ponto para ver os cálculos detalhados."}
+              <p className="text-[10px] text-muted/50 mb-2 flex items-center gap-1.5">
+                <MousePointerClick size={10} className="flex-shrink-0" />
+                {pt ? "Clique em outro ponto · × para limpar" : "Clique em qualquer ponto para ver os cálculos detalhados."}
               </p>
-              {renderChart(activeChart, curvas, 380, setSelectedPoint)}
+              {renderChart(activeChart, curvas, 240, setSelectedPoint)}
             </div>
 
             {/* Thumbnails */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {thumbCharts.map((c) => (
-                <Thumbnail
-                  key={c.key}
-                  chartKey={c.key}
-                  label={c.label}
-                  sub={c.sub}
-                  curvas={curvas}
-                  onClick={() => {
-                    setActiveChart(c.key);
-                    setSelectedPoint(null);
-                  }}
-                />
+                <Thumbnail key={c.key} chartKey={c.key} label={c.label} sub={c.sub} curvas={curvas}
+                  onClick={() => { setActiveChart(c.key); setSelectedPoint(null); }} />
               ))}
             </div>
+
+            {/* IHM params — abaixo dos gráficos */}
+            {ihmParamsFiltered && Object.keys(ihmParamsFiltered).length > 0 && (
+              <div className="rounded-xl border border-border bg-surface px-4 py-3">
+                <SectionLabel>Parâmetros IHM</SectionLabel>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(ihmParamsFiltered).map(([key, val]) => (
+                    <div key={key} className="flex items-center gap-2 bg-[#0d1020] border border-border/40
+                                              rounded-lg px-3 py-1.5 text-xs font-mono">
+                      <span className="text-muted/60">{key.replace(/_/g, " ")}</span>
+                      <span className="text-white font-semibold">{val !== null ? String(val) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[9px] text-muted/40 font-mono mt-2">
+                  {ihmParams!.ihm_ip} · {new Date(ihmParams!.captured_at).toLocaleString("pt-BR")}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* ── Right: data panel ────────────────────────── */}
           <div className="space-y-3">
 
             {/* KPIs */}
-            <div className="rounded-xl border border-border bg-surface p-4">
+            <div className="rounded-xl border border-border bg-surface p-3">
               <SectionLabel>Resultados</SectionLabel>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <KPICard compact highlight label="Força Máx."
                   value={`${fmt(kpis.forca_max_kN, 2)} kN`}
                   sub={`${fmt(kpis.forca_max_N, 0)} N`} />
@@ -283,7 +307,7 @@ export default function Dashboard({ ensaioId }: Props) {
               <Divider />
 
               <SectionLabel>Análise elástica</SectionLabel>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <KPICard compact label="σ Escoamento"
                   value={kpis.tensao_escoamento_MPa != null
                     ? `${fmt(kpis.tensao_escoamento_MPa)} MPa` : "—"} />
@@ -293,8 +317,8 @@ export default function Dashboard({ ensaioId }: Props) {
             </div>
 
             {/* Specimen params */}
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <div className="flex items-center justify-between mb-2.5">
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <div className="flex items-center justify-between mb-2">
                 <SectionLabel>Corpo de prova</SectionLabel>
                 {pt && (
                   <div className="flex items-center gap-1.5 -mt-1">
@@ -348,38 +372,12 @@ export default function Dashboard({ ensaioId }: Props) {
               </div>
 
               {!pt && (
-                <p className="flex items-center gap-1.5 text-[10px] text-muted/40 mt-3">
+                <p className="flex items-center gap-1.5 text-[10px] text-muted/40 mt-2">
                   <MousePointerClick size={10} />
                   clique no gráfico para inspecionar um ponto
                 </p>
               )}
             </div>
-
-            {/* IHM params */}
-            {ihmParams ? (
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <SectionLabel>Parâmetros IHM</SectionLabel>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {Object.entries(ihmParams.params).map(([key, val]) => (
-                    <MiniStat
-                      key={key}
-                      formula={key}
-                      label={key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                      value={val !== null ? String(val) : "—"}
-                    />
-                  ))}
-                </div>
-                <p className="text-[9px] text-muted/40 font-mono mt-2.5">
-                  {ihmParams.ihm_ip} · {new Date(ihmParams.captured_at).toLocaleString("pt-BR")}
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border/40 p-4">
-                <p className="text-[10px] text-muted/40 text-center leading-relaxed">
-                  Sem parâmetros IHM.<br />Configure o IP Modbus nas configurações.
-                </p>
-              </div>
-            )}
 
           </div>
         </div>
