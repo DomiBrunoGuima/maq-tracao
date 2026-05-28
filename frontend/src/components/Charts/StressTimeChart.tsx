@@ -80,7 +80,7 @@ export default function StressTimeChart({ data, rupture, height = 240, onPointCl
           minTickGap={50}
         />
         <YAxis
-          domain={[0, "auto"]}
+          domain={[0, (dataMax: number) => dataMax * 1.08]}
           hide={thumbnail}
           width={50}
           tickFormatter={(v) => Number(v).toFixed(0)}
@@ -89,7 +89,7 @@ export default function StressTimeChart({ data, rupture, height = 240, onPointCl
         />
         {!thumbnail && bands.map((b, i) => (
           <ReferenceArea key={i} x1={b.x1} x2={b.x2}
-            fill={STAGE_COLORS[b.stage] ?? "#fff"} fillOpacity={0.07} strokeOpacity={0} />
+            fill={STAGE_COLORS[b.stage] ?? "#fff"} fillOpacity={0.12} strokeOpacity={0} />
         ))}
         {!thumbnail && sigmaMax > 0 && (
           <ReferenceLine

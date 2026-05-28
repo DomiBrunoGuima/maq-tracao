@@ -42,7 +42,7 @@ interface Props {
 }
 
 export default function ElasticModulusChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
-  const { filtered, median, yMax } = useMemo(() => {
+  const { filtered, median, yMin, yMax } = useMemo(() => {
     // Extract valid numeric E values from the loading phases only
     const loadingPhases = new Set(["elastico_linear", "escoamento_superior", "patamar_escoamento", "encruamento", "carregamento"]);
     const vals = data
@@ -50,7 +50,7 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
       .map(pt => typeof pt.Modulo_Elast === "number" ? pt.Modulo_Elast : null)
       .filter((v): v is number => v !== null && v > 0);
 
-    if (!vals.length) return { filtered: data, median: null, yMax: undefined };
+    if (!vals.length) return { filtered: data, median: null, yMin: 0, yMax: undefined };
 
     // IQR-based outlier filter: keep values within [Q1 - 1.5×IQR, Q3 + 1.5×IQR]
     const sorted = [...vals].sort((a, b) => a - b);
@@ -67,7 +67,7 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
       return pt;
     });
 
-    return { filtered, median: med, yMax: hi * 1.1 };
+    return { filtered, median: med, yMin: lo > 0 ? lo * 0.9 : 0, yMax: hi * 1.1 };
   }, [data]);
 
   return (
@@ -91,10 +91,15 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
           minTickGap={50}
         />
         <YAxis
-          domain={[0, yMax ?? "auto"]}
+          domain={[yMin ?? 0, yMax ?? "auto"]}
           hide={thumbnail}
           width={50}
-          tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`}
+          tickFormatter={(v) => {
+            const n = Number(v);
+            if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+            if (n >= 1) return n.toFixed(0);
+            return n.toFixed(2);
+          }}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
         />
@@ -106,7 +111,7 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
             stroke="#38bdf8"
             strokeDasharray="6 3"
             strokeWidth={1}
-            label={{ value: `E̅ ${median.toFixed(0)} MPa`, position: "insideTopRight", fill: "#38bdf8", fontSize: 9 }}
+            label={{ value: `E̅ ${median.toFixed(0)} MPa`, position: "insideTopLeft", fill: "#38bdf8", fontSize: 9 }}
           />
         )}
 

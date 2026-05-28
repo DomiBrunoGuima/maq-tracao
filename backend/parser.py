@@ -8,6 +8,28 @@ import numpy as np
 import pandas as pd
 
 
+def _trim_precontact(df: pd.DataFrame) -> pd.DataFrame:
+    forca = df["Forca_N"].values.astype(float)
+    fmax = float(np.nanmax(forca)) if len(forca) > 0 else 0.0
+    if fmax <= 0:
+        return df
+    threshold = fmax * 0.005
+    n = len(forca)
+    i_contact = None
+    for i in range(n - 2):
+        if forca[i] > threshold and forca[i + 1] > threshold and forca[i + 2] > threshold:
+            i_contact = i
+            break
+    if i_contact is None or i_contact == 0:
+        return df
+    df = df.iloc[i_contact:].reset_index(drop=True)
+    if "elapsed_seconds" in df.columns:
+        df["elapsed_seconds"] = df["elapsed_seconds"] - df["elapsed_seconds"].iloc[0]
+    if "Deslocamento" in df.columns:
+        df["Deslocamento"] = df["Deslocamento"] - float(df["Deslocamento"].iloc[0])
+    return df
+
+
 def _detect_stages(df: pd.DataFrame) -> pd.Series:
     """Classifica cada ponto em uma das 6 etapas do ensaio de tração."""
     n = len(df)
@@ -182,6 +204,7 @@ def parse_csv(filepath: str | Path) -> tuple[EnsaioMetadata, pd.DataFrame]:
     else:
         df["elapsed_seconds"] = np.arange(len(df), dtype=float)
 
+    df = _trim_precontact(df)
     df["fase"] = _detect_stages(df)
 
     return metadata, df
