@@ -133,7 +133,7 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
           dot={false}
           activeDot={thumbnail ? false : { r: 4, strokeWidth: 0, fill: "#38bdf8" }}
           type="monotone"
-          connectNulls={false}
+          connectNulls={true}
           isAnimationActive={!thumbnail}
           legendType="plainline"
         />

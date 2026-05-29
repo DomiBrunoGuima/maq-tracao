@@ -98,7 +98,7 @@ export default function ForceTimeChart({ data, rupture, height = 240, onPointCli
             dot={false}
             activeDot={thumbnail ? false : { r: 4, strokeWidth: 0, fill: STAGE_COLORS[stage] }}
             type="monotone"
-            connectNulls={false}
+            connectNulls={true}
             isAnimationActive={!thumbnail}
             legendType="none"
           />

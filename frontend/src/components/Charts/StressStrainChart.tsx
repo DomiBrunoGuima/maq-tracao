@@ -99,7 +99,7 @@ export default function StressStrainChart({ data, rupture, height = 280, onPoint
             dot={false}
             activeDot={thumbnail ? false : { r: 4, strokeWidth: 0, fill: STAGE_COLORS[stage] }}
             type="monotone"
-            connectNulls={false}
+            connectNulls={true}
             isAnimationActive={!thumbnail}
             legendType="none"
           />

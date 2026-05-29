@@ -194,7 +194,12 @@ def format_chart_data(df: pd.DataFrame) -> dict:
 
     # Truncate post-rupture noise
     cutoff = _rupture_cutoff(df)
-    df_plot = df.iloc[:cutoff + 1]
+    df_plot = df.iloc[:cutoff + 1].copy()
+
+    # Forward-fill sporadic NaN values in plot columns so series have no gaps
+    for _col in ["Tensao_Pa", "Forca_N", "Deslocamento", "Deform_Along", "Modulo_Elast"]:
+        if _col in df_plot.columns:
+            df_plot[_col] = df_plot[_col].ffill()
 
     rupture_loc = df_plot["Forca_N"].idxmax()
     rupture_row = df_plot.loc[rupture_loc]
