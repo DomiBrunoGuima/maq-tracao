@@ -58,6 +58,7 @@ export interface ChartData {
   elastic_modulus_time: DataPoint[];
   stress_time: DataPoint[];
   rupture: RupturePoint;
+  E_regressao: number | null;
 }
 
 export interface IHMRegister {

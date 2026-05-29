@@ -1,6 +1,7 @@
 import type { DataPoint } from "../../types";
 
 export const STAGE_COLORS: Record<string, string> = {
+  acomodacao:          "#94a3b8",
   elastico_linear:     "#38bdf8",
   escoamento_superior: "#f59e0b",
   patamar_escoamento:  "#10b981",
@@ -12,6 +13,7 @@ export const STAGE_COLORS: Record<string, string> = {
 };
 
 export const STAGE_LABELS: Record<string, string> = {
+  acomodacao:          "Acomodação",
   elastico_linear:     "Elástico Linear",
   escoamento_superior: "Escoamento Superior",
   patamar_escoamento:  "Patamar de Escoamento",
@@ -23,6 +25,7 @@ export const STAGE_LABELS: Record<string, string> = {
 };
 
 export const ORDERED_STAGES = [
+  "acomodacao",
   "elastico_linear",
   "escoamento_superior",
   "patamar_escoamento",

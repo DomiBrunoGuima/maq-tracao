@@ -39,9 +39,10 @@ interface Props {
   height?: number;
   onPointClick?: (point: DataPoint) => void;
   thumbnail?: boolean;
+  eRegressao?: number | null;
 }
 
-export default function ElasticModulusChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
+export default function ElasticModulusChart({ data, rupture, height = 240, onPointClick, thumbnail = false, eRegressao }: Props) {
   const { filtered, median, yMin, yMax } = useMemo(() => {
     // Extract valid numeric E values from the loading phases only
     const loadingPhases = new Set(["elastico_linear", "escoamento_superior", "patamar_escoamento", "encruamento", "carregamento"]);
@@ -104,14 +105,21 @@ export default function ElasticModulusChart({ data, rupture, height = 240, onPoi
           stroke="#1e2435"
         />
 
-        {/* Median reference line */}
-        {!thumbnail && median != null && (
+        {/* E regression reference line (preferred) or median fallback */}
+        {!thumbnail && (eRegressao != null || median != null) && (
           <ReferenceLine
-            y={median}
+            y={eRegressao ?? median!}
             stroke="#38bdf8"
             strokeDasharray="6 3"
             strokeWidth={1}
-            label={{ value: `E̅ ${median.toFixed(0)} MPa`, position: "insideTopLeft", fill: "#38bdf8", fontSize: 9 }}
+            label={{
+              value: eRegressao != null
+                ? `E reg. ${eRegressao.toFixed(0)} MPa`
+                : `E̅ ${median!.toFixed(0)} MPa`,
+              position: "insideTopLeft",
+              fill: "#38bdf8",
+              fontSize: 9,
+            }}
           />
         )}
 

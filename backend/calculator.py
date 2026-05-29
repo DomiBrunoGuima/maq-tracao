@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 
 _LOADING = frozenset([
-    "elastico_linear", "escoamento_superior", "patamar_escoamento",
+    "acomodacao", "elastico_linear", "escoamento_superior", "patamar_escoamento",
     "encruamento", "ruptura",
     "carregamento",  # retrocompatibilidade
 ])
 _PRE_UTS = frozenset([
-    "elastico_linear", "escoamento_superior", "patamar_escoamento", "encruamento",
-    "carregamento",
+    "acomodacao", "elastico_linear", "escoamento_superior", "patamar_escoamento",
+    "encruamento", "carregamento",
 ])
 
 
@@ -159,6 +159,28 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
     }
 
 
+def _rupture_cutoff(df: pd.DataFrame) -> int:
+    """Returns the index up to which data should be plotted (inclusive).
+
+    Detects the first abrupt force drop (>50 % of Fmax in a single step) after
+    the UTS and returns that index so all series are sliced to [:cutoff+1].
+    Falls back to the last row if no abrupt drop is found.
+    """
+    forca = df["Forca_N"].values.astype(float)
+    n = len(forca)
+    if n < 2:
+        return n - 1
+    uts_pos = int(np.argmax(forca))
+    fmax = float(forca[uts_pos])
+    if fmax <= 0:
+        return n - 1
+    threshold = fmax * 0.50
+    for i in range(uts_pos + 1, n):
+        if forca[i - 1] - forca[i] > threshold:
+            return i
+    return n - 1
+
+
 def format_chart_data(df: pd.DataFrame) -> dict:
     def safe_records(sub: pd.DataFrame, fields: list[str]) -> list[dict]:
         out = []
@@ -170,23 +192,41 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             out.append(record)
         return out
 
-    rupture_loc = df["Forca_N"].idxmax()
-    rupture_row = df.loc[rupture_loc]
+    # Truncate post-rupture noise
+    cutoff = _rupture_cutoff(df)
+    df_plot = df.iloc[:cutoff + 1]
+
+    rupture_loc = df_plot["Forca_N"].idxmax()
+    rupture_row = df_plot.loc[rupture_loc]
+
+    # Elastic region only for E×t chart
+    elastic_df = df_plot[df_plot["fase"] == "elastico_linear"]
+
+    # E via linear regression on elastic phase (σ vs ε)
+    E_regressao: float | None = None
+    if len(elastic_df) >= 3:
+        eps_el = elastic_df["Deform_Along"].values.astype(float)
+        sig_el = elastic_df["Tensao_Pa"].values.astype(float)
+        valid = np.isfinite(eps_el) & np.isfinite(sig_el) & (eps_el > 0)
+        if valid.sum() >= 3 and float(np.std(eps_el[valid])) > 0:
+            coeffs = np.polyfit(eps_el[valid], sig_el[valid], 1)
+            E_regressao = float(coeffs[0])
 
     return {
         "stress_strain": safe_records(
-            df,
+            df_plot,
             ["Deform_Along", "Tensao_Pa", "fase", "elapsed_seconds"],
         ),
         "force_displacement": safe_records(
-            df, ["Deslocamento", "Forca_N", "fase", "elapsed_seconds"]
+            df_plot, ["Deslocamento", "Forca_N", "fase", "elapsed_seconds"]
         ),
-        "force_time": safe_records(df, ["elapsed_seconds", "Forca_N", "fase"]),
+        "force_time": safe_records(df_plot, ["elapsed_seconds", "Forca_N", "fase"]),
         "elastic_modulus_time": safe_records(
-            df, ["elapsed_seconds", "Modulo_Elast", "fase"]
+            elastic_df if len(elastic_df) > 0 else df_plot,
+            ["elapsed_seconds", "Modulo_Elast", "fase"],
         ),
         "stress_time": safe_records(
-            df, ["elapsed_seconds", "Tensao_Pa", "fase"]
+            df_plot, ["elapsed_seconds", "Tensao_Pa", "fase"]
         ),
         "rupture": {
             "elapsed_seconds": float(rupture_row["elapsed_seconds"]),
@@ -195,4 +235,5 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             "Tensao_Pa": float(rupture_row["Tensao_Pa"]),
             "Deslocamento": float(rupture_row["Deslocamento"]),
         },
+        "E_regressao": E_regressao,
     }

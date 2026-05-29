@@ -73,7 +73,7 @@ export default function StressStrainChart({ data, rupture, height = 280, onPoint
           domain={[0, (dataMax: number) => dataMax * 1.08]}
           hide={thumbnail}
           width={50}
-          tickFormatter={(v) => Number(v).toFixed(0)}
+          tickFormatter={(v) => { const n = Number(v); if (n >= 10) return n.toFixed(0); if (n >= 1) return n.toFixed(1); return n.toFixed(2); }}
           tick={{ fill: "#475569", fontSize: 10 }}
           stroke="#1e2435"
         />

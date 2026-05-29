@@ -37,7 +37,7 @@ function renderChart(
     case "ss": return <StressStrainChart      data={curvas.stress_strain}        {...p} />;
     case "fd": return <ForceDisplacementChart data={curvas.force_displacement}   {...p} />;
     case "ft": return <ForceTimeChart         data={curvas.force_time}           {...p} />;
-    case "em": return <ElasticModulusChart    data={curvas.elastic_modulus_time} {...p} />;
+    case "em": return <ElasticModulusChart    data={curvas.elastic_modulus_time} eRegressao={curvas.E_regressao} {...p} />;
     case "st": return <StressTimeChart        data={curvas.stress_time}          {...p} />;
   }
 }
