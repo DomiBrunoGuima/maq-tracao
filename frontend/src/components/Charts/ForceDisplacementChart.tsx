@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { DataPoint, RupturePoint } from "../../types";
 import { RuptureMarker } from "./RuptureMarker";
-import { ORDERED_STAGES, STAGE_COLORS, STAGE_LABELS, splitByStage, stageRanges } from "./stageConfig";
+import { ORDERED_STAGES, STAGE_COLORS, STAGE_LABELS, stageRanges } from "./stageConfig";
 
 const TooltipContent = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -49,7 +49,6 @@ export default function ForceDisplacementChart({ data, rupture, height = 240, on
   const stagesInData = useMemo(() => new Set(data.map(pt => String(pt.fase ?? ""))), [data]);
   const active = ORDERED_STAGES.filter(s => stagesInData.has(s));
   const bands  = stageRanges(data, "Deslocamento");
-  const stageGroups = useMemo(() => splitByStage(data), [data]);
 
   const chart = (
     <ResponsiveContainer width="100%" height={thumbnail ? height : "100%"}>
@@ -86,14 +85,18 @@ export default function ForceDisplacementChart({ data, rupture, height = 240, on
         {active.map((stage) => (
           <Line
             key={stage}
-            data={stageGroups[stage]}
-            dataKey="Forca_N"
+            dataKey={(pt: DataPoint) => {
+              if (String(pt.fase ?? "") !== stage) return undefined;
+              const v = pt.Forca_N;
+              return typeof v === "number" ? v : undefined;
+            }}
             name={STAGE_LABELS[stage]}
             stroke={STAGE_COLORS[stage]}
             strokeWidth={thumbnail ? 1.5 : 2}
             dot={false}
             activeDot={thumbnail ? false : { r: 4, strokeWidth: 0, fill: STAGE_COLORS[stage] }}
             type="monotone"
+            connectNulls={false}
             isAnimationActive={!thumbnail}
             legendType="none"
           />
