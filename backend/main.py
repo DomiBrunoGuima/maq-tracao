@@ -346,7 +346,20 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     df = pd.read_json(io.StringIO(r.data_json))
     ihm_params = _load_ihm_params_for(r.filename, db)
     kpis = calculate_kpis(df, ihm_params=ihm_params)
-    html = generate_html_report(r, df, kpis, req)
+
+    comparacao_series = None
+    if req.include_comparativo and req.comparacao_ids:
+        comparacao_series = []
+        for cid in req.comparacao_ids:
+            cr = db.query(EnsaioDB).filter(EnsaioDB.id == cid).first()
+            if cr:
+                try:
+                    cdf = pd.read_json(io.StringIO(cr.data_json))
+                    comparacao_series.append((cr.nome, cdf))
+                except Exception as exc:
+                    print(f"[relatorio] falha ao carregar ensaio {cid} para comparativo: {exc}", flush=True)
+
+    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series)
     return HTMLResponse(content=html)
 
 

@@ -111,8 +111,10 @@ class CondicoesEnsaio(BaseModel):
     temp_ensaio: str = "Tamb"
     num_corpos_prova: str = "1"
     celula_carga: str = ""
+    celula_carga_unidade: str = "kN"
     comprimento_inicial_mm: str = ""
     velocidade_ensaio: str = ""
+    velocidade_ensaio_unidade: str = "mm/min"
     tipo_corpo_prova: str = ""
     distancia_garras_mm: str = ""
     extensometro: str = ""
@@ -138,6 +140,8 @@ class ReportRequest(BaseModel):
     include_resultados: bool = True
     include_stress_strain: bool = True
     include_graficos_adicionais: bool = False
+    include_comparativo: bool = False
+    comparacao_ids: List[int] = []
     include_raw_data: bool = False
     include_conclusao: bool = True
     include_observacoes_finais: bool = True

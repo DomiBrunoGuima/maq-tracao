@@ -155,8 +155,10 @@ export interface CondicoesEnsaio {
   temp_ensaio: string;
   num_corpos_prova: string;
   celula_carga: string;
+  celula_carga_unidade: string;
   comprimento_inicial_mm: string;
   velocidade_ensaio: string;
+  velocidade_ensaio_unidade: string;
   tipo_corpo_prova: string;
   distancia_garras_mm: string;
   extensometro: string;
@@ -183,6 +185,8 @@ export interface ReportRequest {
   include_resultados: boolean;
   include_stress_strain: boolean;
   include_graficos_adicionais: boolean;
+  include_comparativo: boolean;
+  comparacao_ids: number[];
   include_raw_data: boolean;
   include_conclusao: boolean;
   include_observacoes_finais: boolean;

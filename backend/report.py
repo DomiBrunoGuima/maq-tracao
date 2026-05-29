@@ -50,6 +50,65 @@ def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
         return ""
 
 
+def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
+    """Gráfico σ×ε com múltiplas curvas sobrepostas."""
+    try:
+        palette = ["#1e3a5f", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#2980b9"]
+        fig, ax = plt.subplots(figsize=(8, 4.8))
+        for idx, (label, df) in enumerate(series):
+            color = palette[idx % len(palette)]
+            x = df["Deform_Along"].values * 100
+            y = df["Tensao_Pa"].values
+            ax.plot(x, y, color=color, linewidth=1.8, label=label)
+            rup = int(df["Forca_N"].values.argmax())
+            ax.scatter([x[rup]], [y[rup]], color=color, s=50, zorder=5)
+        ax.set_xlabel("Deformação (%)", fontsize=10)
+        ax.set_ylabel("Tensão (MPa)", fontsize=10)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, alpha=0.25, linestyle="--", color="gray")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(fontsize=8, loc="best")
+        plt.tight_layout(pad=0.5)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+    except Exception as exc:
+        print(f"[report] _chart_comparison_ss_b64 falhou: {exc}", flush=True)
+        return ""
+
+
+def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
+    """Gráfico F×d com múltiplas curvas sobrepostas."""
+    try:
+        palette = ["#2e6da4", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#1e3a5f"]
+        fig, ax = plt.subplots(figsize=(8, 4))
+        for idx, (label, df) in enumerate(series):
+            color = palette[idx % len(palette)]
+            ax.plot(df["Deslocamento"].values, df["Forca_N"].values,
+                    color=color, linewidth=1.6, label=label)
+        ax.set_xlabel("Deslocamento (mm)", fontsize=10)
+        ax.set_ylabel("Força (N)", fontsize=10)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, alpha=0.25, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(fontsize=8, loc="best")
+        plt.tight_layout(pad=0.5)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+    except Exception as exc:
+        print(f"[report] _chart_comparison_fd_b64 falhou: {exc}", flush=True)
+        return ""
+
+
 def _chart_force_displacement_b64(df: pd.DataFrame) -> str:
     try:
         fig, ax = plt.subplots(figsize=(8, 4))
@@ -143,7 +202,8 @@ p { margin: 6px 0; }
 # Main function
 # ──────────────────────────────────────────────
 
-def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
+def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
+                         comparacao_series: list[tuple[str, pd.DataFrame]] | None = None) -> str:
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     body_parts: list[str] = []
     sec_num = 0
@@ -286,13 +346,18 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
             rows.append(_td2("Temperatura do Laboratório:", f"{c.temp_laboratorio} °C" if c.temp_laboratorio else "—",
                              "Umidade do Laboratório:", f"{c.umidade_laboratorio} %" if c.umidade_laboratorio else "—"))
         if c.temp_ensaio or c.num_corpos_prova:
-            rows.append(_td2("Temperatura do Ensaio:", c.temp_ensaio or "—",
+            te = c.temp_ensaio.strip() if c.temp_ensaio else "Tamb"
+            # Append °C only when value is numeric (not "Tamb" or other text)
+            te_display = te if not te.replace(",", ".").replace("-", "").strip().replace(".", "", 1).isdigit() else f"{te} °C"
+            rows.append(_td2("Temperatura do Ensaio:", te_display,
                              "Número de Corpos de Prova:", c.num_corpos_prova or "—"))
         if c.celula_carga or c.comprimento_inicial_mm:
-            rows.append(_td2("Célula de Carga:", c.celula_carga or "—",
+            carga_display = f"{c.celula_carga} {c.celula_carga_unidade}".strip() if c.celula_carga else "—"
+            rows.append(_td2("Célula de Carga:", carga_display,
                              "Comprimento Inicial (L₀):", f"{c.comprimento_inicial_mm} mm" if c.comprimento_inicial_mm else "—"))
         if c.velocidade_ensaio or c.tipo_corpo_prova:
-            rows.append(_td2("Velocidade do Ensaio:", c.velocidade_ensaio or "—",
+            vel_display = f"{c.velocidade_ensaio} {c.velocidade_ensaio_unidade}".strip() if c.velocidade_ensaio else "—"
+            rows.append(_td2("Velocidade do Ensaio:", vel_display,
                              "Corpo de Prova:", c.tipo_corpo_prova or "—"))
         if c.distancia_garras_mm or c.extensometro:
             rows.append(_td2("Distância entre Garras:", f"{c.distancia_garras_mm} mm" if c.distancia_garras_mm else "—",
@@ -352,6 +417,31 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req) -> str:
                 fig_num += 1
             else:
                 body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico F×d: falha na geração]</p>')
+
+        if req.include_comparativo and comparacao_series:
+            all_ss = [(ensaio.nome, df)] + comparacao_series
+            all_fd = [(ensaio.nome, df)] + comparacao_series
+
+            body_parts.append(
+                f'<p style="margin-bottom:8px">Nas Figuras {fig_num} e {fig_num+1} são apresentadas as curvas comparativas '
+                f'entre os {len(all_ss)} ensaios selecionados.</p>'
+            )
+
+            cmp_ss = _chart_comparison_ss_b64(all_ss)
+            if cmp_ss:
+                body_parts.append(_figure(
+                    f"data:image/png;base64,{cmp_ss}",
+                    f"Figura {fig_num} – Comparativo Tensão × Deformação ({len(all_ss)} ensaios)."
+                ))
+                fig_num += 1
+
+            cmp_fd = _chart_comparison_fd_b64(all_fd)
+            if cmp_fd:
+                body_parts.append(_figure(
+                    f"data:image/png;base64,{cmp_fd}",
+                    f"Figura {fig_num} – Comparativo Força × Deslocamento ({len(all_fd)} ensaios)."
+                ))
+                fig_num += 1
 
         if req.include_resultados:
             res_table_num = sec_num

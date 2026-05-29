@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
-import { X, FileText, Loader2, ChevronDown, Upload, Trash2 } from "lucide-react";
+import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2 } from "lucide-react";
 import { generateReport } from "../../api/client";
+import { useEnsaios } from "../../hooks/useEnsaios";
 import type {
   ReportRequest, DadosEmpresa, DadosCliente, DadosAmostra,
   CondicoesEnsaio, Assinatura,
@@ -19,17 +20,20 @@ const EMPTY_EMPRESA: DadosEmpresa = { nome: "", endereco: "", telefone: "", emai
 const EMPTY_CLIENTE: DadosCliente = { nome: "", os: "", contato: "", email_cliente: "", telefone_cliente: "", endereco: "", bairro: "", cidade_uf: "", cep: "", data_recebimento: "", periodo_realizacao: "" };
 const EMPTY_AMOSTRA: DadosAmostra = { id_interno: "", id_cliente: "", imagem_data_url: "" };
 const EMPTY_CONDICOES: CondicoesEnsaio = {
-  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "",
-  num_corpos_prova: "1", celula_carga: "", comprimento_inicial_mm: "",
-  velocidade_ensaio: "", tipo_corpo_prova: "", distancia_garras_mm: "",
-  extensometro: "", largura_cp_mm: "", espessura_cp_mm: "",
-  preparacao_cp: [], data_realizacao: "", equipamentos: "",
-  norma_referencia: "ISO 527-1:2019",
+  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "Tamb",
+  num_corpos_prova: "1", celula_carga: "", celula_carga_unidade: "kN",
+  comprimento_inicial_mm: "", velocidade_ensaio: "", velocidade_ensaio_unidade: "mm/min",
+  tipo_corpo_prova: "", distancia_garras_mm: "", extensometro: "",
+  largura_cp_mm: "", espessura_cp_mm: "", preparacao_cp: [],
+  data_realizacao: "", equipamentos: "", norma_referencia: "ISO 527-1:2019",
 };
 
 const PREPARACAO_OPCOES = ["Injeção", "Usinagem", "Prensagem", "Estampagem", "Recorte", "Enviados pelo Cliente"];
 
 // ── helpers ──────────────────────────────────────────────────
+
+const INPUT_CLS = "bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-white \
+focus:outline-none focus:border-accent transition-colors font-mono";
 
 function Field({ label, value, onChange, placeholder, type = "text", className = "" }: {
   label: string; value: string; onChange: (v: string) => void;
@@ -40,8 +44,55 @@ function Field({ label, value, onChange, placeholder, type = "text", className =
       <span className="text-xs text-muted">{label}</span>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-white
-                   focus:outline-none focus:border-accent transition-colors font-mono" />
+        className={INPUT_CLS} />
+    </label>
+  );
+}
+
+function FieldWithSuffix({ label, value, onChange, placeholder, suffix, className = "" }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; suffix: string; className?: string;
+}) {
+  return (
+    <label className={`flex flex-col gap-1 ${className}`}>
+      <span className="text-xs text-muted">{label}</span>
+      <div className="flex items-center gap-0">
+        <input type="text" value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="bg-bg border border-border rounded-l-lg px-3 py-1.5 text-sm text-white
+                     focus:outline-none focus:border-accent transition-colors font-mono flex-1 min-w-0" />
+        <span className="bg-surface border border-l-0 border-border rounded-r-lg
+                         px-2.5 py-1.5 text-xs text-muted font-mono whitespace-nowrap shrink-0">
+          {suffix}
+        </span>
+      </div>
+    </label>
+  );
+}
+
+function FieldWithUnitSelect({ label, value, onChange, unit, onUnit, units, placeholder, className = "" }: {
+  label: string; value: string; onChange: (v: string) => void;
+  unit: string; onUnit: (u: string) => void; units: string[];
+  placeholder?: string; className?: string;
+}) {
+  return (
+    <label className={`flex flex-col gap-1 ${className}`}>
+      <span className="text-xs text-muted">{label}</span>
+      <div className="flex items-center gap-0">
+        <input type="text" value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="bg-bg border border-border rounded-l-lg px-3 py-1.5 text-sm text-white
+                     focus:outline-none focus:border-accent transition-colors font-mono flex-1 min-w-0" />
+        <select
+          value={unit}
+          onChange={e => onUnit(e.target.value)}
+          className="bg-surface border border-l-0 border-border rounded-r-lg
+                     px-2 py-1.5 text-xs text-muted font-mono focus:outline-none
+                     focus:border-accent transition-colors cursor-pointer shrink-0"
+        >
+          {units.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </div>
     </label>
   );
 }
@@ -108,6 +159,8 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data: ensaios } = useEnsaios();
+
   const [flags, setFlags] = useState({
     include_empresa: true,
     include_cliente: false,
@@ -117,10 +170,13 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
     include_resultados: true,
     include_stress_strain: true,
     include_graficos_adicionais: false,
+    include_comparativo: false,
     include_raw_data: false,
     include_conclusao: true,
     include_observacoes_finais: true,
   });
+
+  const [comparacaoIds, setComparacaoIds] = useState<number[]>([]);
 
   const [empresa, setEmpresaState] = useState<DadosEmpresa>(EMPTY_EMPRESA);
   const [cliente, setClienteState] = useState<DadosCliente>(EMPTY_CLIENTE);
@@ -160,6 +216,11 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
   function setAssinatura(i: number, field: keyof Assinatura, v: string) {
     setAssinaturas(sigs => sigs.map((s, idx) => idx === i ? { ...s, [field]: v } : s));
   }
+  function toggleComparacao(id: number) {
+    setComparacaoIds(ids =>
+      ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
+    );
+  }
 
   async function handleGenerate() {
     setLoading(true);
@@ -168,6 +229,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
       const req: ReportRequest = {
         ensaio_id: ensaioId,
         ...flags,
+        comparacao_ids: flags.include_comparativo ? comparacaoIds : [],
         empresa, cliente, amostra, objetivos,
         condicoes, local_data: localData,
         assinaturas: assinaturas.filter(s => s.nome),
@@ -182,6 +244,8 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
       setLoading(false);
     }
   }
+
+  const outrosEnsaios = ensaios?.filter(e => e.id !== ensaioId) ?? [];
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -259,18 +323,44 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
           <SectionCard title="Condições do Ensaio" enabled={flags.include_condicoes} onToggle={() => toggleFlag("include_condicoes")}>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Temperatura do Laboratório (°C)" value={condicoes.temp_laboratorio} onChange={v => setCondicoes("temp_laboratorio", v)} placeholder="ex: 23,0" />
-                <Field label="Umidade do Laboratório (%)" value={condicoes.umidade_laboratorio} onChange={v => setCondicoes("umidade_laboratorio", v)} placeholder="ex: 59" />
-                <Field label="Temperatura do Ensaio" value={condicoes.temp_ensaio} onChange={v => setCondicoes("temp_ensaio", v)} placeholder="Tamb" />
-                <Field label="Número de Corpos de Prova" value={condicoes.num_corpos_prova} onChange={v => setCondicoes("num_corpos_prova", v)} />
-                <Field label="Célula de Carga" value={condicoes.celula_carga} onChange={v => setCondicoes("celula_carga", v)} placeholder="ex: 5 kN" />
-                <Field label="Comprimento Inicial L₀ (mm)" value={condicoes.comprimento_inicial_mm} onChange={v => setCondicoes("comprimento_inicial_mm", v)} placeholder="ex: 50" />
-                <Field label="Velocidade do Ensaio" value={condicoes.velocidade_ensaio} onChange={v => setCondicoes("velocidade_ensaio", v)} placeholder="ex: 5,00 mm/min" />
-                <Field label="Tipo de Corpo de Prova" value={condicoes.tipo_corpo_prova} onChange={v => setCondicoes("tipo_corpo_prova", v)} placeholder="ex: Tipo 1A" />
-                <Field label="Distância entre Garras (mm)" value={condicoes.distancia_garras_mm} onChange={v => setCondicoes("distancia_garras_mm", v)} placeholder="ex: 115" />
-                <Field label="Extensômetro" value={condicoes.extensometro} onChange={v => setCondicoes("extensometro", v)} placeholder="ex: Até a ruptura" />
-                <Field label="Largura dos CPs (mm)" value={condicoes.largura_cp_mm} onChange={v => setCondicoes("largura_cp_mm", v)} placeholder="ex: 9,98 ± 0,01" />
-                <Field label="Espessura dos CPs (mm)" value={condicoes.espessura_cp_mm} onChange={v => setCondicoes("espessura_cp_mm", v)} placeholder="ex: 4,13 ± 0,01" />
+                <FieldWithSuffix label="Temperatura do Laboratório" value={condicoes.temp_laboratorio}
+                  onChange={v => setCondicoes("temp_laboratorio", v)} placeholder="ex: 23,0" suffix="°C" />
+                <FieldWithSuffix label="Umidade do Laboratório" value={condicoes.umidade_laboratorio}
+                  onChange={v => setCondicoes("umidade_laboratorio", v)} placeholder="ex: 59" suffix="%" />
+                <FieldWithSuffix label="Temperatura do Ensaio" value={condicoes.temp_ensaio}
+                  onChange={v => setCondicoes("temp_ensaio", v)} placeholder="ex: 23,0 ou Tamb" suffix="°C" />
+                <Field label="Número de Corpos de Prova" value={condicoes.num_corpos_prova}
+                  onChange={v => setCondicoes("num_corpos_prova", v)} />
+                <FieldWithUnitSelect
+                  label="Célula de Carga"
+                  value={condicoes.celula_carga}
+                  onChange={v => setCondicoes("celula_carga", v)}
+                  unit={condicoes.celula_carga_unidade}
+                  onUnit={u => setCondicoes("celula_carga_unidade", u)}
+                  units={["N", "kN"]}
+                  placeholder="ex: 5"
+                />
+                <FieldWithSuffix label="Comprimento Inicial L₀" value={condicoes.comprimento_inicial_mm}
+                  onChange={v => setCondicoes("comprimento_inicial_mm", v)} placeholder="ex: 50" suffix="mm" />
+                <FieldWithUnitSelect
+                  label="Velocidade do Ensaio"
+                  value={condicoes.velocidade_ensaio}
+                  onChange={v => setCondicoes("velocidade_ensaio", v)}
+                  unit={condicoes.velocidade_ensaio_unidade}
+                  onUnit={u => setCondicoes("velocidade_ensaio_unidade", u)}
+                  units={["mm/min", "mm/s", "m/min"]}
+                  placeholder="ex: 5,00"
+                />
+                <Field label="Tipo de Corpo de Prova" value={condicoes.tipo_corpo_prova}
+                  onChange={v => setCondicoes("tipo_corpo_prova", v)} placeholder="ex: Tipo 1A" />
+                <FieldWithSuffix label="Distância entre Garras" value={condicoes.distancia_garras_mm}
+                  onChange={v => setCondicoes("distancia_garras_mm", v)} placeholder="ex: 115" suffix="mm" />
+                <Field label="Extensômetro" value={condicoes.extensometro}
+                  onChange={v => setCondicoes("extensometro", v)} placeholder="ex: Até a ruptura" />
+                <FieldWithSuffix label="Largura dos CPs" value={condicoes.largura_cp_mm}
+                  onChange={v => setCondicoes("largura_cp_mm", v)} placeholder="ex: 9,98 ± 0,01" suffix="mm" />
+                <FieldWithSuffix label="Espessura dos CPs" value={condicoes.espessura_cp_mm}
+                  onChange={v => setCondicoes("espessura_cp_mm", v)} placeholder="ex: 4,13 ± 0,01" suffix="mm" />
               </div>
               <div>
                 <span className="text-xs text-muted block mb-2">Preparação dos Corpos de Prova</span>
@@ -286,7 +376,8 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                   ))}
                 </div>
               </div>
-              <Field label="Data de Realização" value={condicoes.data_realizacao} onChange={v => setCondicoes("data_realizacao", v)} placeholder="dd/mm/aaaa" />
+              <Field label="Data de Realização" value={condicoes.data_realizacao}
+                onChange={v => setCondicoes("data_realizacao", v)} placeholder="dd/mm/aaaa" />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-muted">Equipamento(s)</span>
                 <textarea value={condicoes.equipamentos} onChange={e => setCondicoes("equipamentos", e.target.value)}
@@ -294,27 +385,78 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                   className="bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-white
                              focus:outline-none focus:border-accent transition-colors resize-none font-mono" />
               </label>
-              <Field label="Norma de Referência" value={condicoes.norma_referencia} onChange={v => setCondicoes("norma_referencia", v)} />
+              <Field label="Norma de Referência" value={condicoes.norma_referencia}
+                onChange={v => setCondicoes("norma_referencia", v)} />
             </div>
           </SectionCard>
 
           {/* Resultados */}
           <SectionCard title="Resultados" enabled={flags.include_resultados} onToggle={() => toggleFlag("include_resultados")}>
-            <div className="space-y-2">
-              {(
-                [
-                  ["include_stress_strain", "Gráfico Tensão × Deformação"],
-                  ["include_graficos_adicionais", "Gráfico Força × Deslocamento"],
-                  ["include_raw_data", "Tabela de dados brutos"],
-                ] as [keyof typeof flags, string][]
-              ).map(([k, label]) => (
-                <label key={k} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={flags[k]}
-                    onChange={() => toggleFlag(k)}
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {(
+                  [
+                    ["include_stress_strain", "Gráfico Tensão × Deformação"],
+                    ["include_graficos_adicionais", "Gráfico Força × Deslocamento"],
+                    ["include_raw_data", "Tabela de dados brutos"],
+                  ] as [keyof typeof flags, string][]
+                ).map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={flags[k]}
+                      onChange={() => toggleFlag(k)}
+                      className="w-4 h-4 accent-accent" />
+                    <span className="text-sm text-slate-300">{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Comparativo */}
+              <div className="border-t border-border/50 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer mb-3">
+                  <input type="checkbox" checked={flags.include_comparativo}
+                    onChange={() => toggleFlag("include_comparativo")}
                     className="w-4 h-4 accent-accent" />
-                  <span className="text-sm text-slate-300">{label}</span>
+                  <BarChart2 size={13} className="text-muted" />
+                  <span className="text-sm text-slate-300">Gráficos Comparativos</span>
                 </label>
-              ))}
+
+                {flags.include_comparativo && (
+                  <div className="ml-6">
+                    <p className="text-xs text-muted mb-2">
+                      Selecione os ensaios para comparar com o atual. As curvas σ×ε e F×d serão sobrepostas no relatório.
+                    </p>
+                    {outrosEnsaios.length === 0 ? (
+                      <p className="text-xs text-muted/50 italic">Nenhum outro ensaio disponível.</p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-lg p-2 bg-bg">
+                        {outrosEnsaios.map(e => (
+                          <label key={e.id}
+                            className="flex items-center gap-2.5 px-2 py-1.5 rounded cursor-pointer
+                                       hover:bg-surface transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={comparacaoIds.includes(e.id)}
+                              onChange={() => toggleComparacao(e.id)}
+                              className="w-3.5 h-3.5 accent-accent shrink-0"
+                            />
+                            <span className="text-xs font-mono text-slate-300 truncate">
+                              {e.filename.replace(".csv", "")}
+                            </span>
+                            <span className="text-xs text-muted/60 ml-auto shrink-0">
+                              {e.tensao_max_MPa.toFixed(0)} MPa
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {comparacaoIds.length > 0 && (
+                      <p className="text-xs text-accent mt-1.5">
+                        {comparacaoIds.length} ensaio{comparacaoIds.length > 1 ? "s" : ""} selecionado{comparacaoIds.length > 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </SectionCard>
 
