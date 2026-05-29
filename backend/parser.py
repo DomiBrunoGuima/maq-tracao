@@ -35,6 +35,7 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
     n = len(df)
     stages = pd.Series("encruamento", index=df.index)
     if n < 8:
+        print(f"[stages] n={n} < 8, retornando encruamento total", flush=True)
         return stages
 
     sig   = df["Tensao_Pa"].values.astype(float)
@@ -50,6 +51,7 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
 
     n_load = uts_pos + 1
     if n_load < 8:
+        print(f"[stages] n={n} uts_pos={uts_pos} n_load={n_load} < 8, sem detecção de fases", flush=True)
         return stages
 
     # Smooth loading stress
@@ -57,17 +59,25 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
     sig_s = np.convolve(sig[:n_load], np.ones(w) / w, mode="same")
 
     # ── Upper yield: first local max with significant drop after it ───────────
+    # Drop threshold lowered to 1.5% to catch subtle yield transitions
     search_end = int(n_load * 0.65)
     uy_pos = None
     for i in range(2, search_end - 1):
         drop = sig_s[i] - float(np.min(sig_s[i + 1 : min(i + 5, search_end)]))
-        if sig_s[i] > sig_s[i - 1] and drop > sig_s[i] * 0.02:
+        if sig_s[i] > sig_s[i - 1] and drop > sig_s[i] * 0.015:
             uy_pos = i
             break
 
     if uy_pos is None:
         # Sem escoamento distinto: elástico = primeiros 25%, resto = encruamento
-        stages.iloc[: int(n_load * 0.25)] = "elastico_linear"
+        elastic_end = int(n_load * 0.25)
+        stages.iloc[:elastic_end] = "elastico_linear"
+        print(
+            f"[stages] n={n} uts_pos={uts_pos} n_load={n_load} smooth_w={w} "
+            f"search_end={search_end} uy_pos=None → elastico[0:{elastic_end}] "
+            f"encruamento[{elastic_end}:{uts_pos}] estriccao[{uts_pos+1}:{n-1}]",
+            flush=True,
+        )
         return stages
 
     hw = max(2, n_load // 30)
@@ -81,6 +91,11 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
     # ── Patamar: após escoamento superior, σ ≈ constante ─────────────────────
     post = sig_s[uy_e + 1 :]
     if len(post) < 3:
+        print(
+            f"[stages] n={n} uts_pos={uts_pos} uy_pos={uy_pos} uy_s={uy_s} uy_e={uy_e} "
+            f"post muito curto ({len(post)}), sem patamar",
+            flush=True,
+        )
         return stages
 
     lower_yield = float(np.min(post[: max(3, len(post) // 4)]))
@@ -95,7 +110,38 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
 
     plat_end_abs = uy_e + 1 + plat_end_rel
     stages.iloc[uy_e + 1 : plat_end_abs + 1] = "patamar_escoamento"
-    # encruamento: plat_end_abs + 1 → uts_pos (já é o default)
+    # encruamento: plat_end_abs + 1 → uts_pos (default)
+
+    # ── Debug: cobertura de fases ─────────────────────────────────────────────
+    phase_coverage = {
+        "elastico_linear":      f"[0:{uy_s}]",
+        "escoamento_superior":  f"[{uy_s}:{uy_e+1}]",
+        "patamar_escoamento":   f"[{uy_e+1}:{plat_end_abs+1}]",
+        "encruamento":          f"[{plat_end_abs+1}:{uts_pos+1}]",
+        "estriccao":            f"[{uts_pos+1}:{n-1}]",
+        "ruptura":              f"[{n-1}]",
+    }
+    print(
+        f"[stages] n={n} uts_pos={uts_pos} uy_pos={uy_pos} hw={hw} "
+        f"smooth_w={w} plat_end_rel={plat_end_rel} | "
+        + " ".join(f"{k}:{v}" for k, v in phase_coverage.items()),
+        flush=True,
+    )
+
+    # ── Anti-gap validation ───────────────────────────────────────────────────
+    phase_vals = stages.values
+    uncovered = int(np.sum(phase_vals == None))  # noqa: E711
+    counts = {p: int(np.sum(phase_vals == p)) for p in [
+        "elastico_linear", "escoamento_superior", "patamar_escoamento",
+        "encruamento", "estriccao", "ruptura",
+    ]}
+    total_assigned = sum(counts.values())
+    if total_assigned != n:
+        print(
+            f"[stages] AVISO ANTI-GAP: {n - total_assigned} pontos sem fase! "
+            f"counts={counts}",
+            flush=True,
+        )
 
     return stages
 
