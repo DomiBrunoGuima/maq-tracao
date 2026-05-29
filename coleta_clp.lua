@@ -1,13 +1,11 @@
 -- =============================================
--- Configurações — ajuste conforme seu projeto
+-- Configurações
 -- =============================================
-local LINK        = "Link1"       -- nome do link do seu CLP
-local ESTACAO     = 1             -- número da estação
-local END_INICIO  = 0x6001        -- bit que indica "teste em andamento" ($6001)
-local REGISTRADORES = {
-    0xD3000, 0xD3001, 0xD3002     -- endereços que você quer gravar
-}
-local INTERVALO_MS = 1000         -- coleta a cada 1 segundo
+local LINK     = "Link1"
+local ESTACAO  = 1
+local BIT_CTRL = 6001  -- $6001: 1 = teste ativo, 0 = encerrado
+
+local INTERVALO_MS = 1000  -- coleta a cada 1 segundo
 
 -- =============================================
 -- Variáveis internas
@@ -21,30 +19,31 @@ local nome_arquivo = ""
 -- =============================================
 while true do
 
-    -- Lê o bit de controle do CLP (1 = teste ativo)
-    local status = mem.inter.Read(END_INICIO)
+    local status = mem.inter.Read(BIT_CTRL)
 
     -- ---- INÍCIO DO TESTE ----
     if status == 1 and not coletando then
         coletando    = true
-        linhas       = {}   -- limpa dados anteriores
+        linhas       = {}
         nome_arquivo = "/usb/teste_" .. os.date("%Y%m%d_%H%M%S") .. ".csv"
 
-        -- Cabeçalho do CSV
-        local cabecalho = "Timestamp"
-        for i, _ in ipairs(REGISTRADORES) do
-            cabecalho = cabecalho .. ",Reg" .. i
-        end
-        table.insert(linhas, cabecalho)
+        -- Cabeçalho
+        table.insert(linhas, "Timestamp,D412,D408,D92,D600")
     end
 
-    -- ---- COLETA DE DADOS ----
+    -- ---- COLETA ----
     if coletando then
+        local d412 = plc.Read(LINK, ESTACAO, "D412")
+        local d408 = plc.Read(LINK, ESTACAO, "D408")
+        local d92  = plc.Read(LINK, ESTACAO, "D92")
+        local d600 = plc.Read(LINK, ESTACAO, "D600")
+
         local linha = os.date("%H:%M:%S")
-        for _, addr in ipairs(REGISTRADORES) do
-            local val = plc.Read(LINK, ESTACAO, addr)
-            linha = linha .. "," .. tostring(val)
-        end
+            .. "," .. tostring(d412)
+            .. "," .. tostring(d408)
+            .. "," .. tostring(d92)
+            .. "," .. tostring(d600)
+
         table.insert(linhas, linha)
     end
 
@@ -52,7 +51,6 @@ while true do
     if status == 0 and coletando then
         coletando = false
 
-        -- Grava tudo de uma vez no arquivo
         local f = io.open(nome_arquivo, "w")
         if f then
             for _, l in ipairs(linhas) do
@@ -61,7 +59,7 @@ while true do
             f:close()
         end
 
-        linhas = {}  -- libera memória
+        linhas = {}
     end
 
     sys.Sleep(INTERVALO_MS)
