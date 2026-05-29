@@ -288,9 +288,14 @@ def parse_csv(filepath: str | Path) -> tuple[EnsaioMetadata, pd.DataFrame]:
 
     valid_ts = df["timestamp"].notna()
     if valid_ts.any():
-        df = df.sort_values("timestamp", kind="stable").reset_index(drop=True)
+        # Drop rows where timestamp goes backward (IHM circular buffer artefact).
+        # Process in file order: once a timestamp regresses, discard that row and all
+        # subsequent rows that are still behind the running maximum.
         ts_max = df["timestamp"].cummax()
-        df = df[df["timestamp"] >= ts_max].reset_index(drop=True)
+        dropped = int((valid_ts & (df["timestamp"] < ts_max)).sum())
+        if dropped:
+            print(f"[parser] {dropped} linhas descartadas por lapso temporal (timestamp retroagiu)", flush=True)
+        df = df[df["timestamp"].isna() | (df["timestamp"] >= ts_max)].reset_index(drop=True)
 
     t0 = df["timestamp"].dropna().iloc[0] if not df["timestamp"].dropna().empty else None
     if t0 is not None:
