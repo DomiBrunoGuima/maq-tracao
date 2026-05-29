@@ -106,8 +106,9 @@ export default function StressTimeChart({ data, rupture, height = 240, onPointCl
             key={stage}
             dataKey={(pt: DataPoint, index: number) => {
               const mine = String(pt.fase ?? "") === stage;
-              const stitch = !mine && index < data.length - 1 && String(data[index + 1]?.fase ?? "") === stage;
-              if (!mine && !stitch) return null;
+              const stitchNext = !mine && index < data.length - 1 && String(data[index + 1]?.fase ?? "") === stage;
+              const stitchPrev = !mine && index > 0 && String(data[index - 1]?.fase ?? "") === stage;
+              if (!mine && !stitchNext && !stitchPrev) return null;
               const v = pt.Tensao_Pa;
               return typeof v === "number" ? v : null;
             }}
