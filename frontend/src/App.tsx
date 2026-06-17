@@ -4,8 +4,9 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import ComparisonView from "./components/Comparison/ComparisonView";
 import ConfigPanel from "./components/Config/ConfigPanel";
 import RealtimeMonitor from "./components/Realtime/RealtimeMonitor";
+import ControlPanel from "./components/Control/ControlPanel";
 
-type View = "dashboard" | "comparison" | "config" | "realtime";
+type View = "dashboard" | "comparison" | "config" | "realtime" | "control";
 
 export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -33,6 +34,7 @@ export default function App() {
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
         onViewRealtime={() => setView("realtime")}
+        onViewControl={() => setView("control")}
         currentView={view}
       />
 
@@ -48,6 +50,9 @@ export default function App() {
         )}
         {view === "realtime" && (
           <RealtimeMonitor />
+        )}
+        {view === "control" && (
+          <ControlPanel onOpenEnsaio={handleSelectEnsaio} />
         )}
       </main>
     </div>

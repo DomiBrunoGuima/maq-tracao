@@ -61,12 +61,22 @@ export interface ChartData {
   E_regressao: number | null;
 }
 
+export type ModbusDataType =
+  | "uint16"
+  | "decimal"
+  | "int32"
+  | "decimal32"
+  | "float32"
+  | "coil";
+
 export interface IHMRegister {
   name: string;
   address: number;
   description: string;
-  data_type: "uint16" | "decimal" | "float32" | "coil";
+  data_type: ModbusDataType;
   scale: number;
+  role?: string;
+  writable?: boolean;
 }
 
 export interface ParametrosIHM {
@@ -95,6 +105,13 @@ export interface AppConfig {
   realtime_stop_bit_name: string;
   realtime_forca_name: string;
   realtime_deslocamento_name: string;
+  clp_ip: string;
+  clp_port: number;
+  clp_timeout: number;
+  control_registers: IHMRegister[];
+  control_pulse_ms: number;
+  area_seccao_mm2: number;
+  comprimento_inicial_mm: number;
 }
 
 export interface RealtimePoint {
@@ -111,6 +128,34 @@ export interface RealtimeFrame {
   t_ms: number;
   error?: string;
   stopped?: boolean;
+  material_integro?: boolean | null;
+  ruptura?: boolean;
+  saved_ensaio_id?: number | null;
+}
+
+export interface ControlStartRequest {
+  sentido: "cima" | "baixo";
+  velocidade?: number | null;
+  deslocamento?: number | null;
+  limite_forca?: number | null;
+  area_seccao?: number | null;
+  comprimento_inicial?: number | null;
+}
+
+export interface ControlSetpointsRequest {
+  sentido?: "cima" | "baixo" | null;
+  velocidade?: number | null;
+  deslocamento?: number | null;
+  limite_forca?: number | null;
+}
+
+export interface ControlStatus {
+  online: boolean;
+  forca_atual: number | null;
+  deslocamento_atual: number | null;
+  material_integro: boolean | null;
+  ruptura: boolean | null;
+  ativo: boolean | null;
 }
 
 export interface ModbusFetchResult {

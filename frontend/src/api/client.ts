@@ -2,6 +2,9 @@ import axios from "axios";
 import type {
   AppConfig,
   ChartData,
+  ControlSetpointsRequest,
+  ControlStartRequest,
+  ControlStatus,
   EnsaioDetail,
   EnsaioSummary,
   KPIs,
@@ -44,6 +47,20 @@ export const fetchFtpCsv = (): Promise<ModbusFetchResult> =>
 
 export const reimportAll = (): Promise<{ reimported: number; details: { file: string; ok: boolean }[] }> =>
   api.post("/reimport-all").then((r) => r.data);
+
+// ── Controle da máquina (CLP) ──────────────────────────────────────────────
+
+export const startTest = (req: ControlStartRequest): Promise<{ status: string; sentido: string; setpoints: Record<string, number> }> =>
+  api.post("/control/start", req).then((r) => r.data);
+
+export const stopTest = (): Promise<{ status: string }> =>
+  api.post("/control/stop").then((r) => r.data);
+
+export const setSetpoints = (req: ControlSetpointsRequest): Promise<{ status: string; setpoints: Record<string, number> }> =>
+  api.post("/control/setpoints", req).then((r) => r.data);
+
+export const getControlStatus = (): Promise<ControlStatus> =>
+  api.get("/control/status").then((r) => r.data);
 
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });

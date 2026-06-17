@@ -14,11 +14,21 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
 from .database import EnsaioDB, ParametrosIHMDB, SessionLocal, get_db
-from .models import ConfigModel, EnsaioDetail, EnsaioSummary, ParametrosIHM, ReportRequest
+from .models import (
+    ConfigModel,
+    ControlSetpointsRequest,
+    ControlStartRequest,
+    ControlStatus,
+    EnsaioDetail,
+    EnsaioSummary,
+    ParametrosIHM,
+    ReportRequest,
+)
 from .ftp_client import download_csv as ftp_download_csv
-from .modbus_client import RealtimeModbusReader, capture_registers
+from .modbus_client import ModbusController, RealtimeModbusReader, capture_registers
 from .parser import parse_csv
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
@@ -47,6 +57,13 @@ _CONFIG_DEFAULTS: dict = {
     "realtime_stop_bit_name": "teste_parada_bit",
     "realtime_forca_name": "forca_atual",
     "realtime_deslocamento_name": "deslocamento_atual",
+    "clp_ip": "",
+    "clp_port": 502,
+    "clp_timeout": 3,
+    "control_registers": [],
+    "control_pulse_ms": 300,
+    "area_seccao_mm2": 0.0,
+    "comprimento_inicial_mm": 0.0,
 }
 
 
@@ -70,6 +87,39 @@ def _save_config(cfg: dict) -> None:
 _config: dict = _load_config()
 
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
+
+
+# ---------------------------------------------------------------------------
+# CLP — conexão e registradores de controle
+# ---------------------------------------------------------------------------
+
+# Roles de leitura usados na aquisição/status
+_READ_ROLES = ("forca_atual", "deslocamento_atual", "material_integro_bit", "ruptura_bit")
+
+
+def _clp_conn() -> tuple[str, int, int]:
+    """Retorna (ip, port, timeout) do CLP, com fallback para a config da IHM."""
+    ip      = _config.get("clp_ip") or _config.get("ihm_ip", "")
+    port    = int(_config.get("clp_port") or _config.get("ihm_port", 502))
+    timeout = int(_config.get("clp_timeout") or _config.get("ihm_timeout", 3))
+    return ip, port, timeout
+
+
+def _control_registers() -> list[dict]:
+    return _config.get("control_registers", []) or []
+
+
+def _make_controller() -> ModbusController:
+    ip, port, timeout = _clp_conn()
+    return ModbusController(ip, port, timeout, _control_registers())
+
+
+def _read_registers_by_role() -> list[dict]:
+    return [r for r in _control_registers() if r.get("role") in _READ_ROLES]
+
+
+def _role_to_name() -> dict[str, str]:
+    return {r["role"]: r["name"] for r in _control_registers() if r.get("role") and r.get("name")}
 
 
 # ---------------------------------------------------------------------------
@@ -100,63 +150,49 @@ def _save_ihm_params(filename: str, db, params: dict) -> None:
     print(f"[modbus] Parâmetros capturados para {filename}: {params}", flush=True)
 
 
-def _load_csv(filepath: str) -> None:
+def _load_csv(filepath: str) -> tuple[bool, str]:
+    """Retorna (sucesso, mensagem). Em caso de falha a mensagem descreve o motivo."""
     db = SessionLocal()
     try:
         path = Path(filepath)
         if not path.exists():
-            return
+            return False, f"Arquivo não encontrado: {path.name}"
 
         # Skip if already in database
         if db.query(EnsaioDB).filter(EnsaioDB.filename == path.name).first():
-            return
+            return True, "já importado"
 
         metadata, df = parse_csv(filepath)
 
-        # Arquivo pode ser detectado pelo watcher enquanto ainda está sendo escrito.
-        # Menos de 10 amostras válidas indica arquivo incompleto — ignora silenciosamente.
-        if df["Forca_N"].dropna().shape[0] < 10:
-            print(f"[loader] Ignorando {path.name}: {df['Forca_N'].dropna().shape[0]} amostras (arquivo incompleto?)", flush=True)
-            return
+        n_validas = int(df["Forca_N"].dropna().shape[0])
+        if n_validas < 10:
+            msg = (
+                f"Apenas {n_validas} amostra(s) válida(s) após filtrar lapsos temporais. "
+                "O ensaio pode estar incompleto ou o arquivo foi coletado antes do início do teste."
+            )
+            print(f"[loader] Ignorando {path.name}: {msg}", flush=True)
+            return False, msg
 
         # Busca parâmetros da IHM ANTES de calcular KPIs (area_seccao e comprimento_inicial
         # entram diretamente nas fórmulas σ = F/A, ε = ΔL/L₀, A% = (d/L₀)×100)
         ihm_params = _fetch_ihm_params()
-        kpis = calculate_kpis(df, ihm_params=ihm_params)
-
-        data_ensaio = df["DATA"].iloc[0].strip() if len(df) > 0 else "01/01/2026"
-
-        # Serialize df, converting timestamps to ISO strings
-        df_for_json = df.copy()
-        if "timestamp" in df_for_json.columns:
-            df_for_json["timestamp"] = df_for_json["timestamp"].astype(str)
-
-        record = EnsaioDB(
-            nome=f"{path.stem} — {data_ensaio}",
-            filename=path.name,
-            data_ensaio=data_ensaio,
-            num_amostras=len(df),
-            forca_max_N=kpis["forca_max_N"],
-            tensao_max_MPa=kpis["tensao_max_MPa"],
-            alonga_ruptura_pct=kpis["alonga_ruptura_pct"],
-            tempo_ruptura_s=kpis["tempo_ruptura_s"],
-            metadata_version=metadata.version,
-            metadata_equipment_id=metadata.equipment_id,
-            metadata_code=metadata.code,
-            filepath=str(path.resolve()),
-            data_json=df_for_json.to_json(orient="records"),
-        )
-        db.add(record)
-        db.commit()
-        print(f"[loader] Loaded: {path.name}", flush=True)
-
-        if ihm_params is not None:
-            _save_ihm_params(path.name, db, ihm_params)
-        elif _config.get("ihm_ip"):
+        if ihm_params is None and _config.get("ihm_ip"):
             print(f"[modbus] IHM inacessível — parâmetros não capturados para {path.name}", flush=True)
 
+        persist_ensaio(
+            db, metadata, df,
+            filename=path.name,
+            params=ihm_params,
+            filepath=str(path.resolve()),
+            source_ip=_config.get("ihm_ip", ""),
+        )
+        print(f"[loader] Loaded: {path.name}", flush=True)
+        return True, "ok"
+
     except Exception as exc:
-        print(f"[loader] Error loading {filepath}: {exc}")
+        msg = f"{type(exc).__name__}: {exc}"
+        print(f"[loader] Error loading {filepath}: {msg}", flush=True)
+        return False, msg
     finally:
         db.close()
 
@@ -313,10 +349,12 @@ def reimport_ensaio(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail=f"Arquivo não encontrado: {filepath}")
     db.delete(r)
     db.commit()
-    _load_csv(filepath)
+    ok, msg = _load_csv(filepath)
+    if not ok:
+        raise HTTPException(status_code=422, detail=f"Falha ao reimportar: {msg}")
     new_r = db.query(EnsaioDB).filter(EnsaioDB.filename == Path(filepath).name).first()
     if not new_r:
-        raise HTTPException(status_code=500, detail="Falha ao reimportar — verifique os logs do servidor")
+        raise HTTPException(status_code=500, detail="Falha ao reimportar — erro desconhecido")
     return {"id": new_r.id, "nome": new_r.nome, "num_amostras": new_r.num_amostras}
 
 
@@ -330,11 +368,8 @@ def reimport_all(db: Session = Depends(get_db)):
     db.commit()
     results = []
     for fp in filepaths:
-        try:
-            _load_csv(fp)
-            results.append({"file": Path(fp).name, "ok": True})
-        except Exception as exc:
-            results.append({"file": Path(fp).name, "ok": False, "error": str(exc)})
+        ok, msg = _load_csv(fp)
+        results.append({"file": Path(fp).name, "ok": ok, "msg": msg})
     return {"reimported": len([r for r in results if r["ok"]]), "details": results}
 
 
@@ -420,11 +455,13 @@ def fetch_csv_via_ftp(db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
-    _load_csv(str(dest))
+    ok, msg = _load_csv(str(dest))
+    if not ok:
+        raise HTTPException(status_code=422, detail=f"Arquivo recebido mas falhou ao importar: {msg}")
 
     rec = db.query(EnsaioDB).filter(EnsaioDB.filename == filename).first()
     if not rec:
-        raise HTTPException(status_code=500, detail="Arquivo recebido mas falhou ao importar")
+        raise HTTPException(status_code=500, detail="Arquivo recebido mas falhou ao importar: erro desconhecido")
 
     return {
         "status": "ok",
@@ -437,6 +474,251 @@ def fetch_csv_via_ftp(db: Session = Depends(get_db)):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Controle da máquina — escrita de comandos/setpoints no CLP
+# ---------------------------------------------------------------------------
+
+def _apply_setpoints(ctrl: ModbusController, *, sentido, velocidade, deslocamento, limite_forca) -> dict:
+    """Escreve os setpoints fornecidos (ignora os None e os roles não configurados)."""
+    applied: dict = {}
+    for role, value in (
+        ("limite_forca", limite_forca),
+        ("velocidade", velocidade),
+        ("deslocamento_programado", deslocamento),
+    ):
+        if value is not None and ctrl.resolve(role) is not None:
+            ctrl.write_named(role, value)
+            applied[role] = value
+    if sentido in ("cima", "baixo"):
+        if ctrl.resolve("sentido_cima") is not None:
+            ctrl.write_named("sentido_cima", 1 if sentido == "cima" else 0)
+        if ctrl.resolve("sentido_baixo") is not None:
+            ctrl.write_named("sentido_baixo", 1 if sentido == "baixo" else 0)
+        applied["sentido"] = sentido
+    return applied
+
+
+@app.post("/api/control/start")
+def control_start(req: ControlStartRequest):
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado — preencha em Configurações → Controle (CLP).")
+    if req.sentido not in ("cima", "baixo"):
+        raise HTTPException(status_code=422, detail="Sentido inválido — use 'cima' ou 'baixo'.")
+    if req.limite_forca is not None and req.limite_forca <= 0:
+        raise HTTPException(status_code=422, detail="Limite de força deve ser maior que zero.")
+
+    ctrl = _make_controller()
+    if ctrl.resolve("iniciar") is None:
+        raise HTTPException(status_code=400, detail="Registrador 'iniciar' não configurado em Controle (CLP).")
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+
+    pulse_ms = int(_config.get("control_pulse_ms", 300))
+    try:
+        applied = _apply_setpoints(
+            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            deslocamento=req.deslocamento, limite_forca=req.limite_forca,
+        )
+        # Persiste área/L0 do setup para a próxima aquisição derivar tensão/deformação
+        if req.area_seccao is not None:
+            _config["area_seccao_mm2"] = req.area_seccao
+        if req.comprimento_inicial is not None:
+            _config["comprimento_inicial_mm"] = req.comprimento_inicial
+        if req.area_seccao is not None or req.comprimento_inicial is not None:
+            _save_config(_config)
+
+        ctrl.pulse("iniciar", pulse_ms)
+        return {"status": "started", "sentido": req.sentido, "setpoints": applied}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao iniciar ensaio: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.post("/api/control/stop")
+def control_stop():
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado.")
+    ctrl = _make_controller()
+    if ctrl.resolve("parar") is None:
+        raise HTTPException(status_code=400, detail="Registrador 'parar' não configurado em Controle (CLP).")
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+    pulse_ms = int(_config.get("control_pulse_ms", 300))
+    try:
+        ctrl.pulse("parar", pulse_ms)
+        # Segurança: zera os sentidos
+        for role in ("sentido_cima", "sentido_baixo"):
+            if ctrl.resolve(role) is not None:
+                ctrl.write_named(role, 0)
+        return {"status": "stopped"}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao parar ensaio: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.post("/api/control/setpoints")
+def control_setpoints(req: ControlSetpointsRequest):
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado.")
+    if req.limite_forca is not None and req.limite_forca <= 0:
+        raise HTTPException(status_code=422, detail="Limite de força deve ser maior que zero.")
+    ctrl = _make_controller()
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+    try:
+        applied = _apply_setpoints(
+            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            deslocamento=req.deslocamento, limite_forca=req.limite_forca,
+        )
+        return {"status": "ok", "setpoints": applied}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao escrever setpoints: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.get("/api/control/status", response_model=ControlStatus)
+def control_status():
+    ip, port, timeout = _clp_conn()
+    regs = _read_registers_by_role()
+    if not ip or not regs:
+        return ControlStatus(online=False)
+    data = capture_registers(ip, port, timeout, regs)
+    if data is None:
+        return ControlStatus(online=False)
+    rn = _role_to_name()
+    def _val(role):
+        name = rn.get(role)
+        return data.get(name) if name else None
+    integro = _val("material_integro_bit")
+    ruptura = _val("ruptura_bit")
+    return ControlStatus(
+        online=True,
+        forca_atual=_val("forca_atual"),
+        deslocamento_atual=_val("deslocamento_atual"),
+        material_integro=bool(integro) if integro is not None else None,
+        ruptura=bool(ruptura) if ruptura is not None else None,
+        ativo=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Aquisição do CLP — SSE stream com gravação direta no banco
+# ---------------------------------------------------------------------------
+
+@app.get("/api/control/stream")
+async def control_stream(request: Request):
+    """Stream SSE que lê força/deslocamento do CLP, acumula as amostras e, ao
+    detectar ruptura (M31) — ou desconexão do cliente após coletar dados —, grava
+    o ensaio direto no banco e emite {"saved_ensaio_id": N}."""
+    ip, port, timeout = _clp_conn()
+    interval_ms = max(50, int(_config.get("realtime_interval_ms", 100)))
+    regs = _read_registers_by_role()
+    rn = _role_to_name()
+    forca_name   = rn.get("forca_atual")
+    desl_name    = rn.get("deslocamento_atual")
+    integro_name = rn.get("material_integro_bit")
+    ruptura_name = rn.get("ruptura_bit")
+
+    if not ip or not forca_name:
+        async def _err():
+            yield f"data: {json.dumps({'error': 'clp_nao_configurado'})}\n\n"
+        return StreamingResponse(_err(), media_type="text/event-stream")
+
+    reader = RealtimeModbusReader(ip, port, timeout, regs)
+    loop   = asyncio.get_event_loop()
+    area = float(_config.get("area_seccao_mm2", 0) or 0)
+    l0   = float(_config.get("comprimento_inicial_mm", 0) or 0)
+
+    def _persist(samples: list[dict]) -> int | None:
+        if len(samples) < 10:
+            return None
+        db = SessionLocal()
+        try:
+            filename = f"CLP_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+            metadata, df = build_ensaio_dataframe(samples, area, l0, filename=filename)
+            if int(df["Forca_N"].dropna().shape[0]) < 10:
+                return None
+            params = {"area_seccao": area, "comprimento_inicial": l0} if (area > 0 and l0 > 0) else None
+            rec = persist_ensaio(db, metadata, df, filename=filename, params=params, source_ip=ip)
+            return rec.id
+        except Exception as exc:
+            print(f"[control] Falha ao persistir ensaio: {exc}", flush=True)
+            return None
+        finally:
+            db.close()
+
+    async def generate():
+        samples: list[dict] = []
+        t_start: float | None = None
+        last_ruptura = False
+        try:
+            connected = await loop.run_in_executor(None, reader.connect)
+            if not connected:
+                yield f"data: {json.dumps({'error': 'clp_offline'})}\n\n"
+                return
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                data = await loop.run_in_executor(None, reader.read)
+                if data is None:
+                    yield f"data: {json.dumps({'error': 'reconnecting'})}\n\n"
+                    await asyncio.sleep(1.0)
+                    await loop.run_in_executor(None, reader.connect)
+                    continue
+
+                forca   = data.get(forca_name)
+                desl    = data.get(desl_name) if desl_name else None
+                integro = bool(data.get(integro_name, 0)) if integro_name else None
+                ruptura = bool(data.get(ruptura_name, 0)) if ruptura_name else False
+
+                if t_start is None and forca is not None:
+                    t_start = time.time()
+                elapsed_ms = int((time.time() - t_start) * 1000) if t_start else 0
+
+                if forca is not None:
+                    samples.append({"t_ms": elapsed_ms, "forca": forca, "deslocamento": desl or 0.0})
+
+                # Borda de subida na ruptura → grava e encerra
+                if ruptura and not last_ruptura:
+                    saved_id = await loop.run_in_executor(None, _persist, samples)
+                    yield f"data: {json.dumps({'ruptura': True, 'saved_ensaio_id': saved_id})}\n\n"
+                    break
+                last_ruptura = ruptura
+
+                payload = json.dumps({
+                    "recording":        t_start is not None,
+                    "forca":            forca,
+                    "deslocamento":     desl,
+                    "material_integro": integro,
+                    "ruptura":          ruptura,
+                    "t_ms":             elapsed_ms,
+                })
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(interval_ms / 1000)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await loop.run_in_executor(None, reader.close)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":        "keep-alive",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

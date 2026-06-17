@@ -1,0 +1,190 @@
+{
+  "watch_directory": "C:\\Projetos\\Annalogyc\\sandbox\\maq-tracao\\data",
+  "auto_load": true,
+  "refresh_interval_s": 5,
+  "ihm_ip": "192.168.8.10",
+  "ihm_port": 502,
+  "ihm_timeout": 3,
+  "ihm_registers": [
+    {
+      "name": "velocidade_processamento",
+      "address": 40000,
+      "description": "Velocidade Processamento",
+      "data_type": "decimal",
+      "scale": 0.01
+    },
+    {
+      "name": "deslocamento_programado",
+      "address": 40005,
+      "description": "Deslocamento Programado",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "forca_maxima",
+      "address": 40010,
+      "description": "Força Máxima",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "area_seccao",
+      "address": 40020,
+      "description": "Área da Secção",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "comprimento_inicial",
+      "address": 40030,
+      "description": "Comprimento Inicial",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "deslocamento_atual",
+      "address": 40040,
+      "description": "Deslocamento Atual",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "forca_atual",
+      "address": 40050,
+      "description": "Força Atual",
+      "data_type": "float32",
+      "scale": 1.0
+    },
+    {
+      "name": "teste_ativo_bit",
+      "address": 3999,
+      "description": "BIT INICIO",
+      "data_type": "coil",
+      "scale": 1.0
+    },
+    {
+      "name": "teste_parada_bit",
+      "address": 3997,
+      "description": "BIT PARADA",
+      "data_type": "coil",
+      "scale": 1.0
+    }
+  ],
+  "ftp_port": 21,
+  "ftp_user": "hmi",
+  "ftp_password": "12345678",
+  "ftp_remote_dir": "/HMI/HMI-000/History/CSV",
+  "ftp_remote_filename": "H0001.csv",
+  "realtime_interval_ms": 100,
+  "realtime_bit_name": "teste_ativo_bit",
+  "realtime_stop_bit_name": "teste_parada_bit",
+  "realtime_forca_name": "forca_atual",
+  "realtime_deslocamento_name": "deslocamento_atual",
+  "clp_ip": "",
+  "clp_port": 502,
+  "clp_timeout": 3,
+  "control_pulse_ms": 300,
+  "area_seccao_mm2": 0.0,
+  "comprimento_inicial_mm": 0.0,
+  "control_registers": [
+    {
+      "name": "iniciar",
+      "role": "iniciar",
+      "address": 9,
+      "description": "VERIFICAR endereco Modbus — device M9 (BIT INICIO)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "parar",
+      "role": "parar",
+      "address": 7,
+      "description": "VERIFICAR endereco Modbus — device M7 (BIT PARADA)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "sentido_cima",
+      "role": "sentido_cima",
+      "address": 5,
+      "description": "VERIFICAR endereco Modbus — device M5 (sobe)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "sentido_baixo",
+      "role": "sentido_baixo",
+      "address": 6,
+      "description": "VERIFICAR endereco Modbus — device M6 (desce)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "deslocamento_programado",
+      "role": "deslocamento_programado",
+      "address": 412,
+      "description": "VERIFICAR endereco/tipo — device T412/D412 (float doubleword)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "velocidade",
+      "role": "velocidade",
+      "address": 408,
+      "description": "VERIFICAR endereco/escala — device D408 (decimal doubleword)",
+      "data_type": "decimal32",
+      "scale": 0.01,
+      "writable": true
+    },
+    {
+      "name": "limite_forca",
+      "role": "limite_forca",
+      "address": 2006,
+      "description": "VERIFICAR endereco/tipo — device D2006 (Limite de forca de ruptura)",
+      "data_type": "int32",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "forca_atual",
+      "role": "forca_atual",
+      "address": 2000,
+      "description": "VERIFICAR endereco/tipo — device D2000 (Forca Newton atual)",
+      "data_type": "int32",
+      "scale": 1.0,
+      "writable": false
+    },
+    {
+      "name": "deslocamento_atual",
+      "role": "deslocamento_atual",
+      "address": 412,
+      "description": "VERIFICAR endereco/tipo — deslocamento instantaneo (mm)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": false
+    },
+    {
+      "name": "material_integro_bit",
+      "role": "material_integro_bit",
+      "address": 30,
+      "description": "VERIFICAR endereco Modbus — device M30 (Material integro)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": false
+    },
+    {
+      "name": "ruptura_bit",
+      "role": "ruptura_bit",
+      "address": 31,
+      "description": "VERIFICAR endereco Modbus — device M31 (Material sofreu ruptura)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": false
+    }
+  ]
+}

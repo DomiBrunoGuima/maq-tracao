@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Radio, Sliders, Settings } from "lucide-react";
+import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Radio, Sliders, Settings, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig, useFetchFtpCsv } from "../../hooks/useConfig";
 
-type Section = "geral" | "ihm" | "ftp" | "registradores" | "realtime" | "sobre";
+type Section = "geral" | "ihm" | "ftp" | "registradores" | "realtime" | "controle" | "sobre";
 
 interface Props {
   onClose: () => void;
@@ -28,6 +28,13 @@ type FormState = {
   realtime_stop_bit_name: string;
   realtime_forca_name: string;
   realtime_deslocamento_name: string;
+  clp_ip: string;
+  clp_port: number;
+  clp_timeout: number;
+  control_registers: IHMRegister[];
+  control_pulse_ms: number;
+  area_seccao_mm2: number;
+  comprimento_inicial_mm: number;
 };
 
 const DEFAULT_FORM: FormState = {
@@ -48,6 +55,13 @@ const DEFAULT_FORM: FormState = {
   realtime_stop_bit_name: "teste_parada_bit",
   realtime_forca_name: "forca_atual",
   realtime_deslocamento_name: "deslocamento_atual",
+  clp_ip: "",
+  clp_port: 502,
+  clp_timeout: 3,
+  control_registers: [],
+  control_pulse_ms: 300,
+  area_seccao_mm2: 0,
+  comprimento_inicial_mm: 0,
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -340,142 +354,189 @@ function FTPSection({
   );
 }
 
-function RegistradoresSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
-  function addReg() {
-    setForm((f) => ({
-      ...f,
-      ihm_registers: [
-        ...f.ihm_registers,
-        { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0 },
-      ],
-    }));
-  }
+const DATA_TYPE_OPTIONS = ["uint16", "decimal", "int32", "decimal32", "float32", "coil"] as const;
+const WORD2_TYPES = ["int32", "decimal32", "float32"]; // tipos com escala numérica (float32 sem escala)
 
-  function updateReg(i: number, patch: Partial<IHMRegister>) {
-    setForm((f) => {
-      const regs = [...f.ihm_registers];
-      regs[i] = { ...regs[i], ...patch };
-      return { ...f, ihm_registers: regs };
-    });
-  }
-
-  function removeReg(i: number) {
-    setForm((f) => ({ ...f, ihm_registers: f.ihm_registers.filter((_, j) => j !== i) }));
-  }
+function RegisterTable({
+  registers, onAdd, onUpdate, onRemove, showRole = false, addLabel = "Adicionar",
+}: {
+  registers: IHMRegister[];
+  onAdd: () => void;
+  onUpdate: (i: number, patch: Partial<IHMRegister>) => void;
+  onRemove: (i: number) => void;
+  showRole?: boolean;
+  addLabel?: string;
+}) {
+  const cols = showRole
+    ? "grid-cols-[80px_110px_110px_1fr_92px_70px_32px]"
+    : "grid-cols-[90px_120px_1fr_100px_80px_32px]";
+  const headers = showRole
+    ? ["Endereço", "Role", "Nome", "Descrição", "Tipo", "Escala", ""]
+    : ["Endereço", "Nome", "Descrição", "Tipo", "Escala", ""];
+  const inputCell =
+    "bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white " +
+    "focus:outline-none focus:border-accent transition-colors w-full";
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-1">
-        <div>
-          <SectionTitle>Registradores Modbus</SectionTitle>
-          <SectionDesc>
-            Mapeamento de endereços Modbus lidos da IHM. Suporta uint16, decimal (com escala) e
-            float32 IEEE 754 big-endian (dois registradores consecutivos).
-          </SectionDesc>
-        </div>
+      <div className="flex justify-end mb-2">
         <button
-          onClick={addReg}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                     bg-accent/10 text-accent hover:bg-accent/20 transition-colors mt-1"
+          onClick={onAdd}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                     bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
         >
           <Plus size={12} />
-          Adicionar
+          {addLabel}
         </button>
       </div>
 
-      {form.ihm_registers.length === 0 ? (
+      {registers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border py-10 text-center">
           <p className="text-sm text-muted/60">Nenhum registrador configurado.</p>
-          <p className="text-xs text-muted/40 mt-1">Clique em "Adicionar" para mapear um endereço Modbus.</p>
+          <p className="text-xs text-muted/40 mt-1">Clique em "{addLabel}" para mapear um endereço Modbus.</p>
         </div>
       ) : (
         <>
-          {/* Table header */}
-          <div className="grid grid-cols-[90px_120px_1fr_100px_80px_32px] gap-2 px-3 mb-1.5">
-            {["Endereço", "Nome", "Descrição", "Tipo", "Escala", ""].map((h) => (
-              <span key={h} className="text-[10px] font-medium text-muted/50 uppercase tracking-wider">{h}</span>
+          <div className={clsx("grid gap-2 px-3 mb-1.5", cols)}>
+            {headers.map((h, idx) => (
+              <span key={idx} className="text-[10px] font-medium text-muted/50 uppercase tracking-wider">{h}</span>
             ))}
           </div>
 
           <div className="space-y-2">
-            {form.ihm_registers.map((r, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[90px_120px_1fr_100px_80px_32px] gap-2 items-center
-                           bg-surface border border-border rounded-lg px-3 py-2.5"
-              >
-                <input
-                  type="number"
-                  value={r.address}
-                  onChange={(e) => updateReg(i, { address: Number(e.target.value) })}
-                  placeholder="40000"
-                  className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
-                             focus:outline-none focus:border-accent transition-colors w-full"
-                />
-                <input
-                  value={r.name}
-                  onChange={(e) => updateReg(i, { name: e.target.value })}
-                  placeholder="chave"
-                  className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
-                             focus:outline-none focus:border-accent transition-colors w-full"
-                />
-                <input
-                  value={r.description}
-                  onChange={(e) => updateReg(i, { description: e.target.value })}
-                  placeholder="Descrição"
-                  className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
-                             focus:outline-none focus:border-accent transition-colors w-full"
-                />
-                <select
-                  value={r.data_type}
-                  onChange={(e) => updateReg(i, { data_type: e.target.value as IHMRegister["data_type"] })}
-                  className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
-                             focus:outline-none focus:border-accent transition-colors w-full"
-                >
-                  <option value="uint16">uint16</option>
-                  <option value="decimal">decimal</option>
-                  <option value="float32">float32</option>
-                  <option value="coil">coil</option>
+            {registers.map((r, i) => (
+              <div key={i} className={clsx("grid gap-2 items-center bg-surface border border-border rounded-lg px-3 py-2.5", cols)}>
+                <input type="number" value={r.address} placeholder="40000"
+                  onChange={(e) => onUpdate(i, { address: Number(e.target.value) })} className={inputCell} />
+                {showRole && (
+                  <input value={r.role ?? ""} placeholder="role"
+                    onChange={(e) => onUpdate(i, { role: e.target.value })} className={inputCell} />
+                )}
+                <input value={r.name} placeholder="chave"
+                  onChange={(e) => onUpdate(i, { name: e.target.value })} className={inputCell} />
+                <input value={r.description} placeholder="Descrição"
+                  onChange={(e) => onUpdate(i, { description: e.target.value })} className={inputCell} />
+                <select value={r.data_type}
+                  onChange={(e) => onUpdate(i, { data_type: e.target.value as IHMRegister["data_type"] })} className={inputCell}>
+                  {DATA_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-                {r.data_type !== "float32" ? (
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={r.scale ?? 1}
-                    onChange={(e) => updateReg(i, { scale: Number(e.target.value) })}
-                    className="bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white
-                               focus:outline-none focus:border-accent transition-colors w-full"
-                  />
+                {r.data_type !== "float32" && r.data_type !== "coil" ? (
+                  <input type="number" step="0.001" value={r.scale ?? 1}
+                    onChange={(e) => onUpdate(i, { scale: Number(e.target.value) })} className={inputCell} />
                 ) : (
                   <span className="text-xs text-muted/30 font-mono text-center">—</span>
                 )}
-                <button
-                  onClick={() => removeReg(i)}
-                  className="text-muted hover:text-red-400 transition-colors flex items-center justify-center"
-                >
+                <button onClick={() => onRemove(i)}
+                  className="text-muted hover:text-red-400 transition-colors flex items-center justify-center">
                   <Trash2 size={13} />
                 </button>
               </div>
             ))}
           </div>
 
-          {(form.ihm_registers.some((r) => r.data_type === "float32") ||
-            form.ihm_registers.some((r) => r.data_type !== "float32" && (r.scale ?? 1) !== 1)) && (
-            <div className="mt-3 space-y-1">
-              {form.ihm_registers.some((r) => r.data_type === "float32") && (
-                <p className="text-[10px] font-mono text-muted/50">
-                  float32 — lê registradores N (HI) + N+1 (LO), IEEE 754 big-endian
-                </p>
-              )}
-              {form.ihm_registers.some((r) => r.data_type !== "float32" && (r.scale ?? 1) !== 1) && (
-                <p className="text-[10px] font-mono text-muted/50">
-                  decimal — valor_real = raw × escala
-                </p>
-              )}
-            </div>
-          )}
+          <div className="mt-3 space-y-1">
+            <p className="text-[10px] font-mono text-muted/50">
+              float32 / int32 / decimal32 — registradores N (HI) + N+1 (LO), big-endian
+            </p>
+            {registers.some((r) => WORD2_TYPES.includes(r.data_type) || r.data_type === "decimal") && (
+              <p className="text-[10px] font-mono text-muted/50">decimal/int32/decimal32 — valor_real = raw × escala</p>
+            )}
+          </div>
         </>
       )}
+    </div>
+  );
+}
+
+function makeRegHandlers(
+  key: "ihm_registers" | "control_registers",
+  setForm: React.Dispatch<React.SetStateAction<FormState>>,
+  defaults: Partial<IHMRegister>,
+) {
+  return {
+    add: () => setForm((f) => ({
+      ...f,
+      [key]: [...f[key], { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0, ...defaults }],
+    })),
+    update: (i: number, patch: Partial<IHMRegister>) => setForm((f) => {
+      const regs = [...f[key]];
+      regs[i] = { ...regs[i], ...patch };
+      return { ...f, [key]: regs };
+    }),
+    remove: (i: number) => setForm((f) => ({ ...f, [key]: f[key].filter((_, j) => j !== i) })),
+  };
+}
+
+function RegistradoresSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  const h = makeRegHandlers("ihm_registers", setForm, {});
+  return (
+    <div>
+      <SectionTitle>Registradores Modbus</SectionTitle>
+      <SectionDesc>
+        Mapeamento de endereços Modbus lidos da IHM (legado). Suporta uint16, decimal (com escala),
+        int32/decimal32 e float32 big-endian (dois registradores consecutivos).
+      </SectionDesc>
+      <RegisterTable registers={form.ihm_registers} onAdd={h.add} onUpdate={h.update} onRemove={h.remove} />
+    </div>
+  );
+}
+
+function ControleSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  const h = makeRegHandlers("control_registers", setForm, { writable: true, role: "" });
+  return (
+    <div>
+      <SectionTitle>Controle (CLP)</SectionTitle>
+      <SectionDesc>
+        Conexão Modbus TCP direta com o CLP e mapeamento dos registradores de comando/leitura.
+        Roles esperados: <span className="text-slate-300 font-mono">iniciar, parar, sentido_cima, sentido_baixo,
+        deslocamento_programado, velocidade, limite_forca, forca_atual, deslocamento_atual,
+        material_integro_bit, ruptura_bit</span>.
+      </SectionDesc>
+
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <Field label="IP do CLP" hint="Se vazio, usa o IP da Conexão IHM.">
+          <input value={form.clp_ip} onChange={(e) => setForm((f) => ({ ...f, clp_ip: e.target.value }))}
+            placeholder="192.168.11.10" className={inputCls} />
+        </Field>
+        <Field label="Porta Modbus">
+          <input type="number" value={form.clp_port}
+            onChange={(e) => setForm((f) => ({ ...f, clp_port: Number(e.target.value) }))} className={inputCls} />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <Field label="Timeout (s)">
+          <input type="number" min={1} max={30} value={form.clp_timeout}
+            onChange={(e) => setForm((f) => ({ ...f, clp_timeout: Number(e.target.value) }))} className={smallInputCls + " w-full"} />
+        </Field>
+        <Field label="Pulso comando (ms)" hint="Duração do pulso em coils iniciar/parar.">
+          <input type="number" min={50} max={2000} step={10} value={form.control_pulse_ms}
+            onChange={(e) => setForm((f) => ({ ...f, control_pulse_ms: Number(e.target.value) }))} className={smallInputCls + " w-full"} />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-2">
+        <Field label="Área da seção padrão (mm²)" hint="Usada para derivar tensão σ = F/A.">
+          <input type="number" step="0.01" value={form.area_seccao_mm2}
+            onChange={(e) => setForm((f) => ({ ...f, area_seccao_mm2: Number(e.target.value) }))} className={inputCls} />
+        </Field>
+        <Field label="Comprimento inicial L₀ (mm)" hint="Usado para derivar deformação ε = ΔL/L₀.">
+          <input type="number" step="0.01" value={form.comprimento_inicial_mm}
+            onChange={(e) => setForm((f) => ({ ...f, comprimento_inicial_mm: Number(e.target.value) }))} className={inputCls} />
+        </Field>
+      </div>
+
+      <Divider />
+
+      <div className="mb-2">
+        <SectionTitle>Registradores de controle</SectionTitle>
+        <SectionDesc>Endereços Modbus de escrita (comandos/setpoints) e leitura (força/deslocamento/flags).</SectionDesc>
+      </div>
+      <RegisterTable
+        registers={form.control_registers}
+        onAdd={h.add} onUpdate={h.update} onRemove={h.remove}
+        showRole addLabel="Adicionar registrador"
+      />
     </div>
   );
 }
@@ -597,6 +658,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "ftp",            label: "FTP",              icon: <Download size={15} /> },
   { id: "registradores",  label: "Registradores",    icon: <Sliders size={15} /> },
   { id: "realtime",       label: "Tempo Real",       icon: <Radio size={15} /> },
+  { id: "controle",       label: "Controle (CLP)",   icon: <SlidersHorizontal size={15} /> },
 ];
 
 export default function ConfigPanel({ onClose }: Props) {
@@ -607,7 +669,12 @@ export default function ConfigPanel({ onClose }: Props) {
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 
   useEffect(() => {
-    if (config) setForm((prev) => ({ ...prev, ...config, ihm_registers: config.ihm_registers ?? [] }));
+    if (config) setForm((prev) => ({
+      ...prev,
+      ...config,
+      ihm_registers: config.ihm_registers ?? [],
+      control_registers: config.control_registers ?? [],
+    }));
   }, [config]);
 
   if (isLoading) {
@@ -663,6 +730,7 @@ export default function ConfigPanel({ onClose }: Props) {
             {section === "ftp"           && <FTPSection           form={form} setForm={setForm} fetchFtpMut={fetchFtpMut} updateMut={updateMut} />}
             {section === "registradores" && <RegistradoresSection form={form} setForm={setForm} />}
             {section === "realtime"      && <RealtimeSection      form={form} setForm={setForm} />}
+            {section === "controle"      && <ControleSection      form={form} setForm={setForm} />}
             {section === "sobre"         && <SobreSection />}
           </div>
         </div>

@@ -44,8 +44,11 @@ class IHMRegister(BaseModel):
     name: str
     address: int
     description: str = ""
-    data_type: str = "uint16"   # "uint16" | "decimal" | "float32"
-    scale: float = 1.0          # aplicado ao uint16/decimal: valor_real = raw * scale
+    # "coil" | "uint16" | "decimal" | "int32" | "decimal32" | "float32"
+    data_type: str = "uint16"
+    scale: float = 1.0          # aplicado a uint16/decimal/int32/decimal32: valor_real = raw * scale
+    role: str = ""              # papel no controle (iniciar, parar, sentido_cima, limite_forca, ...)
+    writable: bool = False      # se o software pode escrever neste registrador
 
 
 class ParametrosIHM(BaseModel):
@@ -76,6 +79,39 @@ class ConfigModel(BaseModel):
     realtime_stop_bit_name: str = "teste_parada_bit"
     realtime_forca_name: str = "forca_atual"
     realtime_deslocamento_name: str = "deslocamento_atual"
+    # ── Conexão e controle direto do CLP (substitui a IHM) ──────────────────
+    clp_ip: str = ""            # se vazio, faz fallback para ihm_ip
+    clp_port: int = 502
+    clp_timeout: int = 3
+    control_registers: List[IHMRegister] = []
+    control_pulse_ms: int = 300  # duração do pulso em coils de comando (iniciar/parar)
+    area_seccao_mm2: float = 0.0       # default do setup; sobrescrito por ensaio
+    comprimento_inicial_mm: float = 0.0
+
+
+class ControlStartRequest(BaseModel):
+    sentido: str = "cima"              # "cima" | "baixo"
+    velocidade: Optional[float] = None
+    deslocamento: Optional[float] = None
+    limite_forca: Optional[float] = None
+    area_seccao: Optional[float] = None
+    comprimento_inicial: Optional[float] = None
+
+
+class ControlSetpointsRequest(BaseModel):
+    sentido: Optional[str] = None      # "cima" | "baixo" | None (não altera)
+    velocidade: Optional[float] = None
+    deslocamento: Optional[float] = None
+    limite_forca: Optional[float] = None
+
+
+class ControlStatus(BaseModel):
+    online: bool = False
+    forca_atual: Optional[float] = None
+    deslocamento_atual: Optional[float] = None
+    material_integro: Optional[bool] = None
+    ruptura: Optional[bool] = None
+    ativo: Optional[bool] = None
 
 
 class DadosEmpresa(BaseModel):

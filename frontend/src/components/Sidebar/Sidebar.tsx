@@ -6,6 +6,7 @@ import {
   RefreshCw,
   RotateCcw,
   Settings,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -21,6 +22,7 @@ interface Props {
   onViewConfig: () => void;
   onViewComparison: () => void;
   onViewRealtime: () => void;
+  onViewControl: () => void;
   currentView: string;
 }
 
@@ -32,6 +34,7 @@ export default function Sidebar({
   onViewConfig,
   onViewComparison,
   onViewRealtime,
+  onViewControl,
   currentView,
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
@@ -139,6 +142,21 @@ export default function Sidebar({
 
       {/* Bottom nav buttons */}
       <div className="p-3 border-t border-border space-y-1">
+        <button
+          onClick={onViewControl}
+          className={clsx(
+            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
+            currentView === "control"
+              ? "bg-accent/10 text-accent"
+              : "text-muted hover:text-white hover:bg-border"
+          )}
+        >
+          <SlidersHorizontal size={15} className={currentView === "control" ? "text-accent" : ""} />
+          Controle da Máquina
+          {currentView === "control" && (
+            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          )}
+        </button>
         <button
           onClick={onViewRealtime}
           className={clsx(
