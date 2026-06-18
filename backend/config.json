@@ -186,5 +186,83 @@
       "scale": 1.0,
       "writable": false
     }
+  ],
+  "flexao_largura_mm": 0.0,
+  "flexao_espessura_mm": 0.0,
+  "flexao_span_mm": 0.0,
+  "flexao_norma": "ISO 178",
+  "flexao_registers": [
+    {
+      "name": "iniciar",
+      "role": "iniciar",
+      "address": 0,
+      "description": "VERIFICAR no hardware — coil de inicio do ensaio de flexao",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "parar",
+      "role": "parar",
+      "address": 0,
+      "description": "VERIFICAR no hardware — coil de parada do ensaio de flexao",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "velocidade",
+      "role": "velocidade",
+      "address": 0,
+      "description": "VERIFICAR no hardware — velocidade do ensaio de flexao (mm/min)",
+      "data_type": "decimal32",
+      "scale": 0.01,
+      "writable": true
+    },
+    {
+      "name": "deslocamento_programado",
+      "role": "deslocamento_programado",
+      "address": 0,
+      "description": "VERIFICAR no hardware — deflexao-alvo do ensaio de flexao (mm)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "limite_forca",
+      "role": "limite_forca",
+      "address": 0,
+      "description": "VERIFICAR no hardware — limite de forca do ensaio de flexao (N)",
+      "data_type": "int32",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "forca_atual",
+      "role": "forca_atual",
+      "address": 0,
+      "description": "VERIFICAR no hardware — carga aplicada pelo cutelo (N)",
+      "data_type": "int32",
+      "scale": 1.0,
+      "writable": false
+    },
+    {
+      "name": "deslocamento_atual",
+      "role": "deslocamento_atual",
+      "address": 0,
+      "description": "VERIFICAR no hardware — deflexao no centro do corpo de prova (mm)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": false
+    },
+    {
+      "name": "fim_ensaio_bit",
+      "role": "fim_ensaio_bit",
+      "address": 0,
+      "description": "VERIFICAR no hardware — bit que sinaliza fim do ensaio de flexao (ruptura ou deflexao-alvo atingida)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": false
+    }
   ]
 }

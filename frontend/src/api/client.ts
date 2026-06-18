@@ -6,8 +6,13 @@ import type {
   ControlStartRequest,
   ControlStatus,
   EnsaioDetail,
+  EnsaioFlexaoDetail,
+  EnsaioFlexaoSummary,
   EnsaioSummary,
+  FlexaoChartData,
+  FlexaoControlStartRequest,
   KPIs,
+  KPIsFlexao,
   ModbusFetchResult,
   ParametrosIHM,
   ReportRequest,
@@ -61,6 +66,32 @@ export const setSetpoints = (req: ControlSetpointsRequest): Promise<{ status: st
 
 export const getControlStatus = (): Promise<ControlStatus> =>
   api.get("/control/status").then((r) => r.data);
+
+// ── Flexão (módulo separado) ───────────────────────────────────────────────
+
+export const getEnsaiosFlexao = (): Promise<EnsaioFlexaoSummary[]> =>
+  api.get("/flexao/ensaios").then((r) => r.data);
+
+export const getEnsaioFlexao = (id: number): Promise<EnsaioFlexaoDetail> =>
+  api.get(`/flexao/ensaios/${id}`).then((r) => r.data);
+
+export const getKPIsFlexao = (id: number): Promise<KPIsFlexao> =>
+  api.get(`/flexao/ensaios/${id}/kpis`).then((r) => r.data);
+
+export const getCurvasFlexao = (id: number): Promise<FlexaoChartData> =>
+  api.get(`/flexao/ensaios/${id}/curvas`).then((r) => r.data);
+
+export const deleteEnsaioFlexao = (id: number): Promise<void> =>
+  api.delete(`/flexao/ensaios/${id}`).then(() => undefined);
+
+export const startFlexaoTest = (req: FlexaoControlStartRequest): Promise<{ status: string; sentido: string; setpoints: Record<string, number> }> =>
+  api.post("/flexao/control/start", req).then((r) => r.data);
+
+export const stopFlexaoTest = (): Promise<{ status: string }> =>
+  api.post("/flexao/control/stop").then((r) => r.data);
+
+export const getFlexaoStatus = (): Promise<ControlStatus> =>
+  api.get("/flexao/control/status").then((r) => r.data);
 
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });

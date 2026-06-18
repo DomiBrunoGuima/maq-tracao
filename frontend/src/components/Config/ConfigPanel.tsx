@@ -35,6 +35,11 @@ type FormState = {
   control_pulse_ms: number;
   area_seccao_mm2: number;
   comprimento_inicial_mm: number;
+  flexao_registers: IHMRegister[];
+  flexao_largura_mm: number;
+  flexao_espessura_mm: number;
+  flexao_span_mm: number;
+  flexao_norma: string;
 };
 
 const DEFAULT_FORM: FormState = {
@@ -62,6 +67,11 @@ const DEFAULT_FORM: FormState = {
   control_pulse_ms: 300,
   area_seccao_mm2: 0,
   comprimento_inicial_mm: 0,
+  flexao_registers: [],
+  flexao_largura_mm: 0,
+  flexao_espessura_mm: 0,
+  flexao_span_mm: 0,
+  flexao_norma: "ISO 178",
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -674,6 +684,7 @@ export default function ConfigPanel({ onClose }: Props) {
       ...config,
       ihm_registers: config.ihm_registers ?? [],
       control_registers: config.control_registers ?? [],
+      flexao_registers: config.flexao_registers ?? [],
     }));
   }, [config]);
 

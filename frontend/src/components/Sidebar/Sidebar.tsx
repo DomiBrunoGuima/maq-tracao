@@ -5,6 +5,7 @@ import {
   Radio,
   RefreshCw,
   RotateCcw,
+  Ruler,
   Settings,
   SlidersHorizontal,
   Trash2,
@@ -23,6 +24,7 @@ interface Props {
   onViewComparison: () => void;
   onViewRealtime: () => void;
   onViewControl: () => void;
+  onViewFlexao: () => void;
   currentView: string;
 }
 
@@ -35,6 +37,7 @@ export default function Sidebar({
   onViewComparison,
   onViewRealtime,
   onViewControl,
+  onViewFlexao,
   currentView,
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
@@ -154,6 +157,21 @@ export default function Sidebar({
           <SlidersHorizontal size={15} className={currentView === "control" ? "text-accent" : ""} />
           Controle da Máquina
           {currentView === "control" && (
+            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          )}
+        </button>
+        <button
+          onClick={onViewFlexao}
+          className={clsx(
+            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
+            currentView === "flexao"
+              ? "bg-accent/10 text-accent"
+              : "text-muted hover:text-white hover:bg-border"
+          )}
+        >
+          <Ruler size={15} className={currentView === "flexao" ? "text-accent" : ""} />
+          Ensaio de Flexão
+          {currentView === "flexao" && (
             <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           )}
         </button>

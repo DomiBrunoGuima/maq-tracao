@@ -16,14 +16,20 @@ from sqlalchemy.orm import Session
 
 from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
-from .database import EnsaioDB, ParametrosIHMDB, SessionLocal, get_db
+from .database import EnsaioDB, EnsaioFlexaoDB, ParametrosIHMDB, SessionLocal, get_db
+from .flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao
+from .flexao.calculator import calculate_kpis as calculate_kpis_flexao
+from .flexao.calculator import format_chart_data as format_chart_data_flexao
 from .models import (
     ConfigModel,
     ControlSetpointsRequest,
     ControlStartRequest,
     ControlStatus,
     EnsaioDetail,
+    EnsaioFlexaoDetail,
+    EnsaioFlexaoSummary,
     EnsaioSummary,
+    FlexaoControlStartRequest,
     ParametrosIHM,
     ReportRequest,
 )
@@ -64,6 +70,11 @@ _CONFIG_DEFAULTS: dict = {
     "control_pulse_ms": 300,
     "area_seccao_mm2": 0.0,
     "comprimento_inicial_mm": 0.0,
+    "flexao_registers": [],
+    "flexao_largura_mm": 0.0,
+    "flexao_espessura_mm": 0.0,
+    "flexao_span_mm": 0.0,
+    "flexao_norma": "ISO 178",
 }
 
 
@@ -807,6 +818,289 @@ async def realtime_stream(request: Request):
             "Cache-Control":    "no-cache",
             "X-Accel-Buffering": "no",
             "Connection":       "keep-alive",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Flexão — listagem, KPIs, curvas, controle e aquisição (módulo separado)
+# ---------------------------------------------------------------------------
+
+_FLEXAO_READ_ROLES = ("forca_atual", "deslocamento_atual", "fim_ensaio_bit")
+
+
+def _flexao_registers() -> list[dict]:
+    return _config.get("flexao_registers", []) or []
+
+
+def _flexao_make_controller() -> ModbusController:
+    ip, port, timeout = _clp_conn()
+    return ModbusController(ip, port, timeout, _flexao_registers())
+
+
+def _flexao_read_registers_by_role() -> list[dict]:
+    return [r for r in _flexao_registers() if r.get("role") in _FLEXAO_READ_ROLES]
+
+
+def _flexao_role_to_name() -> dict[str, str]:
+    return {r["role"]: r["name"] for r in _flexao_registers() if r.get("role") and r.get("name")}
+
+
+@app.get("/api/flexao/ensaios", response_model=list[EnsaioFlexaoSummary])
+def list_ensaios_flexao(db: Session = Depends(get_db)):
+    rows = db.query(EnsaioFlexaoDB).order_by(EnsaioFlexaoDB.created_at.desc()).all()
+    return [
+        EnsaioFlexaoSummary(
+            id=r.id, nome=r.nome, filename=r.filename,
+            data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
+            forca_max_N=r.forca_max_N, tensao_flexao_max_MPa=r.tensao_flexao_max_MPa,
+            modulo_flexao_MPa=r.modulo_flexao_MPa, created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@app.get("/api/flexao/ensaios/{id}", response_model=EnsaioFlexaoDetail)
+def get_ensaio_flexao(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    return EnsaioFlexaoDetail(
+        id=r.id, nome=r.nome, filename=r.filename,
+        data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
+        forca_max_N=r.forca_max_N, tensao_flexao_max_MPa=r.tensao_flexao_max_MPa,
+        modulo_flexao_MPa=r.modulo_flexao_MPa, created_at=r.created_at,
+        metadata_version=r.metadata_version,
+        metadata_equipment_id=r.metadata_equipment_id, metadata_code=r.metadata_code,
+        deflexao_max_mm=r.deflexao_max_mm, tempo_ensaio_s=r.tempo_ensaio_s,
+        largura_mm=r.largura_mm or 0.0, espessura_mm=r.espessura_mm or 0.0,
+        span_mm=r.span_mm or 0.0, norma=r.norma or "",
+    )
+
+
+def _flexao_geom(r: EnsaioFlexaoDB) -> dict:
+    return {
+        "largura_mm": r.largura_mm, "espessura_mm": r.espessura_mm,
+        "span_mm": r.span_mm, "norma": r.norma,
+    }
+
+
+@app.get("/api/flexao/ensaios/{id}/kpis")
+def get_kpis_flexao(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    return JSONResponse(content=calculate_kpis_flexao(df, geom=_flexao_geom(r)))
+
+
+@app.get("/api/flexao/ensaios/{id}/curvas")
+def get_curvas_flexao(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    return JSONResponse(content=format_chart_data_flexao(df))
+
+
+@app.delete("/api/flexao/ensaios/{id}", status_code=204)
+def delete_ensaio_flexao(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    db.delete(r)
+    db.commit()
+
+
+@app.post("/api/flexao/control/start")
+def flexao_control_start(req: FlexaoControlStartRequest):
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado — preencha em Configurações → Controle (CLP).")
+    if req.limite_forca is not None and req.limite_forca <= 0:
+        raise HTTPException(status_code=422, detail="Limite de força deve ser maior que zero.")
+
+    ctrl = _flexao_make_controller()
+    if ctrl.resolve("iniciar") is None:
+        raise HTTPException(status_code=400, detail="Registrador 'iniciar' de flexão não configurado.")
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+
+    pulse_ms = int(_config.get("control_pulse_ms", 300))
+    try:
+        applied = _apply_setpoints(
+            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            deslocamento=req.deslocamento, limite_forca=req.limite_forca,
+        )
+        # Persiste geometria do setup para a próxima aquisição derivar σf/εf.
+        for cfg_key, val in (
+            ("flexao_largura_mm", req.largura_mm),
+            ("flexao_espessura_mm", req.espessura_mm),
+            ("flexao_span_mm", req.span_mm),
+            ("flexao_norma", req.norma),
+        ):
+            if val is not None:
+                _config[cfg_key] = val
+        _save_config(_config)
+
+        ctrl.pulse("iniciar", pulse_ms)
+        return {"status": "started", "sentido": req.sentido, "setpoints": applied}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao iniciar ensaio de flexão: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.post("/api/flexao/control/stop")
+def flexao_control_stop():
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado.")
+    ctrl = _flexao_make_controller()
+    if ctrl.resolve("parar") is None:
+        raise HTTPException(status_code=400, detail="Registrador 'parar' de flexão não configurado.")
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+    pulse_ms = int(_config.get("control_pulse_ms", 300))
+    try:
+        ctrl.pulse("parar", pulse_ms)
+        for role in ("sentido_cima", "sentido_baixo"):
+            if ctrl.resolve(role) is not None:
+                ctrl.write_named(role, 0)
+        return {"status": "stopped"}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao parar ensaio de flexão: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.get("/api/flexao/control/status", response_model=ControlStatus)
+def flexao_control_status():
+    ip, port, timeout = _clp_conn()
+    regs = _flexao_read_registers_by_role()
+    if not ip or not regs:
+        return ControlStatus(online=False)
+    data = capture_registers(ip, port, timeout, regs)
+    if data is None:
+        return ControlStatus(online=False)
+    rn = _flexao_role_to_name()
+    def _val(role):
+        name = rn.get(role)
+        return data.get(name) if name else None
+    fim = _val("fim_ensaio_bit")
+    return ControlStatus(
+        online=True,
+        forca_atual=_val("forca_atual"),
+        deslocamento_atual=_val("deslocamento_atual"),
+        material_integro=(not bool(fim)) if fim is not None else None,
+        ruptura=bool(fim) if fim is not None else None,
+        ativo=None,
+    )
+
+
+@app.get("/api/flexao/control/stream")
+async def flexao_control_stream(request: Request):
+    """Stream SSE de força/deflexão do CLP; ao detectar fim do ensaio (fim_ensaio_bit)
+    — ou desconexão após coletar dados — grava o ensaio de flexão no banco."""
+    ip, port, timeout = _clp_conn()
+    interval_ms = max(50, int(_config.get("realtime_interval_ms", 100)))
+    regs = _flexao_read_registers_by_role()
+    rn = _flexao_role_to_name()
+    forca_name = rn.get("forca_atual")
+    desl_name  = rn.get("deslocamento_atual")
+    fim_name   = rn.get("fim_ensaio_bit")
+
+    if not ip or not forca_name:
+        async def _err():
+            yield f"data: {json.dumps({'error': 'clp_nao_configurado'})}\n\n"
+        return StreamingResponse(_err(), media_type="text/event-stream")
+
+    reader = RealtimeModbusReader(ip, port, timeout, regs)
+    loop   = asyncio.get_event_loop()
+    geom = {
+        "largura_mm":   float(_config.get("flexao_largura_mm", 0) or 0),
+        "espessura_mm": float(_config.get("flexao_espessura_mm", 0) or 0),
+        "span_mm":      float(_config.get("flexao_span_mm", 0) or 0),
+        "norma":        _config.get("flexao_norma", "ISO 178"),
+    }
+
+    def _persist(samples: list[dict]) -> int | None:
+        if len(samples) < 10:
+            return None
+        db = SessionLocal()
+        try:
+            filename = f"FLEXAO_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+            metadata, df = build_ensaio_flexao_dataframe(
+                samples, geom["largura_mm"], geom["espessura_mm"], geom["span_mm"],
+                filename=filename,
+            )
+            if int(df["Forca_N"].dropna().shape[0]) < 10:
+                return None
+            rec = persist_ensaio_flexao(db, metadata, df, filename=filename, geom=geom, source_ip=ip)
+            return rec.id
+        except Exception as exc:
+            print(f"[flexao.control] Falha ao persistir ensaio: {exc}", flush=True)
+            return None
+        finally:
+            db.close()
+
+    async def generate():
+        samples: list[dict] = []
+        t_start: float | None = None
+        last_fim = False
+        try:
+            if not await loop.run_in_executor(None, reader.connect):
+                yield f"data: {json.dumps({'error': 'clp_offline'})}\n\n"
+                return
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                data = await loop.run_in_executor(None, reader.read)
+                if data is None:
+                    yield f"data: {json.dumps({'error': 'reconnecting'})}\n\n"
+                    await asyncio.sleep(1.0)
+                    await loop.run_in_executor(None, reader.connect)
+                    continue
+
+                forca = data.get(forca_name)
+                desl  = data.get(desl_name) if desl_name else None
+                fim   = bool(data.get(fim_name, 0)) if fim_name else False
+
+                if t_start is None and forca is not None:
+                    t_start = time.time()
+                elapsed_ms = int((time.time() - t_start) * 1000) if t_start else 0
+
+                if forca is not None:
+                    samples.append({"t_ms": elapsed_ms, "forca": forca, "deslocamento": desl or 0.0})
+
+                if fim and not last_fim:
+                    saved_id = await loop.run_in_executor(None, _persist, samples)
+                    yield f"data: {json.dumps({'fim_ensaio': True, 'saved_ensaio_id': saved_id})}\n\n"
+                    break
+                last_fim = fim
+
+                payload = json.dumps({
+                    "recording":    t_start is not None,
+                    "forca":        forca,
+                    "deslocamento": desl,
+                    "fim_ensaio":   fim,
+                    "t_ms":         elapsed_ms,
+                })
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(interval_ms / 1000)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await loop.run_in_executor(None, reader.close)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":        "keep-alive",
         },
     )
 

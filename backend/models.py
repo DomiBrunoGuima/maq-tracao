@@ -40,6 +40,68 @@ class KPIs(BaseModel):
     cv_modulo: float
 
 
+class EnsaioFlexaoSummary(BaseModel):
+    id: int
+    nome: str
+    filename: str
+    data_ensaio: str
+    num_amostras: int
+    forca_max_N: float
+    tensao_flexao_max_MPa: float
+    modulo_flexao_MPa: float
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EnsaioFlexaoDetail(EnsaioFlexaoSummary):
+    metadata_version: str
+    metadata_equipment_id: str
+    metadata_code: str
+    deflexao_max_mm: float
+    tempo_ensaio_s: float
+    largura_mm: float
+    espessura_mm: float
+    span_mm: float
+    norma: str
+
+
+class KPIsFlexao(BaseModel):
+    forca_max_N: float
+    forca_max_kN: float
+    tensao_flexao_max_MPa: float
+    resistencia_flexao_MPa: float
+    modulo_flexao_MPa: float
+    modulo_flexao_GPa: float
+    modulo_regressao_MPa: Optional[float] = None
+    modulo_cordal_MPa: Optional[float] = None
+    deflexao_max_mm: float
+    deflexao_pico_mm: float
+    deform_flexao_max_pct: float
+    tempo_ensaio_s: float
+    tempo_pico_s: float
+    rigidez_N_mm: float
+    taxa_carregamento_N_s: float
+    energia_J: float
+    tensao_escoamento_MPa: Optional[float] = None
+    cv_modulo: float
+    norma: str
+    largura_mm: Optional[float] = None
+    espessura_mm: Optional[float] = None
+    span_mm: Optional[float] = None
+
+
+class FlexaoControlStartRequest(BaseModel):
+    sentido: str = "baixo"             # cutelo desce sobre o corpo de prova
+    velocidade: Optional[float] = None
+    deslocamento: Optional[float] = None    # deflexão-alvo (mm)
+    limite_forca: Optional[float] = None
+    largura_mm: Optional[float] = None
+    espessura_mm: Optional[float] = None
+    span_mm: Optional[float] = None
+    norma: Optional[str] = None
+
+
 class IHMRegister(BaseModel):
     name: str
     address: int
@@ -87,6 +149,12 @@ class ConfigModel(BaseModel):
     control_pulse_ms: int = 300  # duração do pulso em coils de comando (iniciar/parar)
     area_seccao_mm2: float = 0.0       # default do setup; sobrescrito por ensaio
     comprimento_inicial_mm: float = 0.0
+    # ── Flexão (3 pontos) — registradores e geometria default do setup ──────
+    flexao_registers: List[IHMRegister] = []
+    flexao_largura_mm: float = 0.0
+    flexao_espessura_mm: float = 0.0
+    flexao_span_mm: float = 0.0
+    flexao_norma: str = "ISO 178"
 
 
 class ControlStartRequest(BaseModel):

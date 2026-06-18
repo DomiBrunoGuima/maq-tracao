@@ -32,6 +32,32 @@ class EnsaioDB(Base):
     data_json = Column(Text)
 
 
+class EnsaioFlexaoDB(Base):
+    __tablename__ = "ensaios_flexao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, index=True)
+    filename = Column(String, unique=True, index=True)
+    data_ensaio = Column(String)
+    num_amostras = Column(Integer)
+    forca_max_N = Column(Float)
+    tensao_flexao_max_MPa = Column(Float)
+    modulo_flexao_MPa = Column(Float)
+    deflexao_max_mm = Column(Float)
+    tempo_ensaio_s = Column(Float)
+    # Geometria do corpo de prova (flexão 3 pontos)
+    largura_mm = Column(Float)
+    espessura_mm = Column(Float)
+    span_mm = Column(Float)
+    norma = Column(String)
+    metadata_version = Column(String)
+    metadata_equipment_id = Column(String)
+    metadata_code = Column(String)
+    filepath = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    data_json = Column(Text)
+
+
 class ParametrosIHMDB(Base):
     __tablename__ = "parametros_ihm"
 
