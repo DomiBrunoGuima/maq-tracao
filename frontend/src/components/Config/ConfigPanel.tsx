@@ -41,6 +41,7 @@ type FormState = {
   flexao_espessura_mm: number;
   flexao_span_mm: number;
   flexao_norma: string;
+  simulator_enabled: boolean;
 };
 
 const DEFAULT_FORM: FormState = {
@@ -73,6 +74,7 @@ const DEFAULT_FORM: FormState = {
   flexao_espessura_mm: 0,
   flexao_span_mm: 0,
   flexao_norma: "ISO 178",
+  simulator_enabled: false,
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -199,6 +201,33 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
             className={clsx(smallInputCls, "w-24")}
           />
         </Field>
+      </div>
+
+      <Divider />
+
+      <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+        <div>
+          <p className="text-sm text-white font-medium">Modo simulador</p>
+          <p className="text-xs text-muted/70 mt-0.5 max-w-md">
+            Gera valores plausíveis (força, deslocamento, ruptura) sem IHM nem máquina real —
+            permite iniciar e finalizar um ensaio para testar o software. Não conecta no CLP.
+          </p>
+        </div>
+        <button
+          onClick={() => setForm((f) => ({ ...f, simulator_enabled: !f.simulator_enabled }))}
+          className={clsx(
+            "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+            "transition-colors duration-200 focus:outline-none",
+            form.simulator_enabled ? "bg-amber-500" : "bg-border"
+          )}
+        >
+          <span
+            className={clsx(
+              "inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200",
+              form.simulator_enabled ? "translate-x-4" : "translate-x-0"
+            )}
+          />
+        </button>
       </div>
     </div>
   );

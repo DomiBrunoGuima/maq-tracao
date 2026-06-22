@@ -158,6 +158,8 @@ class ConfigModel(BaseModel):
     flexao_espessura_mm: float = 0.0
     flexao_span_mm: float = 0.0
     flexao_norma: str = "ISO 178"
+    # ── Simulador: gera valores plausíveis sem IHM/máquina real ─────────────
+    simulator_enabled: bool = False
 
 
 class ControlStartRequest(BaseModel):

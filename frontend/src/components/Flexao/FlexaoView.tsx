@@ -396,7 +396,12 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {config?.simulator_enabled && (
+          <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-amber-500/50 bg-amber-500/15 text-amber-300 font-semibold">
+            SIMULADOR
+          </div>
+        )}
         <div className={clsx(
           "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border",
           connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"

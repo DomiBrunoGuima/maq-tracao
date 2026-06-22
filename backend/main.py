@@ -36,6 +36,7 @@ from .models import (
 )
 from .ftp_client import download_csv as ftp_download_csv
 from .modbus_client import ModbusController, RealtimeModbusReader, capture_registers, probe_register
+from .simulator import SIM, SimController, SimReader, sim_capture
 from .parser import parse_csv
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
@@ -117,11 +118,23 @@ def _clp_conn() -> tuple[str, int, int]:
     return ip, port, timeout
 
 
+def _sim_enabled() -> bool:
+    """Simulador ligado: usa valores gerados em vez de conectar no CLP real."""
+    return bool(_config.get("simulator_enabled", False))
+
+
+def _make_reader(ip: str, port: int, timeout: int, regs: list[dict]):
+    """RealtimeModbusReader real, ou o simulado quando o simulador está ativo."""
+    return SimReader(regs) if _sim_enabled() else RealtimeModbusReader(ip, port, timeout, regs)
+
+
 def _control_registers() -> list[dict]:
     return _config.get("control_registers", []) or []
 
 
-def _make_controller() -> ModbusController:
+def _make_controller():
+    if _sim_enabled():
+        return SimController(_control_registers())
     ip, port, timeout = _clp_conn()
     return ModbusController(ip, port, timeout, _control_registers())
 
@@ -642,6 +655,17 @@ def control_probe(req: RegisterProbeRequest):
         "scale": req.scale,
         "word_order": req.word_order,
     }
+    if _sim_enabled():
+        decoded = SIM.value_for_register(reg)
+        return {
+            "ok": True, "direction": req.direction, "address": req.address,
+            "name": req.name, "data_type": req.data_type, "word_order": req.word_order,
+            "scale": req.scale, "ip": "simulador", "port": 0,
+            "sent_words": None, "read_words": None, "decoded": decoded,
+            "as_float": float(decoded) if isinstance(decoded, (int, float)) else None,
+            "as_int": int(decoded) if isinstance(decoded, (int, float)) else None,
+            "error": None,
+        }
     return probe_register(ip, port, timeout, reg, direction=req.direction, value=req.value)
 
 
@@ -674,9 +698,9 @@ def control_setpoints(req: ControlSetpointsRequest):
 def control_status():
     ip, port, timeout = _clp_conn()
     regs = _read_registers_by_role()
-    if not ip or not regs:
+    if not regs or (not ip and not _sim_enabled()):
         return ControlStatus(online=False)
-    data = capture_registers(ip, port, timeout, regs)
+    data = sim_capture(regs) if _sim_enabled() else capture_registers(ip, port, timeout, regs)
     if data is None:
         return ControlStatus(online=False)
     rn = _role_to_name()
@@ -713,12 +737,12 @@ async def control_stream(request: Request):
     integro_name = rn.get("material_integro_bit")
     ruptura_name = rn.get("ruptura_bit")
 
-    if not ip or not forca_name:
+    if not forca_name or (not ip and not _sim_enabled()):
         async def _err():
             yield f"data: {json.dumps({'error': 'clp_nao_configurado'})}\n\n"
         return StreamingResponse(_err(), media_type="text/event-stream")
 
-    reader = RealtimeModbusReader(ip, port, timeout, regs)
+    reader = _make_reader(ip, port, timeout, regs)
     loop   = asyncio.get_event_loop()
     area = float(_config.get("area_seccao_mm2", 0) or 0)
     l0   = float(_config.get("comprimento_inicial_mm", 0) or 0)
@@ -908,7 +932,9 @@ def _flexao_registers() -> list[dict]:
     return _config.get("flexao_registers", []) or []
 
 
-def _flexao_make_controller() -> ModbusController:
+def _flexao_make_controller():
+    if _sim_enabled():
+        return SimController(_flexao_registers())
     ip, port, timeout = _clp_conn()
     return ModbusController(ip, port, timeout, _flexao_registers())
 
@@ -1069,9 +1095,9 @@ def flexao_control_zerar_celula():
 def flexao_control_status():
     ip, port, timeout = _clp_conn()
     regs = _flexao_read_registers_by_role()
-    if not ip or not regs:
+    if not regs or (not ip and not _sim_enabled()):
         return ControlStatus(online=False)
-    data = capture_registers(ip, port, timeout, regs)
+    data = sim_capture(regs) if _sim_enabled() else capture_registers(ip, port, timeout, regs)
     if data is None:
         return ControlStatus(online=False)
     rn = _flexao_role_to_name()
@@ -1101,12 +1127,12 @@ async def flexao_control_stream(request: Request):
     desl_name  = rn.get("deslocamento_atual")
     fim_name   = rn.get("fim_ensaio_bit")
 
-    if not ip or not forca_name:
+    if not forca_name or (not ip and not _sim_enabled()):
         async def _err():
             yield f"data: {json.dumps({'error': 'clp_nao_configurado'})}\n\n"
         return StreamingResponse(_err(), media_type="text/event-stream")
 
-    reader = RealtimeModbusReader(ip, port, timeout, regs)
+    reader = _make_reader(ip, port, timeout, regs)
     loop   = asyncio.get_event_loop()
     geom = {
         "largura_mm":   float(_config.get("flexao_largura_mm", 0) or 0),

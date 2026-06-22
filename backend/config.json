@@ -83,9 +83,6 @@
   "clp_ip": "",
   "clp_port": 502,
   "clp_timeout": 3,
-  "control_pulse_ms": 300,
-  "area_seccao_mm2": 0.0,
-  "comprimento_inicial_mm": 0.0,
   "control_registers": [
     {
       "name": "iniciar",
@@ -210,10 +207,9 @@
       "writable": true
     }
   ],
-  "flexao_largura_mm": 0.0,
-  "flexao_espessura_mm": 0.0,
-  "flexao_span_mm": 0.0,
-  "flexao_norma": "ISO 178",
+  "control_pulse_ms": 300,
+  "area_seccao_mm2": 20.0,
+  "comprimento_inicial_mm": 50.0,
   "flexao_registers": [
     {
       "name": "iniciar",
@@ -328,5 +324,10 @@
       "scale": 1.0,
       "writable": false
     }
-  ]
+  ],
+  "flexao_largura_mm": 0.0,
+  "flexao_espessura_mm": 0.0,
+  "flexao_span_mm": 0.0,
+  "flexao_norma": "ISO 178",
+  "simulator_enabled": true
 }

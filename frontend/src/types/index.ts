@@ -236,6 +236,7 @@ export interface AppConfig {
   flexao_espessura_mm: number;
   flexao_span_mm: number;
   flexao_norma: string;
+  simulator_enabled: boolean;
 }
 
 export interface RealtimePoint {
