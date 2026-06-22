@@ -182,7 +182,7 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
         f"elast[{i_el_start}:{i_el_end+1}] "
         f"uy_abs={uy_pos_abs} "
         f"plat_end={plat_end_abs} "
-        f"encruamento→{uts_pos} "
+        f"encruamento->{uts_pos} "
         f"estriccao[{uts_pos+1}:{n-1}]"
     )
     print(

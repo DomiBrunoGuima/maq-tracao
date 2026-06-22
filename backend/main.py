@@ -3,9 +3,19 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Windows: o console usa cp1252 e prints de debug com Unicode (ex.: setas, σ, ε)
+# lançavam UnicodeEncodeError, que derrubava ate a gravacao do ensaio. Forca UTF-8
+# com fallback para nao quebrar nunca por causa de um print.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except Exception:
+        pass
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Request
