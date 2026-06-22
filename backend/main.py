@@ -491,8 +491,12 @@ def health():
 # Controle da máquina — escrita de comandos/setpoints no CLP
 # ---------------------------------------------------------------------------
 
-def _apply_setpoints(ctrl: ModbusController, *, sentido, velocidade, deslocamento, limite_forca) -> dict:
-    """Escreve os setpoints fornecidos (ignora os None e os roles não configurados)."""
+def _apply_setpoints(ctrl: ModbusController, *, velocidade, deslocamento, limite_forca) -> dict:
+    """Escreve apenas os setpoints numéricos (ignora os None e os roles não configurados).
+
+    O sentido NÃO é escrito aqui — ele é disparado como pulso momentâneo por
+    :func:`_pulse_sentido`, pois travar o coil de sentido em nível alto mantém a
+    máquina/CLP em estado ativo (e faz o CLP sobrescrever os registradores)."""
     applied: dict = {}
     for role, value in (
         ("limite_forca", limite_forca),
@@ -502,13 +506,21 @@ def _apply_setpoints(ctrl: ModbusController, *, sentido, velocidade, deslocament
         if value is not None and ctrl.resolve(role) is not None:
             ctrl.write_named(role, value)
             applied[role] = value
-    if sentido in ("cima", "baixo"):
-        if ctrl.resolve("sentido_cima") is not None:
-            ctrl.write_named("sentido_cima", 1 if sentido == "cima" else 0)
-        if ctrl.resolve("sentido_baixo") is not None:
-            ctrl.write_named("sentido_baixo", 1 if sentido == "baixo" else 0)
-        applied["sentido"] = sentido
     return applied
+
+
+def _pulse_sentido(ctrl: ModbusController, sentido: str | None, pulse_ms: int) -> str | None:
+    """Dispara o coil de sentido como pulso momentâneo (escreve 1 e volta a 0).
+
+    O CLP retém o sentido internamente na borda de subida do pulso, então o bit
+    não pode ficar acionado para sempre. Retorna o sentido aplicado ou None."""
+    if sentido not in ("cima", "baixo"):
+        return None
+    role = "sentido_cima" if sentido == "cima" else "sentido_baixo"
+    if ctrl.resolve(role) is None:
+        return None
+    ctrl.pulse(role, pulse_ms)
+    return sentido
 
 
 @app.post("/api/control/start")
@@ -530,7 +542,7 @@ def control_start(req: ControlStartRequest):
     pulse_ms = int(_config.get("control_pulse_ms", 300))
     try:
         applied = _apply_setpoints(
-            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            ctrl, velocidade=req.velocidade,
             deslocamento=req.deslocamento, limite_forca=req.limite_forca,
         )
         # Persiste área/L0 do setup para a próxima aquisição derivar tensão/deformação
@@ -541,6 +553,10 @@ def control_start(req: ControlStartRequest):
         if req.area_seccao is not None or req.comprimento_inicial is not None:
             _save_config(_config)
 
+        # Setpoints escritos → pulso de sentido (momentâneo) → pulso de início.
+        sent = _pulse_sentido(ctrl, req.sentido, pulse_ms)
+        if sent:
+            applied["sentido"] = sent
         ctrl.pulse("iniciar", pulse_ms)
         return {"status": "started", "sentido": req.sentido, "setpoints": applied}
     except Exception as exc:
@@ -585,9 +601,12 @@ def control_setpoints(req: ControlSetpointsRequest):
         raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
     try:
         applied = _apply_setpoints(
-            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            ctrl, velocidade=req.velocidade,
             deslocamento=req.deslocamento, limite_forca=req.limite_forca,
         )
+        sent = _pulse_sentido(ctrl, req.sentido, int(_config.get("control_pulse_ms", 300)))
+        if sent:
+            applied["sentido"] = sent
         return {"status": "ok", "setpoints": applied}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao escrever setpoints: {exc}")
@@ -929,7 +948,7 @@ def flexao_control_start(req: FlexaoControlStartRequest):
     pulse_ms = int(_config.get("control_pulse_ms", 300))
     try:
         applied = _apply_setpoints(
-            ctrl, sentido=req.sentido, velocidade=req.velocidade,
+            ctrl, velocidade=req.velocidade,
             deslocamento=req.deslocamento, limite_forca=req.limite_forca,
         )
         # Persiste geometria do setup para a próxima aquisição derivar σf/εf.
@@ -943,6 +962,10 @@ def flexao_control_start(req: FlexaoControlStartRequest):
                 _config[cfg_key] = val
         _save_config(_config)
 
+        # Setpoints escritos → pulso de sentido (momentâneo) → pulso de início.
+        sent = _pulse_sentido(ctrl, req.sentido, pulse_ms)
+        if sent:
+            applied["sentido"] = sent
         ctrl.pulse("iniciar", pulse_ms)
         return {"status": "started", "sentido": req.sentido, "setpoints": applied}
     except Exception as exc:
