@@ -54,6 +54,38 @@ export function splitByStage(data: DataPoint[]): Record<string, DataPoint[]> {
   return groups;
 }
 
+/** Chave numérica por fase usada nas séries em ponte. */
+export const stageSeriesKey = (stage: string) => `__s_${stage}`;
+
+/**
+ * Para gráficos por fase num ComposedChart (data único compartilhado): devolve as
+ * fases ativas e os dados aumentados com uma chave numérica por fase
+ * (`__s_<fase>`). Cada fase também recebe o último ponto da fase anterior (ponte),
+ * para que os segmentos coloridos se conectem sem buraco entre eles.
+ */
+export function bridgedStageData(
+  data: DataPoint[],
+  yKey: string,
+): { stages: string[]; rows: Record<string, any>[] } {
+  const present = new Set(data.map((pt) => String(pt.fase ?? "")));
+  const stages = ORDERED_STAGES.filter((s) => present.has(s)) as string[];
+  const rows: Record<string, any>[] = data.map((pt) => ({ ...pt }));
+
+  for (let i = 0; i < data.length; i++) {
+    const s = String(data[i].fase ?? "");
+    if (!stages.includes(s)) continue;
+    const y = (data[i] as any)[yKey];
+    if (typeof y !== "number") continue;
+    rows[i][stageSeriesKey(s)] = y;
+    // Ponte: a fase atual alcança o último ponto da fase anterior.
+    if (i > 0 && String(data[i - 1].fase ?? "") !== s) {
+      const yPrev = (data[i - 1] as any)[yKey];
+      if (typeof yPrev === "number") rows[i - 1][stageSeriesKey(s)] = yPrev;
+    }
+  }
+  return { stages, rows };
+}
+
 /** Returns X ranges per stage for use as ReferenceArea bands. */
 export function stageRanges(data: DataPoint[], xKey: string): { stage: string; x1: number; x2: number }[] {
   const ranges: { stage: string; x1: number; x2: number }[] = [];

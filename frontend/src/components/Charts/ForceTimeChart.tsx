@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { DataPoint, RupturePoint } from "../../types";
 import { RuptureMarker } from "./RuptureMarker";
-import { ORDERED_STAGES, STAGE_COLORS, STAGE_LABELS, stageRanges } from "./stageConfig";
+import { STAGE_COLORS, STAGE_LABELS, bridgedStageData, stageRanges, stageSeriesKey } from "./stageConfig";
 
 const TooltipContent = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -46,14 +46,13 @@ interface Props {
 }
 
 export default function ForceTimeChart({ data, rupture, height = 240, onPointClick, thumbnail = false }: Props) {
-  const stagesInData = useMemo(() => new Set(data.map(pt => String(pt.fase ?? ""))), [data]);
-  const active = ORDERED_STAGES.filter(s => stagesInData.has(s));
+  const { stages: active, rows } = useMemo(() => bridgedStageData(data, "Forca_N"), [data]);
   const bands  = stageRanges(data, "elapsed_seconds");
 
   const chart = (
     <ResponsiveContainer width="100%" height={thumbnail ? height : "100%"}>
       <ComposedChart
-        data={data}
+        data={rows}
         margin={thumbnail ? { top: 2, right: 2, left: 0, bottom: 2 } : { top: 6, right: 16, left: 0, bottom: 6 }}
         onClick={(e: any) => { const pt = e?.activePayload?.[0]?.payload; if (pt && onPointClick) onPointClick(pt); }}
         style={{ cursor: onPointClick ? "pointer" : "default" }}
@@ -85,11 +84,7 @@ export default function ForceTimeChart({ data, rupture, height = 240, onPointCli
         {active.map((stage) => (
           <Line
             key={stage}
-            dataKey={(pt: DataPoint) => {
-              if (String(pt.fase ?? "") !== stage) return undefined;
-              const v = pt.Forca_N;
-              return typeof v === "number" ? v : undefined;
-            }}
+            dataKey={stageSeriesKey(stage)}
             name={STAGE_LABELS[stage]}
             stroke={STAGE_COLORS[stage]}
             strokeWidth={thumbnail ? 1.5 : 2}
