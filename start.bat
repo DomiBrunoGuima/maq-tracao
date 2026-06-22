@@ -12,12 +12,8 @@ echo  Pressione Ctrl+C para encerrar
 echo ============================================
 echo.
 
-:: Kill all uvicorn-related python processes (catches orphaned workers too)
-for /f "tokens=2 delims==" %%a in ('wmic process where "Name='python.exe' and CommandLine like '%%uvicorn%%'" get ProcessId /value 2^>nul ^| findstr "="') do (
-    taskkill /F /PID %%a >nul 2>&1
-)
-:: Also kill by port 8000 in case something else got there
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000 "') do (
+:: Encerra processos antigos na porta 8000 (backend) — sem wmic (removido no Win11)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr "LISTENING" ^| findstr ":8000"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 timeout /t 1 /nobreak >nul
