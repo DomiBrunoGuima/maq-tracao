@@ -176,6 +176,17 @@ class ControlSetpointsRequest(BaseModel):
     limite_forca: Optional[float] = None
 
 
+class RegisterProbeRequest(BaseModel):
+    """Teste isolado de um registrador, sem depender do mapa de controle salvo."""
+    address: int
+    data_type: str = "float32"          # coil|uint16|decimal|int32|decimal32|float32
+    scale: float = 1.0
+    word_order: str = "big"             # big|little (tipos de 32 bits)
+    direction: str = "read"             # "read" (entrada) | "write" (saída)
+    value: Optional[float] = None       # obrigatório quando direction == "write"
+    name: str = ""
+
+
 class ControlStatus(BaseModel):
     online: bool = False
     forca_atual: Optional[float] = None

@@ -170,6 +170,34 @@ export interface IHMRegister {
   word_order?: "big" | "little";
 }
 
+export interface RegisterProbeRequest {
+  address: number;
+  data_type: ModbusDataType;
+  scale?: number;
+  word_order?: "big" | "little";
+  direction: "read" | "write";
+  value?: number | null;
+  name?: string;
+}
+
+export interface RegisterProbeResult {
+  ok: boolean;
+  direction: "read" | "write";
+  address: number;
+  name: string;
+  data_type: string;
+  word_order: string;
+  scale: number;
+  ip: string;
+  port: number;
+  sent_words: number[] | null;
+  read_words: number[] | null;
+  decoded: number | null;
+  as_float: number | null;
+  as_int: number | null;
+  error: string | null;
+}
+
 export interface ParametrosIHM {
   id: number;
   ensaio_filename: string;

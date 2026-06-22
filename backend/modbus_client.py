@@ -217,19 +217,28 @@ class ModbusController:
         scale      = float(reg.get("scale", 1.0))
         word_order = reg.get("word_order", "big")
 
+        sent: list[int]
         if data_type == "coil":
+            sent = [1 if value else 0]
             ok = self._write_coil(address, bool(value))
         elif data_type == "float32":
             hi, lo = encode_float32(float(value))
-            ok = self._write_words(address, _order_words(hi, lo, word_order))
+            sent = _order_words(hi, lo, word_order)
+            ok = self._write_words(address, sent)
         elif data_type in ("int32", "decimal32"):
             raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
             hi, lo = encode_int32(raw)
-            ok = self._write_words(address, _order_words(hi, lo, word_order))
+            sent = _order_words(hi, lo, word_order)
+            ok = self._write_words(address, sent)
         else:  # uint16 / decimal
             raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+            sent = [raw & 0xFFFF]
             resp = self._client.write_register(address=address, value=raw & 0xFFFF)
             ok = not resp.isError()
+
+        hexs = "[" + ", ".join(f"0x{w:04X}" for w in sent) + "]"
+        print(f"[modbus-write] {data_type}@{address} wo={word_order} valor={value} "
+              f"-> registers={sent} {hexs} ok={ok}", flush=True)
 
         if not ok:
             raise RuntimeError(
@@ -300,5 +309,125 @@ def capture_registers(
     except Exception as e:
         logger.warning(f"[modbus] Erro de conexão: {e}")
         return None
+    finally:
+        client.close()
+
+
+def probe_register(
+    ip: str,
+    port: int,
+    timeout: int,
+    reg: dict,
+    *,
+    direction: str = "read",
+    value: float | None = None,
+) -> dict[str, Any]:
+    """Testa UM registrador isoladamente e devolve o que foi/voltou no fio.
+
+    direction="write" escreve ``value`` e relê para confirmar; direction="read"
+    apenas lê. Para tipos de 32 bits, devolve a leitura interpretada como float E
+    como int (sob a ordem de palavra escolhida), para você comparar com a IHM e
+    descobrir tipo/ordem corretos. Não levanta exceção — devolve ``error``."""
+    out: dict[str, Any] = {
+        "ok": False,
+        "direction": direction,
+        "address": reg.get("address"),
+        "name": reg.get("name", ""),
+        "data_type": reg.get("data_type", "uint16"),
+        "word_order": reg.get("word_order", "big"),
+        "scale": float(reg.get("scale", 1.0)),
+        "ip": ip, "port": port,
+        "sent_words": None,
+        "read_words": None,
+        "decoded": None,
+        "as_float": None,
+        "as_int": None,
+        "error": None,
+    }
+    address    = reg["address"]
+    data_type  = out["data_type"]
+    scale      = out["scale"]
+    word_order = out["word_order"]
+
+    try:
+        from pymodbus.client import ModbusTcpClient
+    except ImportError:
+        out["error"] = "pymodbus não instalado"
+        return out
+
+    client = ModbusTcpClient(ip, port=port, timeout=timeout)
+    try:
+        if not client.connect():
+            out["error"] = f"IHM/CLP inacessível em {ip}:{port}"
+            return out
+
+        # -- escrita (opcional) --------------------------------------------
+        if direction == "write":
+            if value is None:
+                out["error"] = "valor obrigatório para escrita"
+                return out
+            if data_type == "coil":
+                out["sent_words"] = [1 if value else 0]
+                r = client.write_coil(address=address, value=bool(value))
+            elif data_type == "float32":
+                hi, lo = encode_float32(float(value))
+                out["sent_words"] = _order_words(hi, lo, word_order)
+                r = client.write_registers(address=address, values=out["sent_words"])
+            elif data_type in ("int32", "decimal32"):
+                raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+                hi, lo = encode_int32(raw)
+                out["sent_words"] = _order_words(hi, lo, word_order)
+                r = client.write_registers(address=address, values=out["sent_words"])
+            else:
+                raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+                out["sent_words"] = [raw & 0xFFFF]
+                r = client.write_register(address=address, value=raw & 0xFFFF)
+            if r.isError():
+                out["error"] = f"escrita recusada pela IHM em {data_type}@{address}"
+                print(f"[probe] WRITE FALHOU {data_type}@{address} valor={value} sent={out['sent_words']}", flush=True)
+                return out
+
+        # -- leitura (sempre, para confirmar) ------------------------------
+        if data_type == "coil":
+            rr = client.read_coils(address=address, count=1)
+            if rr.isError():
+                out["error"] = f"leitura recusada (coil@{address})"
+                return out
+            out["read_words"] = [1 if rr.bits[0] else 0]
+            out["decoded"] = out["read_words"][0]
+        elif data_type in ("float32", "int32", "decimal32"):
+            rr = client.read_holding_registers(address=address, count=2)
+            if rr.isError():
+                out["error"] = f"leitura recusada (holding@{address}, count=2)"
+                return out
+            w0, w1 = rr.registers[0], rr.registers[1]
+            out["read_words"] = [w0, w1]
+            hi, lo = _words_to_hilo(w0, w1, word_order)
+            out["as_float"] = round(_decode_float32(hi, lo), 6)
+            int_raw = _decode_int32(hi, lo)
+            out["as_int"] = int_raw
+            if data_type == "float32":
+                out["decoded"] = out["as_float"]
+            else:
+                out["decoded"] = round(int_raw * scale, 6) if scale != 1.0 else int_raw
+        else:
+            rr = client.read_holding_registers(address=address, count=1)
+            if rr.isError():
+                out["error"] = f"leitura recusada (holding@{address})"
+                return out
+            raw = rr.registers[0]
+            out["read_words"] = [raw]
+            out["decoded"] = round(raw * scale, 6) if scale != 1.0 else raw
+
+        out["ok"] = True
+        print(f"[probe] {direction} {data_type}@{address} wo={word_order} "
+              f"sent={out['sent_words']} read={out['read_words']} decoded={out['decoded']} "
+              f"as_float={out['as_float']} as_int={out['as_int']}", flush=True)
+        return out
+
+    except Exception as e:
+        out["error"] = str(e)
+        print(f"[probe] ERRO {data_type}@{address}: {e}", flush=True)
+        return out
     finally:
         client.close()

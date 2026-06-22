@@ -31,10 +31,11 @@ from .models import (
     EnsaioSummary,
     FlexaoControlStartRequest,
     ParametrosIHM,
+    RegisterProbeRequest,
     ReportRequest,
 )
 from .ftp_client import download_csv as ftp_download_csv
-from .modbus_client import ModbusController, RealtimeModbusReader, capture_registers
+from .modbus_client import ModbusController, RealtimeModbusReader, capture_registers, probe_register
 from .parser import parse_csv
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
@@ -587,6 +588,28 @@ def control_stop():
         raise HTTPException(status_code=502, detail=f"Falha ao parar ensaio: {exc}")
     finally:
         ctrl.close()
+
+
+@app.post("/api/control/probe")
+def control_probe(req: RegisterProbeRequest):
+    """Testa um registrador isolado (leitura/escrita) contra a IHM/CLP e devolve
+    o que foi/voltou no fio. Útil para descobrir tipo, endereço e ordem de palavra
+    sem mexer no mapa de controle salvo."""
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP/IHM não configurado em Configurações → Controle (CLP).")
+    if req.direction not in ("read", "write"):
+        raise HTTPException(status_code=422, detail="direction deve ser 'read' ou 'write'.")
+    if req.direction == "write" and req.value is None:
+        raise HTTPException(status_code=422, detail="Informe um valor para escrita.")
+    reg = {
+        "name": req.name,
+        "address": req.address,
+        "data_type": req.data_type,
+        "scale": req.scale,
+        "word_order": req.word_order,
+    }
+    return probe_register(ip, port, timeout, reg, direction=req.direction, value=req.value)
 
 
 @app.post("/api/control/setpoints")

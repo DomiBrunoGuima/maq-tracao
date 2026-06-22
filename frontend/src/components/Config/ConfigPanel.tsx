@@ -3,6 +3,7 @@ import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Radio, Sliders,
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig, useFetchFtpCsv } from "../../hooks/useConfig";
+import RegisterProbe from "./RegisterProbe";
 
 type Section = "geral" | "ihm" | "ftp" | "registradores" | "realtime" | "controle" | "sobre";
 
@@ -556,6 +557,9 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         onAdd={h.add} onUpdate={h.update} onRemove={h.remove}
         showRole addLabel="Adicionar registrador"
       />
+
+      <Divider />
+      <RegisterProbe registers={form.control_registers} />
     </div>
   );
 }

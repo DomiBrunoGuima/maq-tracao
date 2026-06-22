@@ -15,6 +15,8 @@ import type {
   KPIsFlexao,
   ModbusFetchResult,
   ParametrosIHM,
+  RegisterProbeRequest,
+  RegisterProbeResult,
   ReportRequest,
 } from "../types";
 
@@ -66,6 +68,9 @@ export const setSetpoints = (req: ControlSetpointsRequest): Promise<{ status: st
 
 export const getControlStatus = (): Promise<ControlStatus> =>
   api.get("/control/status").then((r) => r.data);
+
+export const probeRegister = (req: RegisterProbeRequest): Promise<RegisterProbeResult> =>
+  api.post("/control/probe", req).then((r) => r.data);
 
 // ── Flexão (módulo separado) ───────────────────────────────────────────────
 
