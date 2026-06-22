@@ -15,14 +15,16 @@ import {
   CheckCircle2,
   Gauge,
   MoveHorizontal,
+  OctagonX,
   Play,
+  RotateCcw,
   ShieldCheck,
   Square,
   Unplug,
   Zap,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { startTest, stopTest } from "../../api/client";
+import { startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import type { RealtimeFrame, RealtimePoint } from "../../types";
 
@@ -245,6 +247,28 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
     }
   }
 
+  async function handleZerarDeslocamento() {
+    setError(null);
+    try {
+      await zerarDeslocamento();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Falha ao zerar o deslocamento.");
+    }
+  }
+
+  async function handleZerarCelula() {
+    setError(null);
+    try {
+      await zerarCelula();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Falha ao zerar a célula de carga.");
+    } finally {
+      // Zerar a célula de carga também encerra o ensaio em curso.
+      setRunning(false);
+      stopStream();
+    }
+  }
+
   const integro = frame?.material_integro ?? false;
   const ruptura = frame?.ruptura ?? false;
 
@@ -320,6 +344,22 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
                        hover:bg-red-500 transition-colors ring-1 ring-red-400/30"
           >
             <Square size={14} /> Parar
+          </button>
+          <button
+            onClick={handleZerarDeslocamento}
+            title="Zera o deslocamento (limpa o resíduo antes de um novo ensaio)"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-bg text-sm font-medium
+                       text-muted hover:text-white hover:border-accent transition-colors"
+          >
+            <RotateCcw size={14} /> Zerar deslocamento
+          </button>
+          <button
+            onClick={handleZerarCelula}
+            title="Zera a célula de carga — também para o ensaio em curso"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-sm font-medium
+                       text-amber-300 hover:bg-amber-500/20 transition-colors"
+          >
+            <OctagonX size={14} /> Zerar célula (para o teste)
           </button>
           {error && <p className="text-xs text-red-400 ml-2">{error}</p>}
         </div>

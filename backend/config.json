@@ -190,6 +190,24 @@
       "data_type": "coil",
       "scale": 1.0,
       "writable": false
+    },
+    {
+      "name": "zerar_deslocamento",
+      "role": "zerar_deslocamento",
+      "address": 0,
+      "description": "VERIFICAR endereco — coil que zera o deslocamento (limpa residuo)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "zerar_celula",
+      "role": "zerar_celula",
+      "address": 0,
+      "description": "VERIFICAR endereco — coil que zera a celula de carga (tambem para o ensaio)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
     }
   ],
   "flexao_largura_mm": 0.0,
@@ -273,6 +291,24 @@
       "data_type": "coil",
       "scale": 1.0,
       "writable": false
+    },
+    {
+      "name": "zerar_deslocamento",
+      "role": "zerar_deslocamento",
+      "address": 0,
+      "description": "VERIFICAR endereco — coil que zera o deslocamento da flexao",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "zerar_celula",
+      "role": "zerar_celula",
+      "address": 0,
+      "description": "VERIFICAR endereco — coil que zera a celula de carga da flexao (tambem para o ensaio)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
     }
   ]
 }

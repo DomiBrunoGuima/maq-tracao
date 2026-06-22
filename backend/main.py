@@ -590,6 +590,39 @@ def control_stop():
         ctrl.close()
 
 
+def _pulse_command(make_controller, role: str, label: str) -> dict:
+    """Conecta, pulsa um coil de comando momentâneo (role) e fecha. Usado por
+    comandos como zerar deslocamento e zerar célula de carga."""
+    ip, port, timeout = _clp_conn()
+    if not ip:
+        raise HTTPException(status_code=400, detail="IP do CLP não configurado em Configurações → Controle (CLP).")
+    ctrl = make_controller()
+    if ctrl.resolve(role) is None:
+        raise HTTPException(status_code=400, detail=f"Registrador '{role}' não configurado em Controle (CLP).")
+    if not ctrl.connect():
+        raise HTTPException(status_code=502, detail=f"CLP inacessível em {ip}:{port}.")
+    pulse_ms = int(_config.get("control_pulse_ms", 300))
+    try:
+        ctrl.pulse(role, pulse_ms)
+        return {"status": "ok", "comando": role}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao {label}: {exc}")
+    finally:
+        ctrl.close()
+
+
+@app.post("/api/control/zerar-deslocamento")
+def control_zerar_deslocamento():
+    """Pulsa o bit que zera o deslocamento (limpa o resíduo antes de um novo ensaio)."""
+    return _pulse_command(_make_controller, "zerar_deslocamento", "zerar o deslocamento")
+
+
+@app.post("/api/control/zerar-celula")
+def control_zerar_celula():
+    """Pulsa o bit que zera a célula de carga — isso também para o ensaio em curso."""
+    return _pulse_command(_make_controller, "zerar_celula", "zerar a célula de carga")
+
+
 @app.post("/api/control/probe")
 def control_probe(req: RegisterProbeRequest):
     """Testa um registrador isolado (leitura/escrita) contra a IHM/CLP e devolve
@@ -1018,6 +1051,18 @@ def flexao_control_stop():
         raise HTTPException(status_code=502, detail=f"Falha ao parar ensaio de flexão: {exc}")
     finally:
         ctrl.close()
+
+
+@app.post("/api/flexao/control/zerar-deslocamento")
+def flexao_control_zerar_deslocamento():
+    """Pulsa o bit que zera o deslocamento do ensaio de flexão."""
+    return _pulse_command(_flexao_make_controller, "zerar_deslocamento", "zerar o deslocamento")
+
+
+@app.post("/api/flexao/control/zerar-celula")
+def flexao_control_zerar_celula():
+    """Pulsa o bit que zera a célula de carga da flexão — também para o ensaio."""
+    return _pulse_command(_flexao_make_controller, "zerar_celula", "zerar a célula de carga")
 
 
 @app.get("/api/flexao/control/status", response_model=ControlStatus)

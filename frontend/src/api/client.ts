@@ -72,6 +72,12 @@ export const getControlStatus = (): Promise<ControlStatus> =>
 export const probeRegister = (req: RegisterProbeRequest): Promise<RegisterProbeResult> =>
   api.post("/control/probe", req).then((r) => r.data);
 
+export const zerarDeslocamento = (): Promise<{ status: string }> =>
+  api.post("/control/zerar-deslocamento").then((r) => r.data);
+
+export const zerarCelula = (): Promise<{ status: string }> =>
+  api.post("/control/zerar-celula").then((r) => r.data);
+
 // ── Flexão (módulo separado) ───────────────────────────────────────────────
 
 export const getEnsaiosFlexao = (): Promise<EnsaioFlexaoSummary[]> =>
@@ -97,6 +103,12 @@ export const stopFlexaoTest = (): Promise<{ status: string }> =>
 
 export const getFlexaoStatus = (): Promise<ControlStatus> =>
   api.get("/flexao/control/status").then((r) => r.data);
+
+export const zerarDeslocamentoFlexao = (): Promise<{ status: string }> =>
+  api.post("/flexao/control/zerar-deslocamento").then((r) => r.data);
+
+export const zerarCelulaFlexao = (): Promise<{ status: string }> =>
+  api.post("/flexao/control/zerar-celula").then((r) => r.data);
 
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });

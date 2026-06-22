@@ -15,7 +15,9 @@ import {
   CheckCircle2,
   Gauge,
   MoveHorizontal,
+  OctagonX,
   Play,
+  RotateCcw,
   Ruler,
   Square,
   Trash2,
@@ -23,7 +25,12 @@ import {
   Zap,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { startFlexaoTest, stopFlexaoTest } from "../../api/client";
+import {
+  startFlexaoTest,
+  stopFlexaoTest,
+  zerarCelulaFlexao,
+  zerarDeslocamentoFlexao,
+} from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao } from "../../hooks/useFlexao";
 import type { FlexaoFrame } from "../../types";
@@ -349,6 +356,20 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
     finally { setRunning(false); stopStream(); }
   }
 
+  async function handleZerarDeslocamento() {
+    setError(null);
+    try { await zerarDeslocamentoFlexao(); }
+    catch (e: any) { setError(e?.response?.data?.detail ?? "Falha ao zerar o deslocamento."); }
+  }
+
+  async function handleZerarCelula() {
+    setError(null);
+    try { await zerarCelulaFlexao(); }
+    catch (e: any) { setError(e?.response?.data?.detail ?? "Falha ao zerar a célula de carga."); }
+    // Zerar a célula de carga também encerra o ensaio em curso.
+    finally { setRunning(false); stopStream(); }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-end">
@@ -409,6 +430,18 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-500/90 text-white text-sm font-semibold
                        hover:bg-red-500 transition-colors ring-1 ring-red-400/30">
             <Square size={14} /> Parar
+          </button>
+          <button onClick={handleZerarDeslocamento}
+            title="Zera o deslocamento (limpa o resíduo antes de um novo ensaio)"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-bg text-sm font-medium
+                       text-muted hover:text-white hover:border-accent transition-colors">
+            <RotateCcw size={14} /> Zerar deslocamento
+          </button>
+          <button onClick={handleZerarCelula}
+            title="Zera a célula de carga — também para o ensaio em curso"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-sm font-medium
+                       text-amber-300 hover:bg-amber-500/20 transition-colors">
+            <OctagonX size={14} /> Zerar célula (para o teste)
           </button>
           {error && <p className="text-xs text-red-400 ml-2">{error}</p>}
         </div>
