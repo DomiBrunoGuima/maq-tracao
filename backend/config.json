@@ -2,7 +2,7 @@
   "watch_directory": "C:\\Projetos\\Annalogyc\\sandbox\\maq-tracao\\data",
   "auto_load": true,
   "refresh_interval_s": 5,
-  "ihm_ip": "192.168.8.10",
+  "ihm_ip": "192.168.11.10",
   "ihm_port": 502,
   "ihm_timeout": 3,
   "ihm_registers": [
@@ -90,8 +90,8 @@
     {
       "name": "iniciar",
       "role": "iniciar",
-      "address": 9,
-      "description": "VERIFICAR endereco Modbus — device M9 (BIT INICIO)",
+      "address": 4003,
+      "description": "IHM Delta — coil de inicio do ensaio",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -99,8 +99,8 @@
     {
       "name": "parar",
       "role": "parar",
-      "address": 7,
-      "description": "VERIFICAR endereco Modbus — device M7 (BIT PARADA)",
+      "address": 4001,
+      "description": "IHM Delta — coil de parada do ensaio",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -108,8 +108,8 @@
     {
       "name": "sentido_cima",
       "role": "sentido_cima",
-      "address": 5,
-      "description": "VERIFICAR endereco Modbus — device M5 (sobe)",
+      "address": 3999,
+      "description": "IHM Delta — coil de sentido sobe (pulso momentaneo)",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -117,8 +117,8 @@
     {
       "name": "sentido_baixo",
       "role": "sentido_baixo",
-      "address": 6,
-      "description": "VERIFICAR endereco Modbus — device M6 (desce)",
+      "address": 4000,
+      "description": "IHM Delta — coil de sentido desce (pulso momentaneo)",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -126,8 +126,8 @@
     {
       "name": "deslocamento_programado",
       "role": "deslocamento_programado",
-      "address": 412,
-      "description": "VERIFICAR endereco/tipo — device T412/D412 (float doubleword)",
+      "address": 40004,
+      "description": "IHM Delta — float doubleword (deslocamento programado, mm)",
       "data_type": "float32",
       "scale": 1.0,
       "writable": true,
@@ -136,19 +136,19 @@
     {
       "name": "velocidade",
       "role": "velocidade",
-      "address": 408,
-      "description": "VERIFICAR endereco/escala — device D408 (decimal doubleword)",
+      "address": 40000,
+      "description": "IHM Delta — signed decimal doubleword (velocidade, mm/min). Ajuste a escala conforme as casas decimais do elemento.",
       "data_type": "decimal32",
-      "scale": 0.01,
+      "scale": 1.0,
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "limite_forca",
       "role": "limite_forca",
-      "address": 2006,
-      "description": "VERIFICAR endereco/tipo — device D2006 (Limite de forca de ruptura)",
-      "data_type": "int32",
+      "address": 40023,
+      "description": "IHM Delta — float doubleword (limite de forca de ruptura, N)",
+      "data_type": "float32",
       "scale": 1.0,
       "writable": true,
       "word_order": "little"
@@ -156,9 +156,9 @@
     {
       "name": "forca_atual",
       "role": "forca_atual",
-      "address": 2000,
-      "description": "VERIFICAR endereco/tipo — device D2000 (Forca Newton atual)",
-      "data_type": "int32",
+      "address": 40049,
+      "description": "IHM Delta — float doubleword (forca Newton atual)",
+      "data_type": "float32",
       "scale": 1.0,
       "writable": false,
       "word_order": "little"
@@ -166,8 +166,8 @@
     {
       "name": "deslocamento_atual",
       "role": "deslocamento_atual",
-      "address": 412,
-      "description": "VERIFICAR endereco/tipo — deslocamento instantaneo (mm)",
+      "address": 40039,
+      "description": "IHM Delta — floating doubleword (deslocamento instantaneo, mm)",
       "data_type": "float32",
       "scale": 1.0,
       "writable": false,
@@ -176,8 +176,8 @@
     {
       "name": "material_integro_bit",
       "role": "material_integro_bit",
-      "address": 30,
-      "description": "VERIFICAR endereco Modbus — device M30 (Material integro)",
+      "address": 4009,
+      "description": "IHM Delta — coil material integro",
       "data_type": "coil",
       "scale": 1.0,
       "writable": false
@@ -185,8 +185,8 @@
     {
       "name": "ruptura_bit",
       "role": "ruptura_bit",
-      "address": 31,
-      "description": "VERIFICAR endereco Modbus — device M31 (Material sofreu ruptura)",
+      "address": 4010,
+      "description": "IHM Delta — coil material sofreu ruptura",
       "data_type": "coil",
       "scale": 1.0,
       "writable": false
