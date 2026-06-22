@@ -165,6 +165,9 @@ export interface IHMRegister {
   scale: number;
   role?: string;
   writable?: boolean;
+  // Ordem das palavras em tipos de 32 bits: "big" (HI primeiro, ABCD) ou
+  // "little" (LO primeiro, CDAB — comum em CLP Mitsubishi/registradores D)
+  word_order?: "big" | "little";
 }
 
 export interface ParametrosIHM {

@@ -378,11 +378,11 @@ function RegisterTable({
   addLabel?: string;
 }) {
   const cols = showRole
-    ? "grid-cols-[80px_110px_110px_1fr_92px_70px_32px]"
-    : "grid-cols-[90px_120px_1fr_100px_80px_32px]";
+    ? "grid-cols-[76px_96px_96px_1fr_84px_60px_72px_32px]"
+    : "grid-cols-[88px_116px_1fr_96px_72px_72px_32px]";
   const headers = showRole
-    ? ["Endereço", "Role", "Nome", "Descrição", "Tipo", "Escala", ""]
-    : ["Endereço", "Nome", "Descrição", "Tipo", "Escala", ""];
+    ? ["Endereço", "Role", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""]
+    : ["Endereço", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""];
   const inputCell =
     "bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white " +
     "focus:outline-none focus:border-accent transition-colors w-full";
@@ -436,6 +436,15 @@ function RegisterTable({
                 ) : (
                   <span className="text-xs text-muted/30 font-mono text-center">—</span>
                 )}
+                {WORD2_TYPES.includes(r.data_type) ? (
+                  <select value={r.word_order ?? "big"}
+                    onChange={(e) => onUpdate(i, { word_order: e.target.value as "big" | "little" })} className={inputCell}>
+                    <option value="big">big</option>
+                    <option value="little">little</option>
+                  </select>
+                ) : (
+                  <span className="text-xs text-muted/30 font-mono text-center">—</span>
+                )}
                 <button onClick={() => onRemove(i)}
                   className="text-muted hover:text-red-400 transition-colors flex items-center justify-center">
                   <Trash2 size={13} />
@@ -446,7 +455,7 @@ function RegisterTable({
 
           <div className="mt-3 space-y-1">
             <p className="text-[10px] font-mono text-muted/50">
-              float32 / int32 / decimal32 — registradores N (HI) + N+1 (LO), big-endian
+              float32 / int32 / decimal32 — 2 registradores (N + N+1). Ordem: big = HI 1º (ABCD) · little = LO 1º (CDAB, ex.: Mitsubishi/registradores D)
             </p>
             {registers.some((r) => WORD2_TYPES.includes(r.data_type) || r.data_type === "decimal") && (
               <p className="text-[10px] font-mono text-muted/50">decimal/int32/decimal32 — valor_real = raw × escala</p>
@@ -466,7 +475,7 @@ function makeRegHandlers(
   return {
     add: () => setForm((f) => ({
       ...f,
-      [key]: [...f[key], { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0, ...defaults }],
+      [key]: [...f[key], { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0, word_order: "big", ...defaults }],
     })),
     update: (i: number, patch: Partial<IHMRegister>) => setForm((f) => {
       const regs = [...f[key]];
