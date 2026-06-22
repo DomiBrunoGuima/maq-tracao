@@ -243,8 +243,8 @@ function EnsaioItem({
           <p className="text-sm font-medium text-white truncate">{ensaio.filename.replace(".csv", "")}</p>
           <p className="text-xs text-muted">{ensaio.data_ensaio}</p>
           <div className="flex gap-3 mt-1.5">
-            <Stat label="Fmax" value={`${(ensaio.forca_max_N / 1000).toFixed(2)} kN`} />
-            <Stat label="σmax" value={`${ensaio.tensao_max_MPa.toFixed(1)} MPa`} />
+            <Stat label="Fmax" value={`${((ensaio.forca_max_N ?? 0) / 1000).toFixed(2)} kN`} />
+            <Stat label="σmax" value={`${(ensaio.tensao_max_MPa ?? 0).toFixed(1)} MPa`} />
           </div>
         </div>
       </div>

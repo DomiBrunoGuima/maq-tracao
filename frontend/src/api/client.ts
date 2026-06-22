@@ -112,8 +112,14 @@ export const zerarCelulaFlexao = (): Promise<{ status: string }> =>
 
 export const generateReport = async (req: ReportRequest): Promise<void> => {
   const response = await api.post("/relatorio", req, { responseType: "blob" });
-  const url = URL.createObjectURL(
-    new Blob([response.data], { type: "text/html" })
-  );
-  window.open(url, "_blank");
+  const url = URL.createObjectURL(new Blob([response.data], { type: "text/html" }));
+  // window.open() após um await é bloqueado pelo navegador (perde o gesto do
+  // usuário) e o relatório não aparece. Baixar via <a download> é confiável.
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `relatorio_ensaio_${req.ensaio_id}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };

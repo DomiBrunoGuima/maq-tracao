@@ -5,11 +5,7 @@ import type { ChartData, DataPoint, RupturePoint } from "../../types";
 import { useKPIs, useCurvas, useEnsaio, useParametrosIHM } from "../../hooks/useEnsaios";
 import { useConfig } from "../../hooks/useConfig";
 import KPICard from "./KPICard";
-import StressStrainChart from "../Charts/StressStrainChart";
-import ForceDisplacementChart from "../Charts/ForceDisplacementChart";
-import ForceTimeChart from "../Charts/ForceTimeChart";
-import ElasticModulusChart from "../Charts/ElasticModulusChart";
-import StressTimeChart from "../Charts/StressTimeChart";
+import SimpleLineChart from "../Charts/SimpleLineChart";
 import ReportGenerator from "../Reports/ReportGenerator";
 import PointInspectorModal from "../Charts/PointInspectorModal";
 
@@ -32,13 +28,13 @@ function renderChart(
   onPointClick?: (pt: DataPoint) => void,
   thumbnail = false,
 ) {
-  const p = { rupture: curvas.rupture, height, onPointClick, thumbnail };
+  const p = { height, onPointClick, thumbnail };
   switch (key) {
-    case "ss": return <StressStrainChart      data={curvas.stress_strain}        {...p} />;
-    case "fd": return <ForceDisplacementChart data={curvas.force_displacement}   {...p} />;
-    case "ft": return <ForceTimeChart         data={curvas.force_time}           {...p} />;
-    case "em": return <ElasticModulusChart    data={curvas.elastic_modulus_time} eRegressao={curvas.E_regressao} {...p} />;
-    case "st": return <StressTimeChart        data={curvas.stress_time}          {...p} />;
+    case "ss": return <SimpleLineChart data={curvas.stress_strain}        xKey="Deform_Along"     yKey="Tensao_Pa"   xUnit="" yUnit="MPa" xLabel="ε" yLabel="σ (MPa)" color="#38bdf8" xDecimals={3} {...p} />;
+    case "fd": return <SimpleLineChart data={curvas.force_displacement}   xKey="Deslocamento"     yKey="Forca_N"     xUnit="mm" yUnit="N" xLabel="d (mm)" yLabel="F (N)" color="#a78bfa" {...p} />;
+    case "ft": return <SimpleLineChart data={curvas.force_time}           xKey="elapsed_seconds"  yKey="Forca_N"     xUnit="s" yUnit="N" xLabel="t (s)" yLabel="F (N)" color="#38bdf8" {...p} />;
+    case "em": return <SimpleLineChart data={curvas.elastic_modulus_time} xKey="elapsed_seconds"  yKey="Modulo_Elast" xUnit="s" yUnit="MPa" xLabel="t (s)" yLabel="E (MPa)" color="#f59e0b" {...p} />;
+    case "st": return <SimpleLineChart data={curvas.stress_time}          xKey="elapsed_seconds"  yKey="Tensao_Pa"   xUnit="s" yUnit="MPa" xLabel="t (s)" yLabel="σ (MPa)" color="#10b981" {...p} />;
   }
 }
 
