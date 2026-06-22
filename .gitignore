@@ -5,7 +5,7 @@ __pycache__/
 *.pyo
 .env
 *.egg-info/
-dist/
+/dist/
 build/
 
 # Database
@@ -15,7 +15,9 @@ tracao.db
 
 # Node
 frontend/node_modules/
-frontend/dist/
+# frontend/dist/ é versionado de proposito: a maquina de teste roda por
+# git pull sem buildar o frontend (o backend serve frontend/dist no :8000).
+# Rode `npm run build` e commite o dist sempre que mudar o frontend.
 
 # Stray files
 =*
