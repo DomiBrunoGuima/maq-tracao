@@ -3,7 +3,6 @@ import {
   ChevronRight,
   GitCompare,
   Radio,
-  RefreshCw,
   RotateCcw,
   Ruler,
   Settings,
@@ -12,7 +11,6 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useEnsaios, useDeleteEnsaio, useReimportAll } from "../../hooks/useEnsaios";
-import { useFetchFtpCsv } from "../../hooks/useConfig";
 import type { EnsaioSummary } from "../../types";
 
 interface Props {
@@ -42,7 +40,6 @@ export default function Sidebar({
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
   const deleteMut = useDeleteEnsaio();
-  const fetchMut = useFetchFtpCsv();
   const reimportMut = useReimportAll();
 
   return (
@@ -62,26 +59,11 @@ export default function Sidebar({
 
       {/* Actions */}
       <div className="p-3 border-b border-border space-y-2">
-        <div className="flex gap-2">
-        <button
-          onClick={() => fetchMut.mutate()}
-          disabled={fetchMut.isPending}
-          title="Buscar CSV da IHM via FTP"
-          className={clsx(
-            "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50",
-            fetchMut.isError
-              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400"
-              : "bg-accent/10 hover:bg-accent/20 text-accent"
-          )}
-        >
-          <RefreshCw size={13} className={fetchMut.isPending ? "animate-spin" : ""} />
-          {fetchMut.isPending ? "Buscando..." : fetchMut.isError ? "Tentar novamente" : "Buscar CSV"}
-        </button>
         <button
           onClick={onViewComparison}
           title="Comparar ensaios selecionados"
           className={clsx(
-            "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5",
+            "w-full flex items-center justify-center gap-1.5 px-3 py-1.5",
             "rounded text-xs font-medium transition-colors",
             currentView === "comparison"
               ? "bg-accent text-bg"
@@ -91,16 +73,6 @@ export default function Sidebar({
           <GitCompare size={13} />
           Comparar {compareIds.length > 0 && `(${compareIds.length})`}
         </button>
-        </div>
-
-        {fetchMut.isError && (
-          <p className="text-xs text-red-400 leading-snug px-1">
-            {(fetchMut.error as any)?.response?.data?.detail ?? "Erro ao buscar CSV. Verifique as configurações FTP."}
-          </p>
-        )}
-        {fetchMut.isSuccess && (
-          <p className="text-xs text-green-400 px-1">CSV importado com sucesso.</p>
-        )}
         <button
           onClick={() => reimportMut.mutate()}
           disabled={reimportMut.isPending}
@@ -126,7 +98,7 @@ export default function Sidebar({
           <div className="text-center mt-8 px-4">
             <p className="text-xs text-muted">Nenhum ensaio carregado.</p>
             <p className="text-xs text-muted mt-1">
-              Use "Buscar CSV" para importar da IHM.
+              Adicione arquivos CSV na pasta monitorada ou rode um ensaio pelo Controle da Máquina.
             </p>
           </div>
         )}

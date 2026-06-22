@@ -166,7 +166,7 @@ export default function Dashboard({ ensaioId }: Props) {
         </div>
         <h2 className="text-lg font-semibold text-white mb-2">Nenhum ensaio selecionado</h2>
         <p className="text-sm text-muted max-w-xs">
-          Selecione um ensaio na barra lateral ou use "Buscar CSV" para importar da IHM.
+          Selecione um ensaio na barra lateral. Os ensaios são carregados da pasta monitorada.
         </p>
       </div>
     );
