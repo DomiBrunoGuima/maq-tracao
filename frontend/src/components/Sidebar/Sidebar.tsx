@@ -2,7 +2,6 @@ import {
   Activity,
   ChevronRight,
   GitCompare,
-  Radio,
   RotateCcw,
   Ruler,
   Settings,
@@ -20,7 +19,6 @@ interface Props {
   onToggleCompare: (id: number) => void;
   onViewConfig: () => void;
   onViewComparison: () => void;
-  onViewRealtime: () => void;
   onViewControl: () => void;
   onViewFlexao: () => void;
   currentView: string;
@@ -33,7 +31,6 @@ export default function Sidebar({
   onToggleCompare,
   onViewConfig,
   onViewComparison,
-  onViewRealtime,
   onViewControl,
   onViewFlexao,
   currentView,
@@ -115,53 +112,34 @@ export default function Sidebar({
         ))}
       </div>
 
-      {/* Bottom nav buttons */}
-      <div className="p-3 border-t border-border space-y-1">
-        <button
-          onClick={onViewControl}
-          className={clsx(
-            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
-            currentView === "control"
-              ? "bg-accent/10 text-accent"
-              : "text-muted hover:text-white hover:bg-border"
-          )}
-        >
-          <SlidersHorizontal size={15} className={currentView === "control" ? "text-accent" : ""} />
-          Controle da Máquina
-          {currentView === "control" && (
-            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          )}
-        </button>
-        <button
-          onClick={onViewFlexao}
-          className={clsx(
-            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
-            currentView === "flexao"
-              ? "bg-accent/10 text-accent"
-              : "text-muted hover:text-white hover:bg-border"
-          )}
-        >
-          <Ruler size={15} className={currentView === "flexao" ? "text-accent" : ""} />
-          Ensaio de Flexão
-          {currentView === "flexao" && (
-            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          )}
-        </button>
-        <button
-          onClick={onViewRealtime}
-          className={clsx(
-            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
-            currentView === "realtime"
-              ? "bg-accent/10 text-accent"
-              : "text-muted hover:text-white hover:bg-border"
-          )}
-        >
-          <Radio size={15} className={currentView === "realtime" ? "text-accent" : ""} />
-          Monitor ao Vivo
-          {currentView === "realtime" && (
-            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          )}
-        </button>
+      {/* Bottom nav — Tração e Flexão como ensaios de igual importância */}
+      <div className="p-3 border-t border-border space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onViewControl}
+            className={clsx(
+              "flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-lg border text-xs font-semibold transition-colors",
+              currentView === "control"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border bg-bg text-muted hover:text-white hover:border-accent/50"
+            )}
+          >
+            <SlidersHorizontal size={18} />
+            Tração
+          </button>
+          <button
+            onClick={onViewFlexao}
+            className={clsx(
+              "flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-lg border text-xs font-semibold transition-colors",
+              currentView === "flexao"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border bg-bg text-muted hover:text-white hover:border-accent/50"
+            )}
+          >
+            <Ruler size={18} />
+            Flexão
+          </button>
+        </div>
         <button
           onClick={onViewConfig}
           className={clsx(

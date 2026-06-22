@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import {
+  getFlexaoStatus,
   startFlexaoTest,
   stopFlexaoTest,
   zerarCelulaFlexao,
@@ -262,6 +263,8 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
   const [maxForca, setMaxForca] = useState(0);
   const [savedId, setSavedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Leitura ao vivo mesmo com o ensaio parado (conferir condições antes de iniciar).
+  const [live, setLive] = useState<{ forca: number | null; desloc: number | null }>({ forca: null, desloc: null });
 
   useEffect(() => {
     if (!config) return;
@@ -322,7 +325,29 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
 
   useEffect(() => () => { esRef.current?.close(); }, []);
 
+  // Polling da leitura ao vivo enquanto o ensaio NÃO roda (durante o ensaio o SSE provê).
+  useEffect(() => {
+    if (running) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await getFlexaoStatus();
+        if (cancelled) return;
+        const forca = s.forca_atual ?? null;
+        const desloc = s.deslocamento_atual ?? null;
+        setLive({ forca, desloc });
+        if (forca != null) setMaxForca((p) => Math.max(p, forca));
+      } catch { /* offline: ignora */ }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [running]);
+
   const num = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+
+  const forcaShown = frame?.forca ?? live.forca;
+  const deslocShown = frame?.deslocamento ?? live.desloc;
 
   async function handleStart() {
     setError(null);
@@ -330,7 +355,6 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
       const v = num(form[k]);
       if (v == null || v <= 0) { setError(`Informe a ${label} (mm) maior que zero.`); return; }
     }
-    if (!window.confirm(`Iniciar ensaio de flexão com o cutelo indo para ${form.sentido === "cima" ? "CIMA" : "BAIXO"}?`)) return;
     try {
       await startFlexaoTest({
         sentido: form.sentido,
@@ -375,10 +399,13 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
       <div className="flex items-center justify-end">
         <div className={clsx(
           "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border",
-          connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-border bg-surface text-muted",
+          connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+            : forcaShown != null ? "border-sky-500/40 bg-sky-500/10 text-sky-400"
+            : "border-border bg-surface text-muted",
         )}>
-          <span className={clsx("w-1.5 h-1.5 rounded-full", connected ? "bg-emerald-400 animate-pulse" : "bg-muted")} />
-          {connected ? "Aquisição ativa" : "Parado"}
+          <span className={clsx("w-1.5 h-1.5 rounded-full",
+            connected ? "bg-emerald-400 animate-pulse" : forcaShown != null ? "bg-sky-400 animate-pulse" : "bg-muted")} />
+          {connected ? "Aquisição ativa" : forcaShown != null ? "Monitorando" : "Offline"}
         </div>
       </div>
 
@@ -460,10 +487,10 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(frame?.forca, 1, "N")}
-          color={connected ? "text-sky-300" : "text-muted"} />
-        <KpiCard icon={<MoveHorizontal size={20} />} label="Deflexão atual" value={fmtNum(frame?.deslocamento, 2, "mm")}
-          color={connected ? "text-violet-300" : "text-muted"} />
+        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(forcaShown, 1, "N")}
+          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
+        <KpiCard icon={<MoveHorizontal size={20} />} label="Deflexão atual" value={fmtNum(deslocShown, 2, "mm")}
+          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
         <KpiCard icon={<Gauge size={20} />} label="Força máxima" value={maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
           color="text-amber-300" />
       </div>

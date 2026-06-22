@@ -24,7 +24,7 @@ import {
   Zap,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
+import { getControlStatus, startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import type { RealtimeFrame, RealtimePoint } from "../../types";
 
@@ -149,6 +149,9 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   const [maxForca, setMaxForca] = useState(0);
   const [savedId, setSavedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Leitura ao vivo (força/deslocamento) mesmo com o ensaio parado, para conferir
+  // as condições antes de iniciar. Não entra no gráfico — só nos indicadores.
+  const [live, setLive] = useState<{ forca: number | null; desloc: number | null }>({ forca: null, desloc: null });
 
   // Pré-preenche área/L0 a partir da config
   useEffect(() => {
@@ -212,13 +215,35 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
 
   useEffect(() => () => { esRef.current?.close(); }, []);
 
+  // Polling da leitura ao vivo quando o ensaio NÃO está rodando (durante o ensaio,
+  // o stream SSE já fornece os valores). Atualiza força/deslocamento e a força máxima.
+  useEffect(() => {
+    if (running) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await getControlStatus();
+        if (cancelled) return;
+        const forca = s.forca_atual ?? null;
+        const desloc = s.deslocamento_atual ?? null;
+        setLive({ forca, desloc });
+        if (forca != null) setMaxForca((p) => Math.max(p, forca));
+      } catch { /* offline: ignora */ }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [running]);
+
   const num = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+
+  const forcaShown = frame?.forca ?? live.forca;
+  const deslocShown = frame?.deslocamento ?? live.desloc;
 
   async function handleStart() {
     setError(null);
     const limite = num(form.limite_forca);
     if (limite == null || limite <= 0) { setError("Informe um limite de força de ruptura maior que zero."); return; }
-    if (!window.confirm(`Iniciar ensaio com a máquina indo para ${form.sentido === "cima" ? "CIMA" : "BAIXO"}?`)) return;
     try {
       await startTest({
         sentido: form.sentido,
@@ -285,10 +310,13 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
         <div className="flex items-center gap-3">
           <div className={clsx(
             "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border",
-            connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-border bg-surface text-muted",
+            connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+              : forcaShown != null ? "border-sky-500/40 bg-sky-500/10 text-sky-400"
+              : "border-border bg-surface text-muted",
           )}>
-            <span className={clsx("w-1.5 h-1.5 rounded-full", connected ? "bg-emerald-400 animate-pulse" : "bg-muted")} />
-            {connected ? "Aquisição ativa" : "Parado"}
+            <span className={clsx("w-1.5 h-1.5 rounded-full",
+              connected ? "bg-emerald-400 animate-pulse" : forcaShown != null ? "bg-sky-400 animate-pulse" : "bg-muted")} />
+            {connected ? "Aquisição ativa" : forcaShown != null ? "Monitorando" : "Offline"}
           </div>
         </div>
       </div>
@@ -381,10 +409,10 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
 
       {/* Estado / KPIs ao vivo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(frame?.forca, 1, "N")}
-          color={connected ? "text-sky-300" : "text-muted"} />
-        <KpiCard icon={<MoveHorizontal size={20} />} label="Deslocamento atual" value={fmtNum(frame?.deslocamento, 2, "mm")}
-          color={connected ? "text-violet-300" : "text-muted"} />
+        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(forcaShown, 1, "N")}
+          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
+        <KpiCard icon={<MoveHorizontal size={20} />} label="Deslocamento atual" value={fmtNum(deslocShown, 2, "mm")}
+          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
         <KpiCard icon={<Gauge size={20} />} label="Força máxima" value={maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
           color="text-amber-300" />
         <div className={clsx(

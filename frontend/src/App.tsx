@@ -3,11 +3,10 @@ import Sidebar from "./components/Sidebar/Sidebar";
 import Dashboard from "./components/Dashboard/Dashboard";
 import ComparisonView from "./components/Comparison/ComparisonView";
 import ConfigPanel from "./components/Config/ConfigPanel";
-import RealtimeMonitor from "./components/Realtime/RealtimeMonitor";
 import ControlPanel from "./components/Control/ControlPanel";
 import FlexaoView from "./components/Flexao/FlexaoView";
 
-type View = "dashboard" | "comparison" | "config" | "realtime" | "control" | "flexao";
+type View = "dashboard" | "comparison" | "config" | "control" | "flexao";
 
 export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -34,7 +33,6 @@ export default function App() {
         onToggleCompare={handleToggleCompare}
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
-        onViewRealtime={() => setView("realtime")}
         onViewControl={() => setView("control")}
         onViewFlexao={() => setView("flexao")}
         currentView={view}
@@ -49,9 +47,6 @@ export default function App() {
         )}
         {view === "config" && (
           <ConfigPanel onClose={() => setView("dashboard")} />
-        )}
-        {view === "realtime" && (
-          <RealtimeMonitor />
         )}
         {view === "control" && (
           <ControlPanel onOpenEnsaio={handleSelectEnsaio} />

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2, Download, Cpu, FolderOpen, Info, Radio, Sliders, Settings, SlidersHorizontal } from "lucide-react";
+import { Save, X, Plus, Trash2, FolderOpen, Info, Settings, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
-import { useConfig, useUpdateConfig, useFetchFtpCsv } from "../../hooks/useConfig";
+import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 import RegisterProbe from "./RegisterProbe";
 
-type Section = "geral" | "ihm" | "ftp" | "registradores" | "realtime" | "controle" | "sobre";
+type Section = "geral" | "controle" | "sobre";
 
 interface Props {
   onClose: () => void;
@@ -204,166 +204,6 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
   );
 }
 
-function IHMSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
-  return (
-    <div>
-      <SectionTitle>Conexão IHM</SectionTitle>
-      <SectionDesc>
-        Parâmetros de rede para comunicação Modbus TCP com a IHM. O IP configurado aqui é
-        compartilhado com o módulo FTP.
-      </SectionDesc>
-
-      <div className="grid grid-cols-2 gap-4 mb-5">
-        <Field label="Endereço IP">
-          <input
-            value={form.ihm_ip}
-            onChange={(e) => setForm((f) => ({ ...f, ihm_ip: e.target.value }))}
-            placeholder="192.168.8.10"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Porta Modbus">
-          <input
-            type="number"
-            value={form.ihm_port}
-            onChange={(e) => setForm((f) => ({ ...f, ihm_port: Number(e.target.value) }))}
-            className={inputCls}
-          />
-        </Field>
-      </div>
-
-      <Field
-        label="Timeout de conexão (segundos)"
-        hint="Tempo máximo aguardado para cada leitura Modbus antes de considerar a IHM inacessível."
-      >
-        <input
-          type="number"
-          min={1}
-          max={30}
-          value={form.ihm_timeout}
-          onChange={(e) => setForm((f) => ({ ...f, ihm_timeout: Number(e.target.value) }))}
-          className={clsx(smallInputCls, "w-24")}
-        />
-      </Field>
-
-      <Divider />
-
-      <div className="rounded-lg bg-accent/5 border border-accent/20 px-4 py-3">
-        <p className="text-xs text-accent/80 font-medium mb-0.5">Captura automática</p>
-        <p className="text-xs text-muted/70 leading-relaxed">
-          Os registradores configurados na aba <span className="text-slate-300">Registradores</span> são
-          lidos via Modbus sempre que um novo ensaio é detectado.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function FTPSection({
-  form, setForm, fetchFtpMut, updateMut,
-}: {
-  form: FormState;
-  setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  fetchFtpMut: ReturnType<typeof useFetchFtpCsv>;
-  updateMut: ReturnType<typeof useUpdateConfig>;
-}) {
-  return (
-    <div>
-      <SectionTitle>Transferência FTP</SectionTitle>
-      <SectionDesc>
-        Credenciais e caminho para baixar o arquivo CSV diretamente da IHM via FTP.
-        O endereço IP é o mesmo configurado em Conexão IHM.
-      </SectionDesc>
-
-      <div className="grid grid-cols-2 gap-4 mb-5">
-        <Field label="Usuário">
-          <input
-            value={form.ftp_user}
-            onChange={(e) => setForm((f) => ({ ...f, ftp_user: e.target.value }))}
-            placeholder="ihm"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Senha">
-          <input
-            type="password"
-            value={form.ftp_password}
-            onChange={(e) => setForm((f) => ({ ...f, ftp_password: e.target.value }))}
-            placeholder="••••••"
-            className={inputCls}
-          />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-[1fr_auto] gap-4 mb-5">
-        <Field label="Diretório remoto">
-          <input
-            value={form.ftp_remote_dir}
-            onChange={(e) => setForm((f) => ({ ...f, ftp_remote_dir: e.target.value }))}
-            placeholder="/HMI/HMI-000/History/CSV"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Porta FTP">
-          <input
-            type="number"
-            value={form.ftp_port}
-            onChange={(e) => setForm((f) => ({ ...f, ftp_port: Number(e.target.value) }))}
-            className={clsx(smallInputCls, "w-24")}
-          />
-        </Field>
-      </div>
-
-      <Field
-        label="Nome do arquivo remoto"
-        hint="Nome exato do arquivo CSV na IHM. ex: H0001.csv"
-      >
-        <input
-          value={form.ftp_remote_filename}
-          onChange={(e) => setForm((f) => ({ ...f, ftp_remote_filename: e.target.value }))}
-          placeholder="H0001.csv"
-          className={inputCls}
-        />
-      </Field>
-
-      <Divider />
-
-      <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
-        <p className="text-xs font-semibold text-white">Buscar agora</p>
-        <p className="text-xs text-muted/70 leading-relaxed">
-          Salva as configurações acima e baixa o arquivo imediatamente.
-        </p>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => updateMut.mutate(form, { onSuccess: () => fetchFtpMut.mutate() })}
-            disabled={fetchFtpMut.isPending || !form.ihm_ip || !form.ftp_remote_filename}
-            title={
-              !form.ihm_ip ? "Configure o IP da IHM primeiro" :
-              !form.ftp_remote_filename ? "Informe o nome do arquivo" : ""
-            }
-            className={clsx(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-              "bg-accent text-bg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
-          >
-            <Download size={14} />
-            {fetchFtpMut.isPending ? "Baixando..." : "Buscar CSV da IHM"}
-          </button>
-          {fetchFtpMut.isSuccess && (
-            <p className="text-xs text-green-400">
-              ✓ {fetchFtpMut.data.filename} — {fetchFtpMut.data.bytes_received} bytes
-            </p>
-          )}
-          {fetchFtpMut.isError && (
-            <p className="text-xs text-red-400">
-              {(fetchFtpMut.error as any)?.response?.data?.detail ?? "Erro ao conectar via FTP"}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const DATA_TYPE_OPTIONS = ["uint16", "decimal", "int32", "decimal32", "float32", "coil"] as const;
 const WORD2_TYPES = ["int32", "decimal32", "float32"]; // tipos com escala numérica (float32 sem escala)
@@ -487,20 +327,6 @@ function makeRegHandlers(
   };
 }
 
-function RegistradoresSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
-  const h = makeRegHandlers("ihm_registers", setForm, {});
-  return (
-    <div>
-      <SectionTitle>Registradores Modbus</SectionTitle>
-      <SectionDesc>
-        Mapeamento de endereços Modbus lidos da IHM (legado). Suporta uint16, decimal (com escala),
-        int32/decimal32 e float32 big-endian (dois registradores consecutivos).
-      </SectionDesc>
-      <RegisterTable registers={form.ihm_registers} onAdd={h.add} onUpdate={h.update} onRemove={h.remove} />
-    </div>
-  );
-}
-
 function ControleSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
   const h = makeRegHandlers("control_registers", setForm, { writable: true, role: "" });
   return (
@@ -512,15 +338,6 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         deslocamento_programado, velocidade, limite_forca, forca_atual, deslocamento_atual,
         material_integro_bit, ruptura_bit</span>.
       </SectionDesc>
-
-      {/* Botão canário — confirma que o git pull + build chegaram na maquina de teste */}
-      <button
-        onClick={() => alert("✅ Atualização chegou! Canário de build #1 (2026-06-22).")}
-        className="mb-5 flex items-center gap-2 px-4 py-2 rounded-lg bg-fuchsia-500/15 border border-fuchsia-400/40
-                   text-fuchsia-300 text-sm font-semibold hover:bg-fuchsia-500/25 transition-colors"
-      >
-        🔄 Botão de teste de atualização (canário #1)
-      </button>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
         <Field label="IP do CLP" hint="Se vazio, usa o IP da Conexão IHM.">
@@ -573,90 +390,6 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
   );
 }
 
-function RealtimeSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
-  return (
-    <div>
-      <SectionTitle>Monitoramento em Tempo Real</SectionTitle>
-      <SectionDesc>
-        Configuração dos registradores lidos durante o acompanhamento ao vivo do ensaio.
-        Os nomes devem corresponder exatamente aos campos "Nome" configurados na aba Registradores.
-      </SectionDesc>
-
-      <Field
-        label="Intervalo de leitura (ms)"
-        hint="Intervalo entre leituras Modbus. Mínimo 50 ms. Valores menores que a latência da rede serão ignorados."
-      >
-        <input
-          type="number"
-          min={50}
-          max={2000}
-          step={10}
-          value={form.realtime_interval_ms}
-          onChange={(e) => setForm((f) => ({ ...f, realtime_interval_ms: Number(e.target.value) }))}
-          className={smallInputCls + " w-32"}
-        />
-      </Field>
-
-      <Divider />
-
-      <div className="space-y-5">
-        <Field
-          label="Nome do registrador — Bit de início"
-          hint='Pulso (0→1) que dispara o início da gravação. Ex: "teste_ativo_bit"'
-        >
-          <input
-            value={form.realtime_bit_name}
-            onChange={(e) => setForm((f) => ({ ...f, realtime_bit_name: e.target.value }))}
-            placeholder="teste_ativo_bit"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field
-          label="Nome do registrador — Bit de parada"
-          hint='Pulso (0→1) que encerra a gravação e fecha o monitor. Ex: "teste_parada_bit"'
-        >
-          <input
-            value={form.realtime_stop_bit_name}
-            onChange={(e) => setForm((f) => ({ ...f, realtime_stop_bit_name: e.target.value }))}
-            placeholder="teste_parada_bit"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field
-          label="Nome do registrador — Força atual"
-          hint='Registrador que contém a força instantânea em Newtons. Ex: "forca_atual"'
-        >
-          <input
-            value={form.realtime_forca_name}
-            onChange={(e) => setForm((f) => ({ ...f, realtime_forca_name: e.target.value }))}
-            placeholder="forca_atual"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field
-          label="Nome do registrador — Deslocamento atual"
-          hint='Registrador que contém o deslocamento instantâneo em mm. Ex: "deslocamento_atual"'
-        >
-          <input
-            value={form.realtime_deslocamento_name}
-            onChange={(e) => setForm((f) => ({ ...f, realtime_deslocamento_name: e.target.value }))}
-            placeholder="deslocamento_atual"
-            className={inputCls}
-          />
-        </Field>
-      </div>
-
-      <div className="mt-6 bg-accent/5 border border-accent/20 rounded-xl px-4 py-3 text-xs text-muted/80 leading-relaxed">
-        Os três registradores acima devem estar cadastrados na aba <strong className="text-slate-300">Registradores</strong> com os mesmos nomes.
-        O tipo de dado (uint16 / float32 / decimal) e a escala são lidos de lá automaticamente.
-      </div>
-    </div>
-  );
-}
-
 function SobreSection() {
   const items = [
     { label: "Software", value: "Analisador de Ensaios de Tração" },
@@ -686,17 +419,12 @@ function SobreSection() {
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "geral",          label: "Geral",           icon: <FolderOpen size={15} /> },
-  { id: "ihm",            label: "Conexão IHM",      icon: <Cpu size={15} /> },
-  { id: "ftp",            label: "FTP",              icon: <Download size={15} /> },
-  { id: "registradores",  label: "Registradores",    icon: <Sliders size={15} /> },
-  { id: "realtime",       label: "Tempo Real",       icon: <Radio size={15} /> },
   { id: "controle",       label: "Controle (CLP)",   icon: <SlidersHorizontal size={15} /> },
 ];
 
 export default function ConfigPanel({ onClose }: Props) {
   const { data: config, isLoading } = useConfig();
   const updateMut = useUpdateConfig();
-  const fetchFtpMut = useFetchFtpCsv();
   const [section, setSection] = useState<Section>("geral");
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 
@@ -759,10 +487,6 @@ export default function ConfigPanel({ onClose }: Props) {
         <div className="flex-1 overflow-auto">
           <div className="p-8 max-w-2xl">
             {section === "geral"         && <GeralSection         form={form} setForm={setForm} />}
-            {section === "ihm"           && <IHMSection           form={form} setForm={setForm} />}
-            {section === "ftp"           && <FTPSection           form={form} setForm={setForm} fetchFtpMut={fetchFtpMut} updateMut={updateMut} />}
-            {section === "registradores" && <RegistradoresSection form={form} setForm={setForm} />}
-            {section === "realtime"      && <RealtimeSection      form={form} setForm={setForm} />}
             {section === "controle"      && <ControleSection      form={form} setForm={setForm} />}
             {section === "sobre"         && <SobreSection />}
           </div>
