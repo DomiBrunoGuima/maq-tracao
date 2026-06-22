@@ -513,6 +513,15 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         material_integro_bit, ruptura_bit</span>.
       </SectionDesc>
 
+      {/* Botão canário — confirma que o git pull + build chegaram na maquina de teste */}
+      <button
+        onClick={() => alert("✅ Atualização chegou! Canário de build #1 (2026-06-22).")}
+        className="mb-5 flex items-center gap-2 px-4 py-2 rounded-lg bg-fuchsia-500/15 border border-fuchsia-400/40
+                   text-fuchsia-300 text-sm font-semibold hover:bg-fuchsia-500/25 transition-colors"
+      >
+        🔄 Botão de teste de atualização (canário #1)
+      </button>
+
       <div className="grid grid-cols-2 gap-4 mb-5">
         <Field label="IP do CLP" hint="Se vazio, usa o IP da Conexão IHM.">
           <input value={form.clp_ip} onChange={(e) => setForm((f) => ({ ...f, clp_ip: e.target.value }))}
