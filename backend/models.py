@@ -111,6 +111,9 @@ class IHMRegister(BaseModel):
     scale: float = 1.0          # aplicado a uint16/decimal/int32/decimal32: valor_real = raw * scale
     role: str = ""              # papel no controle (iniciar, parar, sentido_cima, limite_forca, ...)
     writable: bool = False      # se o software pode escrever neste registrador
+    # Ordem das palavras em tipos de 32 bits: "big" (ABCD, palavra alta 1º, padrão)
+    # ou "little" (CDAB, palavra baixa 1º — comum em CLP Mitsubishi/registradores D)
+    word_order: str = "big"
 
 
 class ParametrosIHM(BaseModel):

@@ -36,14 +36,32 @@ def encode_int32(value: int, signed: bool = True) -> tuple[int, int]:
     return int(hi), int(lo)
 
 
+def _is_little_word_order(word_order: Any) -> bool:
+    """True quando a palavra baixa vai primeiro (CDAB) — comum em CLPs
+    Mitsubishi e registradores D (doubleword: D_n = palavra baixa, D_n+1 = alta)."""
+    return str(word_order).lower() in ("little", "lo", "low", "swap", "cdab", "lh")
+
+
+def _order_words(hi: int, lo: int, word_order: Any) -> list[int]:
+    """Ordena (HI, LO) conforme a convenção do CLP, para write_registers.
+    'big' (padrão, ABCD) = palavra alta primeiro; 'little' (CDAB) = baixa primeiro."""
+    return [lo, hi] if _is_little_word_order(word_order) else [hi, lo]
+
+
+def _words_to_hilo(r0: int, r1: int, word_order: Any) -> tuple[int, int]:
+    """Inverso de :func:`_order_words`: dado o par lido do CLP, devolve (HI, LO)."""
+    return (r1, r0) if _is_little_word_order(word_order) else (r0, r1)
+
+
 def _read_register(client: Any, reg: dict) -> Any:
     """Lê um registrador (qualquer data_type suportado) e retorna o valor decodificado.
 
     Suporta: coil, uint16, decimal (uint16×scale), int32/decimal32 (doubleword com
     sinal×scale) e float32 (IEEE 754). Retorna None em erro de leitura."""
-    address   = reg["address"]
-    data_type = reg.get("data_type", "uint16")
-    scale     = float(reg.get("scale", 1.0))
+    address    = reg["address"]
+    data_type  = reg.get("data_type", "uint16")
+    scale      = float(reg.get("scale", 1.0))
+    word_order = reg.get("word_order", "big")
 
     if data_type == "coil":
         resp = client.read_coils(address=address, count=1)
@@ -53,13 +71,15 @@ def _read_register(client: Any, reg: dict) -> Any:
         resp = client.read_holding_registers(address=address, count=2)
         if resp.isError():
             return None
-        return round(_decode_float32(resp.registers[0], resp.registers[1]), 4)
+        hi, lo = _words_to_hilo(resp.registers[0], resp.registers[1], word_order)
+        return round(_decode_float32(hi, lo), 4)
 
     if data_type in ("int32", "decimal32"):
         resp = client.read_holding_registers(address=address, count=2)
         if resp.isError():
             return None
-        raw = _decode_int32(resp.registers[0], resp.registers[1])
+        hi, lo = _words_to_hilo(resp.registers[0], resp.registers[1], word_order)
+        raw = _decode_int32(hi, lo)
         return round(raw * scale, 6) if scale != 1.0 else raw
 
     # uint16 / decimal
@@ -185,26 +205,38 @@ class ModbusController:
         return not resp.isError()
 
     def write_register(self, reg: dict, value: float) -> bool:
-        """Escreve um valor respeitando o data_type do registrador."""
+        """Escreve um valor respeitando o data_type e a ordem de palavra do registrador.
+
+        Levanta RuntimeError se o CLP recusar a escrita (endereço/tipo inválido), em
+        vez de falhar em silêncio — assim setpoints que não chegam à máquina aparecem
+        como erro no endpoint, e não como sucesso fantasma."""
         if self._client is None:
             raise RuntimeError("Controlador Modbus não conectado")
-        address   = reg["address"]
-        data_type = reg.get("data_type", "uint16")
-        scale     = float(reg.get("scale", 1.0))
+        address    = reg["address"]
+        data_type  = reg.get("data_type", "uint16")
+        scale      = float(reg.get("scale", 1.0))
+        word_order = reg.get("word_order", "big")
 
         if data_type == "coil":
-            return self._write_coil(address, bool(value))
-        if data_type == "float32":
+            ok = self._write_coil(address, bool(value))
+        elif data_type == "float32":
             hi, lo = encode_float32(float(value))
-            return self._write_words(address, [hi, lo])
-        if data_type in ("int32", "decimal32"):
+            ok = self._write_words(address, _order_words(hi, lo, word_order))
+        elif data_type in ("int32", "decimal32"):
             raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
             hi, lo = encode_int32(raw)
-            return self._write_words(address, [hi, lo])
-        # uint16 / decimal
-        raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
-        resp = self._client.write_register(address=address, value=raw & 0xFFFF)
-        return not resp.isError()
+            ok = self._write_words(address, _order_words(hi, lo, word_order))
+        else:  # uint16 / decimal
+            raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+            resp = self._client.write_register(address=address, value=raw & 0xFFFF)
+            ok = not resp.isError()
+
+        if not ok:
+            raise RuntimeError(
+                f"CLP recusou a escrita em {data_type}@{address} (valor={value}). "
+                "Verifique endereço, tipo e ordem de palavra do registrador em Controle (CLP)."
+            )
+        return True
 
     def write_named(self, role_or_name: str, value: float) -> bool:
         reg = self.resolve(role_or_name)

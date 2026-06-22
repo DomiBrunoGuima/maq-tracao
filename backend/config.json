@@ -130,7 +130,8 @@
       "description": "VERIFICAR endereco/tipo — device T412/D412 (float doubleword)",
       "data_type": "float32",
       "scale": 1.0,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "velocidade",
@@ -139,7 +140,8 @@
       "description": "VERIFICAR endereco/escala — device D408 (decimal doubleword)",
       "data_type": "decimal32",
       "scale": 0.01,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "limite_forca",
@@ -148,7 +150,8 @@
       "description": "VERIFICAR endereco/tipo — device D2006 (Limite de forca de ruptura)",
       "data_type": "int32",
       "scale": 1.0,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "forca_atual",
@@ -157,7 +160,8 @@
       "description": "VERIFICAR endereco/tipo — device D2000 (Forca Newton atual)",
       "data_type": "int32",
       "scale": 1.0,
-      "writable": false
+      "writable": false,
+      "word_order": "little"
     },
     {
       "name": "deslocamento_atual",
@@ -166,7 +170,8 @@
       "description": "VERIFICAR endereco/tipo — deslocamento instantaneo (mm)",
       "data_type": "float32",
       "scale": 1.0,
-      "writable": false
+      "writable": false,
+      "word_order": "little"
     },
     {
       "name": "material_integro_bit",
@@ -217,7 +222,8 @@
       "description": "VERIFICAR no hardware — velocidade do ensaio de flexao (mm/min)",
       "data_type": "decimal32",
       "scale": 0.01,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "deslocamento_programado",
@@ -226,7 +232,8 @@
       "description": "VERIFICAR no hardware — deflexao-alvo do ensaio de flexao (mm)",
       "data_type": "float32",
       "scale": 1.0,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "limite_forca",
@@ -235,7 +242,8 @@
       "description": "VERIFICAR no hardware — limite de forca do ensaio de flexao (N)",
       "data_type": "int32",
       "scale": 1.0,
-      "writable": true
+      "writable": true,
+      "word_order": "little"
     },
     {
       "name": "forca_atual",
@@ -244,7 +252,8 @@
       "description": "VERIFICAR no hardware — carga aplicada pelo cutelo (N)",
       "data_type": "int32",
       "scale": 1.0,
-      "writable": false
+      "writable": false,
+      "word_order": "little"
     },
     {
       "name": "deslocamento_atual",
@@ -253,7 +262,8 @@
       "description": "VERIFICAR no hardware — deflexao no centro do corpo de prova (mm)",
       "data_type": "float32",
       "scale": 1.0,
-      "writable": false
+      "writable": false,
+      "word_order": "little"
     },
     {
       "name": "fim_ensaio_bit",
