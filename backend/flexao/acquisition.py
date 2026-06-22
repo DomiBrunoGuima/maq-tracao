@@ -66,11 +66,6 @@ def build_ensaio_flexao_dataframe(
     df["DATA"] = df["timestamp"].dt.strftime("%d/%m/%Y")
     df["TIME"] = df["timestamp"].dt.strftime("%H:%M:%S")
 
-    # Corta o pré-contato (re-referencia elapsed e deflexão no ponto de contato)
-    # antes de derivar, para σf/εf ficarem consistentes com a deflexão zerada.
-    from ..parser import _trim_precontact
-    df = _trim_precontact(df).reset_index(drop=True)
-
     b = float(largura_mm) if largura_mm and largura_mm > 0 else 1.0
     h = float(espessura_mm) if espessura_mm and espessura_mm > 0 else 1.0
     L = float(span_mm) if span_mm and span_mm > 0 else 1.0

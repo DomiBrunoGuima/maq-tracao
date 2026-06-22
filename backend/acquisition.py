@@ -21,7 +21,7 @@ import pandas as pd
 
 from .calculator import calculate_kpis
 from .database import EnsaioDB, ParametrosIHMDB
-from .parser import COLUMN_NAMES, EnsaioMetadata, _detect_stages, _trim_precontact
+from .parser import COLUMN_NAMES, EnsaioMetadata, _detect_stages
 
 logger_prefix = "[acquisition]"
 
@@ -62,11 +62,6 @@ def build_ensaio_dataframe(
     df["timestamp"] = now + pd.to_timedelta(df["elapsed_seconds"], unit="s")
     df["DATA"] = df["timestamp"].dt.strftime("%d/%m/%Y")
     df["TIME"] = df["timestamp"].dt.strftime("%H:%M:%S")
-
-    # Corta pré-contato ANTES de derivar — o trim re-referencia elapsed_seconds e
-    # Deslocamento (zera no ponto de contato), então tensão/deformação devem usar os
-    # valores já re-referenciados para ficarem consistentes.
-    df = _trim_precontact(df).reset_index(drop=True)
 
     # Sem área/L0 não há como derivar tensão/deformação em unidades físicas — usamos
     # 1.0 (unidades cruas) e avisamos, para não perder os dados do ensaio.

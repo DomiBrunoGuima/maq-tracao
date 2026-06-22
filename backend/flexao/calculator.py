@@ -171,24 +171,6 @@ def calculate_kpis(df: pd.DataFrame, geom: dict | None = None) -> dict:
     }
 
 
-def _break_cutoff(df: pd.DataFrame) -> int:
-    """Índice (inclusivo) até onde plotar: primeira queda abrupta de força (>50%
-    de Fmax num passo) após o pico. Sem queda (ensaio que não rompe) → último ponto."""
-    forca = df["Forca_N"].values.astype(float)
-    n = len(forca)
-    if n < 2:
-        return n - 1
-    peak_pos = int(np.argmax(forca))
-    fmax = float(forca[peak_pos])
-    if fmax <= 0:
-        return n - 1
-    threshold = fmax * 0.50
-    for i in range(peak_pos + 1, n):
-        if forca[i - 1] - forca[i] > threshold:
-            return i
-    return n - 1
-
-
 def format_chart_data(df: pd.DataFrame) -> dict:
     def safe_records(sub: pd.DataFrame, fields: list[str]) -> list[dict]:
         out = []
@@ -200,8 +182,8 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             out.append(record)
         return out
 
-    cutoff = _break_cutoff(df)
-    df_plot = df.iloc[:cutoff + 1].copy()
+    # Mostra o ensaio na totalidade — sem recorte de pré-contato nem de pós-ruptura.
+    df_plot = df.copy()
 
     for _col in ["Tensao_Flexao", "Forca_N", "Deslocamento", "Deform_Flexao", "Modulo_Flexao"]:
         if _col in df_plot.columns:

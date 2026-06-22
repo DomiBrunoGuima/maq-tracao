@@ -159,28 +159,6 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
     }
 
 
-def _rupture_cutoff(df: pd.DataFrame) -> int:
-    """Returns the index up to which data should be plotted (inclusive).
-
-    Detects the first abrupt force drop (>50 % of Fmax in a single step) after
-    the UTS and returns that index so all series are sliced to [:cutoff+1].
-    Falls back to the last row if no abrupt drop is found.
-    """
-    forca = df["Forca_N"].values.astype(float)
-    n = len(forca)
-    if n < 2:
-        return n - 1
-    uts_pos = int(np.argmax(forca))
-    fmax = float(forca[uts_pos])
-    if fmax <= 0:
-        return n - 1
-    threshold = fmax * 0.50
-    for i in range(uts_pos + 1, n):
-        if forca[i - 1] - forca[i] > threshold:
-            return i
-    return n - 1
-
-
 def format_chart_data(df: pd.DataFrame) -> dict:
     def safe_records(sub: pd.DataFrame, fields: list[str]) -> list[dict]:
         out = []
@@ -192,9 +170,8 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             out.append(record)
         return out
 
-    # Truncate post-rupture noise
-    cutoff = _rupture_cutoff(df)
-    df_plot = df.iloc[:cutoff + 1].copy()
+    # Mostra o ensaio na totalidade — sem recorte de pré-contato nem de pós-ruptura.
+    df_plot = df.copy()
 
     # Forward-fill sporadic NaN values in plot columns so series have no gaps
     for _col in ["Tensao_Pa", "Forca_N", "Deslocamento", "Deform_Along", "Modulo_Elast"]:

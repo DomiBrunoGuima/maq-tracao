@@ -5,14 +5,14 @@ típico de flexão a 3 pontos é:
 
     acomodacao → elastico_linear → pos_escoamento → (ruptura | fim_ensaio)
 
-Reaproveita ``_trim_precontact`` e ``_find_linear_region`` do parser de tração.
+Reaproveita ``_find_linear_region`` do parser de tração.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from ..parser import _find_linear_region, _trim_precontact  # noqa: F401  (reexport)
+from ..parser import _find_linear_region  # noqa: F401  (reexport)
 
 # Colunas que o pipeline de flexão espera no DataFrame.
 COLUMN_NAMES = [
