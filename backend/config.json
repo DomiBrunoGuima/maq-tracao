@@ -218,8 +218,8 @@
     {
       "name": "iniciar",
       "role": "iniciar",
-      "address": 0,
-      "description": "VERIFICAR no hardware — coil de inicio do ensaio de flexao",
+      "address": 4003,
+      "description": "Flexao (mesma maquina da tracao) — iniciar",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -227,28 +227,46 @@
     {
       "name": "parar",
       "role": "parar",
-      "address": 0,
-      "description": "VERIFICAR no hardware — coil de parada do ensaio de flexao",
+      "address": 4001,
+      "description": "Flexao (mesma maquina da tracao) — parar",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
     },
     {
-      "name": "velocidade",
-      "role": "velocidade",
-      "address": 0,
-      "description": "VERIFICAR no hardware — velocidade do ensaio de flexao (mm/min)",
-      "data_type": "decimal32",
-      "scale": 0.01,
-      "writable": true,
-      "word_order": "little"
+      "name": "sentido_cima",
+      "role": "sentido_cima",
+      "address": 3999,
+      "description": "Flexao (mesma maquina da tracao) — sentido_cima",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "sentido_baixo",
+      "role": "sentido_baixo",
+      "address": 4000,
+      "description": "Flexao (mesma maquina da tracao) — sentido_baixo",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
     },
     {
       "name": "deslocamento_programado",
       "role": "deslocamento_programado",
-      "address": 0,
-      "description": "VERIFICAR no hardware — deflexao-alvo do ensaio de flexao (mm)",
+      "address": 40004,
+      "description": "Flexao (mesma maquina da tracao) — deslocamento_programado",
       "data_type": "float32",
+      "scale": 1.0,
+      "writable": true,
+      "word_order": "little"
+    },
+    {
+      "name": "velocidade",
+      "role": "velocidade",
+      "address": 40000,
+      "description": "Flexao (mesma maquina da tracao) — velocidade",
+      "data_type": "decimal32",
       "scale": 1.0,
       "writable": true,
       "word_order": "little"
@@ -256,9 +274,9 @@
     {
       "name": "limite_forca",
       "role": "limite_forca",
-      "address": 0,
-      "description": "VERIFICAR no hardware — limite de forca do ensaio de flexao (N)",
-      "data_type": "int32",
+      "address": 40023,
+      "description": "Flexao (mesma maquina da tracao) — limite_forca",
+      "data_type": "float32",
       "scale": 1.0,
       "writable": true,
       "word_order": "little"
@@ -266,9 +284,9 @@
     {
       "name": "forca_atual",
       "role": "forca_atual",
-      "address": 0,
-      "description": "VERIFICAR no hardware — carga aplicada pelo cutelo (N)",
-      "data_type": "int32",
+      "address": 40049,
+      "description": "Flexao (mesma maquina da tracao) — forca_atual",
+      "data_type": "float32",
       "scale": 1.0,
       "writable": false,
       "word_order": "little"
@@ -276,27 +294,18 @@
     {
       "name": "deslocamento_atual",
       "role": "deslocamento_atual",
-      "address": 0,
-      "description": "VERIFICAR no hardware — deflexao no centro do corpo de prova (mm)",
+      "address": 40039,
+      "description": "Flexao (mesma maquina da tracao) — deslocamento_atual",
       "data_type": "float32",
       "scale": 1.0,
       "writable": false,
       "word_order": "little"
     },
     {
-      "name": "fim_ensaio_bit",
-      "role": "fim_ensaio_bit",
-      "address": 0,
-      "description": "VERIFICAR no hardware — bit que sinaliza fim do ensaio de flexao (ruptura ou deflexao-alvo atingida)",
-      "data_type": "coil",
-      "scale": 1.0,
-      "writable": false
-    },
-    {
       "name": "zerar_deslocamento",
       "role": "zerar_deslocamento",
       "address": 0,
-      "description": "VERIFICAR endereco — coil que zera o deslocamento da flexao",
+      "description": "Flexao (mesma maquina da tracao) — zerar_deslocamento",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -305,10 +314,19 @@
       "name": "zerar_celula",
       "role": "zerar_celula",
       "address": 0,
-      "description": "VERIFICAR endereco — coil que zera a celula de carga da flexao (tambem para o ensaio)",
+      "description": "Flexao (mesma maquina da tracao) — zerar_celula",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
+    },
+    {
+      "name": "fim_ensaio_bit",
+      "role": "fim_ensaio_bit",
+      "address": 4010,
+      "description": "Flexao — bit de fim de ensaio (ruptura/deflexao-alvo); mesmo bit da tracao",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": false
     }
   ]
 }
