@@ -163,6 +163,8 @@ export interface IHMRegister {
   address: number;
   // Dispositivo Delta (ex.: "D412", "M5", "X0"). Se preenchido, substitui address.
   device?: string;
+  // Registrador de origem no CLP (ex.: "D600"), só referência
+  clp_ref?: string;
   description: string;
   data_type: ModbusDataType;
   scale: number;

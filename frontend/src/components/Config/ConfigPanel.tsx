@@ -256,11 +256,11 @@ function RegisterTable({
   addLabel?: string;
 }) {
   const cols = showRole
-    ? "grid-cols-[76px_96px_96px_1fr_84px_60px_72px_32px]"
-    : "grid-cols-[88px_116px_1fr_96px_72px_72px_32px]";
+    ? "grid-cols-[72px_64px_92px_92px_1fr_84px_60px_72px_32px]"
+    : "grid-cols-[80px_64px_110px_1fr_96px_72px_72px_32px]";
   const headers = showRole
-    ? ["Disp./End.", "Role", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""]
-    : ["Disp./End.", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""];
+    ? ["Disp./End.", "CLP", "Role", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""]
+    : ["Disp./End.", "CLP", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""];
   const inputCell =
     "bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white " +
     "focus:outline-none focus:border-accent transition-colors w-full";
@@ -297,6 +297,9 @@ function RegisterTable({
                 <input value={r.device || String(r.address ?? "")} placeholder="D412"
                   title="Dispositivo Delta (D412, M5, X0) ou endereço Modbus numérico"
                   onChange={(e) => onUpdate(i, addressPatch(e.target.value))} className={inputCell} />
+                <input value={r.clp_ref ?? ""} placeholder="D600"
+                  title="Registrador de origem no CLP (só referência; o endereço usado é o da coluna Disp./End.)"
+                  onChange={(e) => onUpdate(i, { clp_ref: e.target.value.toUpperCase() })} className={inputCell} />
                 {showRole && (
                   <input value={r.role ?? ""} placeholder="role"
                     onChange={(e) => onUpdate(i, { role: e.target.value })} className={inputCell} />
@@ -337,7 +340,7 @@ function RegisterTable({
               float32 / int32 / decimal32 — 2 registradores (N + N+1). Ordem: big = HI 1º (ABCD) · little = LO 1º (CDAB, ex.: registradores D do Delta)
             </p>
             <p className="text-[10px] font-mono text-muted/50">
-              Disp./End.: digite o dispositivo como na IHM (D412, M5, X0) — o endereço Modbus é calculado pela família do CLP. input = entrada digital X (só leitura)
+              Disp./End.: endereço Modbus lido pelo software (conexão pela IHM: endereço da tabela Modbus da IHM − 1). CLP: registrador de origem no CLP, só referência. input = entrada digital X (só leitura)
             </p>
             {registers.some((r) => WORD2_TYPES.includes(r.data_type) || r.data_type === "decimal") && (
               <p className="text-[10px] font-mono text-muted/50">decimal/int32/decimal32 — valor_real = raw × escala</p>

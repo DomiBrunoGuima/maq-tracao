@@ -109,6 +109,9 @@ class IHMRegister(BaseModel):
     # Quando preenchido, o endereço Modbus é calculado a partir dele (ver plc_family)
     # e o campo address é ignorado.
     device: str = ""
+    # Registrador de origem no CLP (ex.: "D600", "M9"), só para referência: quando a
+    # conexão é pela IHM, o endereço Modbus usado é o da tabela da IHM (address).
+    clp_ref: str = ""
     description: str = ""
     # "coil" | "input" | "uint16" | "decimal" | "int32" | "decimal32" | "float32"
     data_type: str = "uint16"
