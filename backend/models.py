@@ -104,11 +104,15 @@ class FlexaoControlStartRequest(BaseModel):
 
 class IHMRegister(BaseModel):
     name: str
-    address: int
+    address: int = 0
+    # Dispositivo Delta como aparece no ISPSoft/DOPSoft (ex.: "D412", "M5", "X0").
+    # Quando preenchido, o endereço Modbus é calculado a partir dele (ver plc_family)
+    # e o campo address é ignorado.
+    device: str = ""
     description: str = ""
-    # "coil" | "uint16" | "decimal" | "int32" | "decimal32" | "float32"
+    # "coil" | "input" | "uint16" | "decimal" | "int32" | "decimal32" | "float32"
     data_type: str = "uint16"
-    scale: float = 1.0          # aplicado a uint16/decimal/int32/decimal32: valor_real = raw * scale
+    scale: float = 1.0          # valor_real = raw * scale (em float32 também: ex. kgf→N = 9.80665)
     role: str = ""              # papel no controle (iniciar, parar, sentido_cima, limite_forca, ...)
     writable: bool = False      # se o software pode escrever neste registrador
     # Ordem das palavras em tipos de 32 bits: "big" (ABCD, palavra alta 1º, padrão)
@@ -148,6 +152,8 @@ class ConfigModel(BaseModel):
     clp_ip: str = ""            # se vazio, faz fallback para ihm_ip
     clp_port: int = 502
     clp_timeout: int = 3
+    # Família do CLP Delta, usada para converter "device" (D/M/X/Y) em endereço Modbus
+    plc_family: str = "dvp"     # "dvp" | "as"
     control_registers: List[IHMRegister] = []
     control_pulse_ms: int = 300  # duração do pulso em coils de comando (iniciar/parar)
     area_seccao_mm2: float = 0.0       # default do setup; sobrescrito por ensaio
@@ -180,8 +186,9 @@ class ControlSetpointsRequest(BaseModel):
 
 class RegisterProbeRequest(BaseModel):
     """Teste isolado de um registrador, sem depender do mapa de controle salvo."""
-    address: int
-    data_type: str = "float32"          # coil|uint16|decimal|int32|decimal32|float32
+    address: int = 0
+    device: str = ""                    # ex.: "D600" — se preenchido, substitui address
+    data_type: str = "float32"          # coil|input|uint16|decimal|int32|decimal32|float32
     scale: float = 1.0
     word_order: str = "big"             # big|little (tipos de 32 bits)
     direction: str = "read"             # "read" (entrada) | "write" (saída)
@@ -196,6 +203,14 @@ class ControlStatus(BaseModel):
     material_integro: Optional[bool] = None
     ruptura: Optional[bool] = None
     ativo: Optional[bool] = None
+    # Valores calculados pelo CLP (tela "Ensaio de Tração" da IHM)
+    forca_maxima: Optional[float] = None
+    tensao_maxima: Optional[float] = None
+    deslocamento_maximo: Optional[float] = None
+    # Entradas de segurança (X0/X1/X2)
+    emergencia: Optional[bool] = None
+    limite_superior: Optional[bool] = None
+    limite_inferior: Optional[bool] = None
 
 
 class DadosEmpresa(BaseModel):

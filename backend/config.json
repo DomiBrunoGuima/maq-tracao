@@ -87,8 +87,9 @@
     {
       "name": "iniciar",
       "role": "iniciar",
-      "address": 4003,
-      "description": "IHM Delta — coil de inicio do ensaio",
+      "device": "M9",
+      "address": 0,
+      "description": "Botão INICIAR da tela Ensaio de Tração",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -96,8 +97,9 @@
     {
       "name": "parar",
       "role": "parar",
-      "address": 4001,
-      "description": "IHM Delta — coil de parada do ensaio",
+      "device": "M7",
+      "address": 0,
+      "description": "Botão PARAR",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -105,8 +107,9 @@
     {
       "name": "sentido_cima",
       "role": "sentido_cima",
-      "address": 3999,
-      "description": "IHM Delta — coil de sentido sobe (pulso momentaneo)",
+      "device": "M5",
+      "address": 0,
+      "description": "Seta para cima (sobe o cabeçote)",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -114,8 +117,29 @@
     {
       "name": "sentido_baixo",
       "role": "sentido_baixo",
-      "address": 4000,
-      "description": "IHM Delta — coil de sentido desce (pulso momentaneo)",
+      "device": "M6",
+      "address": 0,
+      "description": "Seta para baixo (desce o cabeçote)",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "zerar_deslocamento",
+      "role": "zerar_deslocamento",
+      "device": "M10",
+      "address": 0,
+      "description": "Botão ZERA DESLC.",
+      "data_type": "coil",
+      "scale": 1.0,
+      "writable": true
+    },
+    {
+      "name": "tara",
+      "role": "zerar_celula",
+      "device": "M101",
+      "address": 0,
+      "description": "Botão TARA (zera a célula de carga)",
       "data_type": "coil",
       "scale": 1.0,
       "writable": true
@@ -123,8 +147,9 @@
     {
       "name": "deslocamento_programado",
       "role": "deslocamento_programado",
-      "address": 40004,
-      "description": "IHM Delta — float doubleword (deslocamento programado, mm)",
+      "device": "D412",
+      "address": 0,
+      "description": "Deslocamento programado (mm)",
       "data_type": "float32",
       "scale": 1.0,
       "writable": true,
@@ -133,78 +158,98 @@
     {
       "name": "velocidade",
       "role": "velocidade",
-      "address": 40000,
-      "description": "IHM Delta — signed decimal doubleword (velocidade, mm/min). Ajuste a escala conforme as casas decimais do elemento.",
-      "data_type": "decimal32",
-      "scale": 1.0,
-      "writable": true,
-      "word_order": "little"
-    },
-    {
-      "name": "limite_forca",
-      "role": "limite_forca",
-      "address": 40023,
-      "description": "IHM Delta — float doubleword (limite de forca de ruptura, N)",
+      "device": "D408",
+      "address": 0,
+      "description": "Velocidade programada (mm/min)",
       "data_type": "float32",
       "scale": 1.0,
       "writable": true,
-      "word_order": "little"
-    },
-    {
-      "name": "forca_atual",
-      "role": "forca_atual",
-      "address": 40049,
-      "description": "IHM Delta — float doubleword (forca Newton atual)",
-      "data_type": "float32",
-      "scale": 1.0,
-      "writable": false,
       "word_order": "little"
     },
     {
       "name": "deslocamento_atual",
       "role": "deslocamento_atual",
-      "address": 40039,
-      "description": "IHM Delta — floating doubleword (deslocamento instantaneo, mm)",
+      "device": "D600",
+      "address": 0,
+      "description": "Deslocamento atual (mm)",
       "data_type": "float32",
       "scale": 1.0,
       "writable": false,
       "word_order": "little"
     },
     {
-      "name": "material_integro_bit",
-      "role": "material_integro_bit",
-      "address": 4009,
-      "description": "IHM Delta — coil material integro",
-      "data_type": "coil",
+      "name": "forca_atual",
+      "role": "forca_atual",
+      "device": "D650",
+      "address": 0,
+      "description": "Força atual — a IHM mostra em kgf; escala 9.80665 converte para N",
+      "data_type": "float32",
+      "scale": 9.80665,
+      "writable": false,
+      "word_order": "little"
+    },
+    {
+      "name": "forca_maxima",
+      "role": "forca_maxima",
+      "device": "D2012",
+      "address": 0,
+      "description": "Força máxima (N)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": false,
+      "word_order": "little"
+    },
+    {
+      "name": "tensao_maxima",
+      "role": "tensao_maxima",
+      "device": "D3004",
+      "address": 0,
+      "description": "Tensão máxima (N/mm²)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": false,
+      "word_order": "little"
+    },
+    {
+      "name": "deslocamento_maximo",
+      "role": "deslocamento_maximo",
+      "device": "D610",
+      "address": 0,
+      "description": "Deslocamento máximo (mm)",
+      "data_type": "float32",
+      "scale": 1.0,
+      "writable": false,
+      "word_order": "little"
+    },
+    {
+      "name": "emergencia",
+      "role": "emergencia",
+      "device": "X0",
+      "address": 0,
+      "description": "Emergência acionada",
+      "data_type": "input",
       "scale": 1.0,
       "writable": false
     },
     {
-      "name": "ruptura_bit",
-      "role": "ruptura_bit",
-      "address": 4010,
-      "description": "IHM Delta — coil material sofreu ruptura",
-      "data_type": "coil",
+      "name": "limite_inferior",
+      "role": "limite_inferior",
+      "device": "X1",
+      "address": 0,
+      "description": "Fim de curso inferior",
+      "data_type": "input",
       "scale": 1.0,
       "writable": false
     },
     {
-      "name": "zerar_deslocamento",
-      "role": "zerar_deslocamento",
+      "name": "limite_superior",
+      "role": "limite_superior",
+      "device": "X2",
       "address": 0,
-      "description": "VERIFICAR endereco — coil que zera o deslocamento (limpa residuo)",
-      "data_type": "coil",
+      "description": "Fim de curso superior",
+      "data_type": "input",
       "scale": 1.0,
-      "writable": true
-    },
-    {
-      "name": "zerar_celula",
-      "role": "zerar_celula",
-      "address": 0,
-      "description": "VERIFICAR endereco — coil que zera a celula de carga (tambem para o ensaio)",
-      "data_type": "coil",
-      "scale": 1.0,
-      "writable": true
+      "writable": false
     }
   ],
   "control_pulse_ms": 300,
@@ -329,5 +374,6 @@
   "flexao_espessura_mm": 0.0,
   "flexao_span_mm": 0.0,
   "flexao_norma": "ISO 178",
-  "simulator_enabled": true
+  "simulator_enabled": true,
+  "plc_family": "dvp"
 }

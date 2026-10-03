@@ -45,7 +45,13 @@ from .models import (
     ReportRequest,
 )
 from .ftp_client import download_csv as ftp_download_csv
-from .modbus_client import ModbusController, RealtimeModbusReader, capture_registers, probe_register
+from .modbus_client import (
+    ModbusController,
+    RealtimeModbusReader,
+    capture_registers,
+    probe_register,
+    resolve_register,
+)
 from .simulator import SIM, SimController, SimReader, sim_capture
 from .parser import parse_csv
 from .report import generate_html_report
@@ -78,6 +84,7 @@ _CONFIG_DEFAULTS: dict = {
     "clp_ip": "",
     "clp_port": 502,
     "clp_timeout": 3,
+    "plc_family": "dvp",
     "control_registers": [],
     "control_pulse_ms": 300,
     "area_seccao_mm2": 0.0,
@@ -117,7 +124,16 @@ _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
 # ---------------------------------------------------------------------------
 
 # Roles de leitura usados na aquisição/status
-_READ_ROLES = ("forca_atual", "deslocamento_atual", "material_integro_bit", "ruptura_bit")
+_READ_ROLES = (
+    "forca_atual", "deslocamento_atual", "material_integro_bit", "ruptura_bit",
+    "forca_maxima", "tensao_maxima", "deslocamento_maximo",
+    "emergencia", "limite_superior", "limite_inferior",
+)
+# Roles que são bits (coil/entrada) — devolvidos como bool no status/stream
+_BIT_ROLES = ("material_integro_bit", "ruptura_bit", "emergencia", "limite_superior", "limite_inferior")
+# Roles extras exibidos no painel (além de força/deslocamento/ruptura)
+_EXTRA_ROLES = ("forca_maxima", "tensao_maxima", "deslocamento_maximo",
+                "emergencia", "limite_superior", "limite_inferior")
 
 
 def _clp_conn() -> tuple[str, int, int]:
@@ -138,8 +154,21 @@ def _make_reader(ip: str, port: int, timeout: int, regs: list[dict]):
     return SimReader(regs) if _sim_enabled() else RealtimeModbusReader(ip, port, timeout, regs)
 
 
+def _resolve_registers(regs: list[dict]) -> list[dict]:
+    """Converte os dispositivos Delta (D412, M5, X0...) em endereços Modbus conforme
+    a família do CLP. Registradores com dispositivo inválido são ignorados (com log)."""
+    family = _config.get("plc_family", "dvp")
+    out: list[dict] = []
+    for r in regs or []:
+        try:
+            out.append(resolve_register(r, family))
+        except ValueError as exc:
+            print(f"[config] Registrador '{r.get('name')}' ignorado: {exc}", flush=True)
+    return out
+
+
 def _control_registers() -> list[dict]:
-    return _config.get("control_registers", []) or []
+    return _resolve_registers(_config.get("control_registers", []))
 
 
 def _make_controller():
@@ -167,8 +196,8 @@ def _fetch_ihm_params() -> dict | None:
     ip      = _config.get("ihm_ip", "")
     port    = int(_config.get("ihm_port", 502))
     timeout = int(_config.get("ihm_timeout", 3))
-    regs    = [r for r in _config.get("ihm_registers", [])
-               if r.get("data_type", "uint16") != "coil"]
+    regs    = [r for r in _resolve_registers(_config.get("ihm_registers", []))
+               if r.get("data_type", "uint16") not in ("coil", "input")]
     if not ip or not regs:
         return None
     return capture_registers(ip, port, timeout, regs)
@@ -661,10 +690,15 @@ def control_probe(req: RegisterProbeRequest):
     reg = {
         "name": req.name,
         "address": req.address,
+        "device": req.device,
         "data_type": req.data_type,
         "scale": req.scale,
         "word_order": req.word_order,
     }
+    try:
+        reg = resolve_register(reg, _config.get("plc_family", "dvp"))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     if _sim_enabled():
         decoded = SIM.value_for_register(reg)
         return {
@@ -726,7 +760,18 @@ def control_status():
         material_integro=bool(integro) if integro is not None else None,
         ruptura=bool(ruptura) if ruptura is not None else None,
         ativo=None,
+        **_extras(data, rn),
     )
+
+
+def _extras(data: dict, rn: dict[str, str]) -> dict:
+    """Valores extras da tela de ensaio (máximos do CLP, emergência e fins de curso)."""
+    out: dict = {}
+    for role in _EXTRA_ROLES:
+        name = rn.get(role)
+        v = data.get(name) if name else None
+        out[role] = (bool(v) if v is not None else None) if role in _BIT_ROLES else v
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -736,8 +781,9 @@ def control_status():
 @app.get("/api/control/stream")
 async def control_stream(request: Request):
     """Stream SSE que lê força/deslocamento do CLP, acumula as amostras e, ao
-    detectar ruptura (M31) — ou desconexão do cliente após coletar dados —, grava
-    o ensaio direto no banco e emite {"saved_ensaio_id": N}."""
+    detectar ruptura (bit de ruptura, se mapeado), grava o ensaio direto no banco
+    e emite {"saved_ensaio_id": N}. Se o cliente desconectar (ex.: botão Parar)
+    depois de coletar dados, o ensaio também é gravado."""
     ip, port, timeout = _clp_conn()
     interval_ms = max(50, int(_config.get("realtime_interval_ms", 100)))
     regs = _read_registers_by_role()
@@ -779,6 +825,7 @@ async def control_stream(request: Request):
         samples: list[dict] = []
         t_start: float | None = None
         last_ruptura = False
+        saved = False
         try:
             connected = await loop.run_in_executor(None, reader.connect)
             if not connected:
@@ -810,6 +857,7 @@ async def control_stream(request: Request):
 
                 # Borda de subida na ruptura → grava e encerra
                 if ruptura and not last_ruptura:
+                    saved = True
                     saved_id = await loop.run_in_executor(None, _persist, samples)
                     yield f"data: {json.dumps({'ruptura': True, 'saved_ensaio_id': saved_id})}\n\n"
                     break
@@ -822,13 +870,19 @@ async def control_stream(request: Request):
                     "material_integro": integro,
                     "ruptura":          ruptura,
                     "t_ms":             elapsed_ms,
+                    **_extras(data, rn),
                 })
                 yield f"data: {payload}\n\n"
                 await asyncio.sleep(interval_ms / 1000)
         except asyncio.CancelledError:
             pass
         finally:
-            await loop.run_in_executor(None, reader.close)
+            # Síncrono de propósito: na desconexão a task está cancelada e um await aqui
+            # seria interrompido antes de gravar.
+            reader.close()
+            # Parado pelo usuário (ou sem bit de ruptura mapeado): grava o que foi coletado.
+            if not saved and samples:
+                _persist(samples)
 
     return StreamingResponse(
         generate(),
@@ -856,7 +910,7 @@ async def realtime_stream(request: Request):
     forca_name    = _config.get("realtime_forca_name", "forca_atual")
     desl_name     = _config.get("realtime_deslocamento_name", "deslocamento_atual")
 
-    all_regs = _config.get("ihm_registers", [])
+    all_regs = _resolve_registers(_config.get("ihm_registers", []))
     rt_regs  = [r for r in all_regs if r["name"] in (bit_name, stop_bit_name, forca_name, desl_name)]
 
     reader = RealtimeModbusReader(ip, port, timeout, rt_regs)
@@ -939,7 +993,7 @@ _FLEXAO_READ_ROLES = ("forca_atual", "deslocamento_atual", "fim_ensaio_bit")
 
 
 def _flexao_registers() -> list[dict]:
-    return _config.get("flexao_registers", []) or []
+    return _resolve_registers(_config.get("flexao_registers", []))
 
 
 def _flexao_make_controller():

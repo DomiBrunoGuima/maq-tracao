@@ -155,11 +155,14 @@ export type ModbusDataType =
   | "int32"
   | "decimal32"
   | "float32"
-  | "coil";
+  | "coil"
+  | "input";
 
 export interface IHMRegister {
   name: string;
   address: number;
+  // Dispositivo Delta (ex.: "D412", "M5", "X0"). Se preenchido, substitui address.
+  device?: string;
   description: string;
   data_type: ModbusDataType;
   scale: number;
@@ -172,6 +175,7 @@ export interface IHMRegister {
 
 export interface RegisterProbeRequest {
   address: number;
+  device?: string;
   data_type: ModbusDataType;
   scale?: number;
   word_order?: "big" | "little";
@@ -227,6 +231,7 @@ export interface AppConfig {
   clp_ip: string;
   clp_port: number;
   clp_timeout: number;
+  plc_family: "dvp" | "as";
   control_registers: IHMRegister[];
   control_pulse_ms: number;
   area_seccao_mm2: number;
@@ -256,6 +261,12 @@ export interface RealtimeFrame {
   material_integro?: boolean | null;
   ruptura?: boolean;
   saved_ensaio_id?: number | null;
+  forca_maxima?: number | null;
+  tensao_maxima?: number | null;
+  deslocamento_maximo?: number | null;
+  emergencia?: boolean | null;
+  limite_superior?: boolean | null;
+  limite_inferior?: boolean | null;
 }
 
 export interface ControlStartRequest {
@@ -281,6 +292,12 @@ export interface ControlStatus {
   material_integro: boolean | null;
   ruptura: boolean | null;
   ativo: boolean | null;
+  forca_maxima?: number | null;
+  tensao_maxima?: number | null;
+  deslocamento_maximo?: number | null;
+  emergencia?: boolean | null;
+  limite_superior?: boolean | null;
+  limite_inferior?: boolean | null;
 }
 
 export interface ModbusFetchResult {

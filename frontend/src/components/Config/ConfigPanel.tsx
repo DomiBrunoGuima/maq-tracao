@@ -32,6 +32,7 @@ type FormState = {
   clp_ip: string;
   clp_port: number;
   clp_timeout: number;
+  plc_family: "dvp" | "as";
   control_registers: IHMRegister[];
   control_pulse_ms: number;
   area_seccao_mm2: number;
@@ -65,6 +66,7 @@ const DEFAULT_FORM: FormState = {
   clp_ip: "",
   clp_port: 502,
   clp_timeout: 3,
+  plc_family: "dvp",
   control_registers: [],
   control_pulse_ms: 300,
   area_seccao_mm2: 0,
@@ -234,8 +236,14 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
 }
 
 
-const DATA_TYPE_OPTIONS = ["uint16", "decimal", "int32", "decimal32", "float32", "coil"] as const;
-const WORD2_TYPES = ["int32", "decimal32", "float32"]; // tipos com escala numérica (float32 sem escala)
+const DATA_TYPE_OPTIONS = ["uint16", "decimal", "int32", "decimal32", "float32", "coil", "input"] as const;
+const WORD2_TYPES = ["int32", "decimal32", "float32"];
+
+// Campo único "dispositivo ou endereço": "D412"/"M5"/"X0" vira device; só dígitos vira address.
+function addressPatch(text: string): Partial<IHMRegister> {
+  const t = text.trim().toUpperCase();
+  return /^\d+$/.test(t) ? { address: Number(t), device: "" } : { device: t };
+}
 
 function RegisterTable({
   registers, onAdd, onUpdate, onRemove, showRole = false, addLabel = "Adicionar",
@@ -251,8 +259,8 @@ function RegisterTable({
     ? "grid-cols-[76px_96px_96px_1fr_84px_60px_72px_32px]"
     : "grid-cols-[88px_116px_1fr_96px_72px_72px_32px]";
   const headers = showRole
-    ? ["Endereço", "Role", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""]
-    : ["Endereço", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""];
+    ? ["Disp./End.", "Role", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""]
+    : ["Disp./End.", "Nome", "Descrição", "Tipo", "Escala", "Ordem", ""];
   const inputCell =
     "bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white " +
     "focus:outline-none focus:border-accent transition-colors w-full";
@@ -286,8 +294,9 @@ function RegisterTable({
           <div className="space-y-2">
             {registers.map((r, i) => (
               <div key={i} className={clsx("grid gap-2 items-center bg-surface border border-border rounded-lg px-3 py-2.5", cols)}>
-                <input type="number" value={r.address} placeholder="40000"
-                  onChange={(e) => onUpdate(i, { address: Number(e.target.value) })} className={inputCell} />
+                <input value={r.device || String(r.address ?? "")} placeholder="D412"
+                  title="Dispositivo Delta (D412, M5, X0) ou endereço Modbus numérico"
+                  onChange={(e) => onUpdate(i, addressPatch(e.target.value))} className={inputCell} />
                 {showRole && (
                   <input value={r.role ?? ""} placeholder="role"
                     onChange={(e) => onUpdate(i, { role: e.target.value })} className={inputCell} />
@@ -300,7 +309,7 @@ function RegisterTable({
                   onChange={(e) => onUpdate(i, { data_type: e.target.value as IHMRegister["data_type"] })} className={inputCell}>
                   {DATA_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-                {r.data_type !== "float32" && r.data_type !== "coil" ? (
+                {r.data_type !== "coil" && r.data_type !== "input" ? (
                   <input type="number" step="0.001" value={r.scale ?? 1}
                     onChange={(e) => onUpdate(i, { scale: Number(e.target.value) })} className={inputCell} />
                 ) : (
@@ -325,7 +334,10 @@ function RegisterTable({
 
           <div className="mt-3 space-y-1">
             <p className="text-[10px] font-mono text-muted/50">
-              float32 / int32 / decimal32 — 2 registradores (N + N+1). Ordem: big = HI 1º (ABCD) · little = LO 1º (CDAB, ex.: Mitsubishi/registradores D)
+              float32 / int32 / decimal32 — 2 registradores (N + N+1). Ordem: big = HI 1º (ABCD) · little = LO 1º (CDAB, ex.: registradores D do Delta)
+            </p>
+            <p className="text-[10px] font-mono text-muted/50">
+              Disp./End.: digite o dispositivo como na IHM (D412, M5, X0) — o endereço Modbus é calculado pela família do CLP. input = entrada digital X (só leitura)
             </p>
             {registers.some((r) => WORD2_TYPES.includes(r.data_type) || r.data_type === "decimal") && (
               <p className="text-[10px] font-mono text-muted/50">decimal/int32/decimal32 — valor_real = raw × escala</p>
@@ -345,7 +357,7 @@ function makeRegHandlers(
   return {
     add: () => setForm((f) => ({
       ...f,
-      [key]: [...f[key], { name: "", address: 0, description: "", data_type: "uint16", scale: 1.0, word_order: "big", ...defaults }],
+      [key]: [...f[key], { name: "", address: 0, device: "", description: "", data_type: "float32", scale: 1.0, word_order: "little", ...defaults }],
     })),
     update: (i: number, patch: Partial<IHMRegister>) => setForm((f) => {
       const regs = [...f[key]];
@@ -364,8 +376,9 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
       <SectionDesc>
         Conexão Modbus TCP direta com o CLP e mapeamento dos registradores de comando/leitura.
         Roles esperados: <span className="text-slate-300 font-mono">iniciar, parar, sentido_cima, sentido_baixo,
-        deslocamento_programado, velocidade, limite_forca, forca_atual, deslocamento_atual,
-        material_integro_bit, ruptura_bit</span>.
+        zerar_deslocamento, zerar_celula (tara), deslocamento_programado, velocidade, limite_forca, forca_atual,
+        deslocamento_atual, forca_maxima, tensao_maxima, deslocamento_maximo, emergencia, limite_superior,
+        limite_inferior, material_integro_bit, ruptura_bit</span>.
       </SectionDesc>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
@@ -383,6 +396,13 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         <Field label="Timeout (s)">
           <input type="number" min={1} max={30} value={form.clp_timeout}
             onChange={(e) => setForm((f) => ({ ...f, clp_timeout: Number(e.target.value) }))} className={smallInputCls + " w-full"} />
+        </Field>
+        <Field label="Família do CLP" hint="Converte D/M/X em endereço Modbus.">
+          <select value={form.plc_family}
+            onChange={(e) => setForm((f) => ({ ...f, plc_family: e.target.value as "dvp" | "as" }))} className={smallInputCls + " w-full"}>
+            <option value="dvp">Delta DVP</option>
+            <option value="as">Delta AS</option>
+          </select>
         </Field>
         <Field label="Pulso comando (ms)" hint="Duração do pulso em coils iniciar/parar.">
           <input type="number" min={50} max={2000} step={10} value={form.control_pulse_ms}

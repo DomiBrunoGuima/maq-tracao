@@ -32,6 +32,10 @@ class _Sim:
         self.residual_disp = 0.0        # deslocamento que "sobra" após o ensaio
         self._last_disp = 0.0
         self._last_forca = 0.0
+        # Máximos do ensaio corrente (o CLP real calcula e expõe esses valores).
+        self.forca_max = 0.0
+        self.disp_max = 0.0
+        self.area_mm2 = 20.0            # só para a tensão máxima simulada
         self._new_profile()
 
     # -- perfil aleatório (porém plausível) do corpo de prova -------------
@@ -60,6 +64,8 @@ class _Sim:
         self.running = True
         self.ruptura = False
         self.fim = False
+        self.forca_max = 0.0
+        self.disp_max = 0.0
         self.t0 = time.time()
 
     def stop(self) -> None:
@@ -114,6 +120,8 @@ class _Sim:
         forca = max(0.0, forca)
         self._last_disp = disp
         self._last_forca = forca
+        self.forca_max = max(self.forca_max, forca)
+        self.disp_max = max(self.disp_max, disp)
         return round(forca, 2), round(disp, 3)
 
     # -- leitura por registrador ----------------------------------------
@@ -130,6 +138,14 @@ class _Sim:
             return 1 if self.ruptura else 0
         if role == "fim_ensaio_bit":
             return 1 if self.fim else 0
+        if role == "forca_maxima":
+            return round(self.forca_max, 2)
+        if role == "tensao_maxima":
+            return round(self.forca_max / self.area_mm2, 3)
+        if role == "deslocamento_maximo":
+            return round(self.disp_max, 3)
+        if role in ("emergencia", "limite_superior", "limite_inferior"):
+            return 0
         if role == "limite_forca":
             return round(self.limite_forca, 2)
         if role == "velocidade":
@@ -141,7 +157,7 @@ class _Sim:
             return 1 if (role == "sentido_" + self.sentido and self.running) else 0
         # registrador desconhecido: valor plausível conforme o tipo
         dt = reg.get("data_type", "uint16")
-        if dt == "coil":
+        if dt in ("coil", "input"):
             return 0
         if dt in ("float32",):
             return round(random.uniform(0.0, 10.0), 2)

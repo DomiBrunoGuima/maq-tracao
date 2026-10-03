@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
@@ -26,7 +27,7 @@ import {
 import { clsx } from "clsx";
 import { getControlStatus, startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
-import type { RealtimeFrame, RealtimePoint } from "../../types";
+import type { ControlStatus, RealtimeFrame, RealtimePoint } from "../../types";
 
 const MAX_BUFFER = 4000;
 const DISPLAY_WINDOW = 600;
@@ -49,6 +50,21 @@ function fmtNum(v: number | null | undefined, dec = 2, unit = ""): string {
 }
 
 // ── primitives ────────────────────────────────────────────────────────────
+
+function SafetyChip({ label, active }: { label: string; active: boolean | null | undefined }) {
+  // null/undefined = entrada não mapeada ou sem leitura
+  return (
+    <div className={clsx(
+      "flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium",
+      active == null ? "border-border bg-surface text-muted/50"
+        : active ? "border-red-500/50 bg-red-500/15 text-red-300"
+        : "border-emerald-500/30 bg-emerald-500/5 text-emerald-300/80",
+    )}>
+      {active ? <AlertTriangle size={12} /> : <span className="w-1.5 h-1.5 rounded-full bg-current" />}
+      {label}{active == null ? " —" : active ? " ACIONADO" : " ok"}
+    </div>
+  );
+}
 
 function KpiCard({
   icon, label, value, color = "text-white",
@@ -151,7 +167,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   const [error, setError] = useState<string | null>(null);
   // Leitura ao vivo (força/deslocamento) mesmo com o ensaio parado, para conferir
   // as condições antes de iniciar. Não entra no gráfico — só nos indicadores.
-  const [live, setLive] = useState<{ forca: number | null; desloc: number | null }>({ forca: null, desloc: null });
+  const [live, setLive] = useState<ControlStatus | null>(null);
 
   // Pré-preenche área/L0 a partir da config
   useEffect(() => {
@@ -224,9 +240,8 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       try {
         const s = await getControlStatus();
         if (cancelled) return;
+        setLive(s);
         const forca = s.forca_atual ?? null;
-        const desloc = s.deslocamento_atual ?? null;
-        setLive({ forca, desloc });
         if (forca != null) setMaxForca((p) => Math.max(p, forca));
       } catch { /* offline: ignora */ }
     };
@@ -237,13 +252,20 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
 
   const num = (s: string): number | null => (s.trim() === "" ? null : Number(s));
 
-  const forcaShown = frame?.forca ?? live.forca;
-  const deslocShown = frame?.deslocamento ?? live.desloc;
+  const forcaShown = frame?.forca ?? live?.forca_atual ?? null;
+  const deslocShown = frame?.deslocamento ?? live?.deslocamento_atual ?? null;
+  // Máximos calculados pelo CLP (D2012/D3004/D610); sem eles, usa o pico local da força.
+  const forcaMaxClp = frame?.forca_maxima ?? live?.forca_maxima ?? null;
+  const tensaoMax = frame?.tensao_maxima ?? live?.tensao_maxima ?? null;
+  const deslocMax = frame?.deslocamento_maximo ?? live?.deslocamento_maximo ?? null;
+  const emergencia = frame?.emergencia ?? live?.emergencia;
+  const limSup = frame?.limite_superior ?? live?.limite_superior;
+  const limInf = frame?.limite_inferior ?? live?.limite_inferior;
 
   async function handleStart() {
     setError(null);
     const limite = num(form.limite_forca);
-    if (limite == null || limite <= 0) { setError("Informe um limite de força de ruptura maior que zero."); return; }
+    if (limite != null && limite <= 0) { setError("O limite de força deve ser maior que zero."); return; }
     try {
       await startTest({
         sentido: form.sentido,
@@ -269,6 +291,8 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
     } finally {
       setRunning(false);
       stopStream();
+      // O backend grava o ensaio ao fechar o stream; atualiza a lista em seguida.
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["ensaios"] }), 1500);
     }
   }
 
@@ -333,7 +357,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
             onChange={(v) => setForm((f) => ({ ...f, deslocamento: v }))} placeholder="ex: 50" />
           <NumberField label="Velocidade" unit="mm/min" value={form.velocidade}
             onChange={(v) => setForm((f) => ({ ...f, velocidade: v }))} placeholder="ex: 5" />
-          <NumberField label="Limite de força (ruptura)" unit="N" value={form.limite_forca}
+          <NumberField label="Limite de força (opcional)" unit="N" value={form.limite_forca}
             onChange={(v) => setForm((f) => ({ ...f, limite_forca: v }))} placeholder="ex: 5000" />
           <NumberField label="Área da seção" unit="mm²" value={form.area_seccao}
             onChange={(v) => setForm((f) => ({ ...f, area_seccao: v }))} placeholder="ex: 20" />
@@ -388,11 +412,11 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
           </button>
           <button
             onClick={handleZerarCelula}
-            title="Zera a célula de carga — também para o ensaio em curso"
+            title="Tara: zera a célula de carga — também para o ensaio em curso"
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-sm font-medium
                        text-amber-300 hover:bg-amber-500/20 transition-colors"
           >
-            <OctagonX size={14} /> Zerar célula (para o teste)
+            <OctagonX size={14} /> Tara
           </button>
           {error && <p className="text-xs text-red-400 ml-2">{error}</p>}
         </div>
@@ -418,7 +442,8 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
           color={forcaShown != null ? "text-sky-300" : "text-muted"} />
         <KpiCard icon={<MoveHorizontal size={20} />} label="Deslocamento atual" value={fmtNum(deslocShown, 2, "mm")}
           color={deslocShown != null ? "text-violet-300" : "text-muted"} />
-        <KpiCard icon={<Gauge size={20} />} label="Força máxima" value={maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
+        <KpiCard icon={<Gauge size={20} />} label="Força máxima"
+          value={forcaMaxClp != null ? fmtNum(forcaMaxClp, 1, "N") : maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
           color="text-amber-300" />
         <div className={clsx(
           "rounded-xl px-5 py-4 flex items-center gap-3 border",
@@ -429,10 +454,21 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
             <p className="text-xs text-muted mb-0.5">Estado do material</p>
             <p className={clsx("text-sm font-semibold",
               ruptura ? "text-red-300" : integro ? "text-emerald-300" : "text-muted")}>
-              {ruptura ? "Ruptura (M31)" : integro ? "Íntegro (M30)" : "—"}
+              {ruptura ? "Ruptura" : integro ? "Íntegro" : "—"}
             </p>
           </div>
         </div>
+        <KpiCard icon={<Gauge size={20} />} label="Tensão máxima" value={fmtNum(tensaoMax, 2, "N/mm²")}
+          color={tensaoMax != null ? "text-rose-300" : "text-muted"} />
+        <KpiCard icon={<MoveHorizontal size={20} />} label="Deslocamento máximo" value={fmtNum(deslocMax, 2, "mm")}
+          color={deslocMax != null ? "text-violet-300" : "text-muted"} />
+      </div>
+
+      {/* Segurança: emergência e fins de curso (X0/X1/X2) */}
+      <div className="flex flex-wrap gap-2">
+        <SafetyChip label="Emergência" active={emergencia} />
+        <SafetyChip label="Limite superior" active={limSup} />
+        <SafetyChip label="Limite inferior" active={limInf} />
       </div>
 
       {/* Charts */}

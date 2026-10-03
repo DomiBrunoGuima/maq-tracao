@@ -53,11 +53,80 @@ def _words_to_hilo(r0: int, r1: int, word_order: Any) -> tuple[int, int]:
     return (r1, r0) if _is_little_word_order(word_order) else (r0, r1)
 
 
+# ---------------------------------------------------------------------------
+# Dispositivos Delta (D/M/X/Y) → endereço Modbus
+# ---------------------------------------------------------------------------
+
+PLC_FAMILIES = ("dvp", "as")
+
+
+def _dvp_address(kind: str, n: int, raw: str) -> int:
+    """Mapa Modbus dos CLPs Delta DVP (ES2/EX2/SS2/SA2/SX2/SE...).
+    X e Y são numerados em octal (X0..X7, X10..), como no ISPSoft/DOPSoft."""
+    if kind in ("X", "Y"):
+        if any(c in "89" for c in raw):
+            raise ValueError(f"{kind}{raw}: X/Y do DVP são octais (sem 8 e 9)")
+        return (0x0400 if kind == "X" else 0x0500) + int(raw, 8)
+    if kind == "M":
+        return 0x0800 + n if n < 1536 else 0xB000 + (n - 1536)
+    if kind == "D":
+        return 0x1000 + n if n < 4096 else 0x9000 + (n - 4096)
+    raise ValueError(f"dispositivo {kind} não suportado no DVP")
+
+
+def _as_address(kind: str, raw: str) -> int:
+    """Mapa Modbus dos CLPs Delta AS (AS200/AS300). X/Y usam a forma palavra.bit (X0.3)."""
+    if kind in ("X", "Y"):
+        word, _, bit = raw.partition(".")
+        base = 0x6000 if kind == "X" else 0xA000
+        return base + int(word) * 16 + int(bit or 0)
+    if kind in ("M", "D"):
+        return int(raw)
+    raise ValueError(f"dispositivo {kind} não suportado no AS")
+
+
+def device_to_modbus(device: str, family: str = "dvp") -> tuple[int, str]:
+    """Converte um dispositivo Delta (``D412``, ``M101``, ``X0``) no endereço Modbus
+    (0-based) e no tipo de acesso: ``"coil"`` (M/Y), ``"input"`` (X) ou ``"holding"`` (D)."""
+    dev = device.strip().upper()
+    if len(dev) < 2 or dev[0] not in "DMXY":
+        raise ValueError(f"dispositivo inválido: {device!r} (use D, M, X ou Y — ex.: D412, M5, X0)")
+    kind, raw = dev[0], dev[1:]
+    if not raw.replace(".", "", 1).isdigit() or ("." in raw and kind not in "XY"):
+        raise ValueError(f"dispositivo inválido: {device!r} (número esperado após {kind})")
+    fam = (family or "dvp").lower()
+    if fam == "as":
+        address = _as_address(kind, raw)
+    elif fam == "dvp":
+        if "." in raw:
+            raise ValueError(f"{device!r}: no DVP use X/Y sem ponto (ex.: X0, X10)")
+        address = _dvp_address(kind, int(raw), raw)
+    else:
+        raise ValueError(f"família de CLP desconhecida: {family!r} (use 'dvp' ou 'as')")
+    access = {"D": "holding", "M": "coil", "Y": "coil", "X": "input"}[kind]
+    return address, access
+
+
+def resolve_register(reg: dict, family: str = "dvp") -> dict:
+    """Devolve uma cópia do registrador com ``address`` calculado a partir de ``device``
+    (quando preenchido). X vira ``data_type="input"`` (entrada digital, só leitura)."""
+    device = str(reg.get("device") or "").strip()
+    if not device:
+        return reg
+    address, access = device_to_modbus(device, family)
+    out = {**reg, "address": address}
+    if access == "input":
+        out["data_type"] = "input"
+        out["writable"] = False
+    return out
+
+
 def _read_register(client: Any, reg: dict) -> Any:
     """Lê um registrador (qualquer data_type suportado) e retorna o valor decodificado.
 
-    Suporta: coil, uint16, decimal (uint16×scale), int32/decimal32 (doubleword com
-    sinal×scale) e float32 (IEEE 754). Retorna None em erro de leitura."""
+    Suporta: coil, input (entrada digital X), uint16, decimal (uint16×scale),
+    int32/decimal32 (doubleword com sinal×scale) e float32 (IEEE 754 ×scale).
+    Retorna None em erro de leitura."""
     address    = reg["address"]
     data_type  = reg.get("data_type", "uint16")
     scale      = float(reg.get("scale", 1.0))
@@ -67,12 +136,16 @@ def _read_register(client: Any, reg: dict) -> Any:
         resp = client.read_coils(address=address, count=1)
         return 0 if resp.isError() else (1 if resp.bits[0] else 0)
 
+    if data_type == "input":
+        resp = client.read_discrete_inputs(address=address, count=1)
+        return 0 if resp.isError() else (1 if resp.bits[0] else 0)
+
     if data_type == "float32":
         resp = client.read_holding_registers(address=address, count=2)
         if resp.isError():
             return None
         hi, lo = _words_to_hilo(resp.registers[0], resp.registers[1], word_order)
-        return round(_decode_float32(hi, lo), 4)
+        return round(_decode_float32(hi, lo) * scale, 4)
 
     if data_type in ("int32", "decimal32"):
         resp = client.read_holding_registers(address=address, count=2)
@@ -221,8 +294,10 @@ class ModbusController:
         if data_type == "coil":
             sent = [1 if value else 0]
             ok = self._write_coil(address, bool(value))
+        elif data_type == "input":
+            raise RuntimeError(f"Entrada digital (input@{address}) é somente leitura")
         elif data_type == "float32":
-            hi, lo = encode_float32(float(value))
+            hi, lo = encode_float32(float(value) / scale)
             sent = _order_words(hi, lo, word_order)
             ok = self._write_words(address, sent)
         elif data_type in ("int32", "decimal32"):
@@ -363,6 +438,9 @@ def probe_register(
 
         # -- escrita (opcional) --------------------------------------------
         if direction == "write":
+            if data_type == "input":
+                out["error"] = "entrada digital (X) é somente leitura"
+                return out
             if value is None:
                 out["error"] = "valor obrigatório para escrita"
                 return out
@@ -370,7 +448,7 @@ def probe_register(
                 out["sent_words"] = [1 if value else 0]
                 r = client.write_coil(address=address, value=bool(value))
             elif data_type == "float32":
-                hi, lo = encode_float32(float(value))
+                hi, lo = encode_float32(float(value) / scale)
                 out["sent_words"] = _order_words(hi, lo, word_order)
                 r = client.write_registers(address=address, values=out["sent_words"])
             elif data_type in ("int32", "decimal32"):
@@ -388,10 +466,10 @@ def probe_register(
                 return out
 
         # -- leitura (sempre, para confirmar) ------------------------------
-        if data_type == "coil":
-            rr = client.read_coils(address=address, count=1)
+        if data_type in ("coil", "input"):
+            rr = (client.read_coils if data_type == "coil" else client.read_discrete_inputs)(address=address, count=1)
             if rr.isError():
-                out["error"] = f"leitura recusada (coil@{address})"
+                out["error"] = f"leitura recusada ({data_type}@{address})"
                 return out
             out["read_words"] = [1 if rr.bits[0] else 0]
             out["decoded"] = out["read_words"][0]
@@ -407,7 +485,7 @@ def probe_register(
             int_raw = _decode_int32(hi, lo)
             out["as_int"] = int_raw
             if data_type == "float32":
-                out["decoded"] = out["as_float"]
+                out["decoded"] = round(out["as_float"] * scale, 6) if scale != 1.0 else out["as_float"]
             else:
                 out["decoded"] = round(int_raw * scale, 6) if scale != 1.0 else int_raw
         else:

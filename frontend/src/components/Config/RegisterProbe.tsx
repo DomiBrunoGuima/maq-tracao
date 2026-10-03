@@ -4,7 +4,7 @@ import { ArrowDownToLine, ArrowUpFromLine, FlaskConical, Loader2 } from "lucide-
 import { probeRegister } from "../../api/client";
 import type { IHMRegister, ModbusDataType, RegisterProbeResult } from "../../types";
 
-const DATA_TYPES: ModbusDataType[] = ["coil", "uint16", "decimal", "int32", "decimal32", "float32"];
+const DATA_TYPES: ModbusDataType[] = ["coil", "input", "uint16", "decimal", "int32", "decimal32", "float32"];
 const WORD2 = ["int32", "decimal32", "float32"];
 
 const inp =
@@ -16,7 +16,8 @@ const hex = (ws: number[] | null) =>
   ws == null ? "—" : "[" + ws.map((w) => `0x${w.toString(16).toUpperCase().padStart(4, "0")}`).join(", ") + "]";
 
 export default function RegisterProbe({ registers }: { registers: IHMRegister[] }) {
-  const [address, setAddress] = useState<number>(40004);
+  // Dispositivo Delta (D600, M9, X0) ou endereço Modbus numérico
+  const [target, setTarget] = useState<string>("D600");
   const [name, setName] = useState("");
   const [dataType, setDataType] = useState<ModbusDataType>("float32");
   const [wordOrder, setWordOrder] = useState<"big" | "little">("little");
@@ -27,7 +28,7 @@ export default function RegisterProbe({ registers }: { registers: IHMRegister[] 
   const [result, setResult] = useState<RegisterProbeResult | null>(null);
 
   function prefill(r: IHMRegister) {
-    setAddress(r.address);
+    setTarget(r.device || String(r.address));
     setName(r.name);
     setDataType(r.data_type);
     setWordOrder((r.word_order as "big" | "little") ?? "big");
@@ -36,12 +37,16 @@ export default function RegisterProbe({ registers }: { registers: IHMRegister[] 
     setResult(null);
   }
 
+  const isNum = /^\d+$/.test(target.trim());
+  const address = isNum ? Number(target.trim()) : 0;
+  const device = isNum ? "" : target.trim().toUpperCase();
+
   async function run() {
     setBusy(true);
     setResult(null);
     try {
       const res = await probeRegister({
-        address, name, data_type: dataType, scale, word_order: wordOrder, direction,
+        address, device, name, data_type: dataType, scale, word_order: wordOrder, direction,
         value: direction === "write" ? Number(value) : null,
       });
       setResult(res);
@@ -83,8 +88,8 @@ export default function RegisterProbe({ registers }: { registers: IHMRegister[] 
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
-          <span className={lbl}>Endereço</span>
-          <input type="number" value={address} onChange={(e) => setAddress(Number(e.target.value))} className={inp} />
+          <span className={lbl}>Dispositivo / endereço</span>
+          <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="D600" className={inp} />
         </div>
         <div>
           <span className={lbl}>Nome</span>

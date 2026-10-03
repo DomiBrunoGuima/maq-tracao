@@ -103,3 +103,59 @@ def test_build_dataframe_skips_incomplete_samples():
     samples += _ramp_samples()
     _, df = build_ensaio_dataframe(samples, 20.0, 50.0, filename="CLP_w.csv")
     assert df["Forca_N"].notna().all()
+
+
+# ---------------------------------------------------------------------------
+# Dispositivos Delta → endereço Modbus
+# ---------------------------------------------------------------------------
+
+from backend.modbus_client import device_to_modbus, resolve_register  # noqa: E402
+
+
+@pytest.mark.parametrize("device,expected", [
+    ("D412",  (0x1000 + 412, "holding")),
+    ("D3004", (0x1000 + 3004, "holding")),
+    ("D4096", (0x9000, "holding")),
+    ("M5",    (0x0800 + 5, "coil")),
+    ("M101",  (0x0800 + 101, "coil")),
+    ("M1536", (0xB000, "coil")),
+    ("X0",    (0x0400, "input")),
+    ("X10",   (0x0400 + 8, "input")),   # X é octal no DVP
+    ("Y1",    (0x0501, "coil")),
+])
+def test_dvp_device_addresses(device, expected):
+    assert device_to_modbus(device, "dvp") == expected
+
+
+@pytest.mark.parametrize("device,expected", [
+    ("D412",  (412, "holding")),
+    ("M101",  (101, "coil")),
+    ("X0.2",  (0x6002, "input")),
+    ("X1.0",  (0x6010, "input")),
+])
+def test_as_device_addresses(device, expected):
+    assert device_to_modbus(device, "as") == expected
+
+
+@pytest.mark.parametrize("device", ["X8", "Z1", "D", "Dabc"])
+def test_invalid_devices(device):
+    with pytest.raises(ValueError):
+        device_to_modbus(device, "dvp")
+
+
+def test_resolve_register_device_overrides_address():
+    reg = {"name": "desl", "device": "d600", "address": 40039, "data_type": "float32"}
+    out = resolve_register(reg, "dvp")
+    assert out["address"] == 0x1000 + 600
+    assert out["data_type"] == "float32"
+    assert reg["address"] == 40039  # não altera o original
+
+
+def test_resolve_register_input_is_readonly():
+    out = resolve_register({"name": "emg", "device": "X0", "data_type": "coil", "writable": True})
+    assert out["data_type"] == "input" and out["writable"] is False
+
+
+def test_resolve_register_without_device_is_unchanged():
+    reg = {"name": "x", "address": 123, "data_type": "uint16"}
+    assert resolve_register(reg) is reg
