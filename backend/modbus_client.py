@@ -131,7 +131,7 @@ def _read_register(client: Any, reg: dict) -> Any:
     """Lê um registrador (qualquer data_type suportado) e retorna o valor decodificado.
 
     Suporta: coil, input (entrada digital X), uint16, decimal (uint16×scale),
-    int32/decimal32 (doubleword com sinal×scale) e float32 (IEEE 754 ×scale).
+    int32/decimal32 (doubleword com sinal×scale) e float32 (IEEE 754 ×scale). A escrita também multiplica pela escala.
     Retorna None em erro de leitura."""
     address    = reg["address"]
     data_type  = reg.get("data_type", "uint16")
@@ -303,16 +303,16 @@ class ModbusController:
         elif data_type == "input":
             raise RuntimeError(f"Entrada digital (input@{address}) é somente leitura")
         elif data_type == "float32":
-            hi, lo = encode_float32(float(value) / scale)
+            hi, lo = encode_float32(float(value) * scale)
             sent = _order_words(hi, lo, word_order)
             ok = self._write_words(address, sent)
         elif data_type in ("int32", "decimal32"):
-            raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+            raw = int(round(float(value) * scale))
             hi, lo = encode_int32(raw)
             sent = _order_words(hi, lo, word_order)
             ok = self._write_words(address, sent)
         else:  # uint16 / decimal
-            raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+            raw = int(round(float(value) * scale))
             sent = [raw & 0xFFFF]
             resp = self._client.write_register(address=address, value=raw & 0xFFFF)
             ok = not resp.isError()
@@ -454,16 +454,16 @@ def probe_register(
                 out["sent_words"] = [1 if value else 0]
                 r = client.write_coil(address=address, value=bool(value))
             elif data_type == "float32":
-                hi, lo = encode_float32(float(value) / scale)
+                hi, lo = encode_float32(float(value) * scale)
                 out["sent_words"] = _order_words(hi, lo, word_order)
                 r = client.write_registers(address=address, values=out["sent_words"])
             elif data_type in ("int32", "decimal32"):
-                raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+                raw = int(round(float(value) * scale))
                 hi, lo = encode_int32(raw)
                 out["sent_words"] = _order_words(hi, lo, word_order)
                 r = client.write_registers(address=address, values=out["sent_words"])
             else:
-                raw = int(round(float(value) / scale)) if scale != 1.0 else int(round(float(value)))
+                raw = int(round(float(value) * scale))
                 out["sent_words"] = [raw & 0xFFFF]
                 r = client.write_register(address=address, value=raw & 0xFFFF)
             if r.isError():

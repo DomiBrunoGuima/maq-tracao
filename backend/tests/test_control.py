@@ -168,3 +168,29 @@ def test_resolve_register_without_device_is_unchanged():
 ])
 def test_direto_device_addresses(device, expected):
     assert device_to_modbus(device, "direto") == expected
+
+
+def test_write_multiplies_by_scale():
+    from backend.modbus_client import ModbusController
+
+    class _Resp:
+        def isError(self):
+            return False
+
+    class _Cli:
+        def __init__(self):
+            self.sent = None
+        def write_registers(self, address, values):
+            self.sent = values
+            return _Resp()
+        def write_register(self, address, value):
+            self.sent = [value]
+            return _Resp()
+
+    ctrl = ModbusController("x", 502, 1, [])
+    ctrl._client = _Cli()
+    ctrl.write_register({"address": 0, "data_type": "uint16", "scale": 10}, 5)
+    assert ctrl._client.sent == [50]
+    ctrl.write_register({"address": 0, "data_type": "float32", "scale": 2, "word_order": "little"}, 1.5)
+    lo, hi = ctrl._client.sent
+    assert _decode_float32(hi, lo) == pytest.approx(3.0)

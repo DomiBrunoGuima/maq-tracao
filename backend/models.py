@@ -115,7 +115,7 @@ class IHMRegister(BaseModel):
     description: str = ""
     # "coil" | "input" | "uint16" | "decimal" | "int32" | "decimal32" | "float32"
     data_type: str = "uint16"
-    scale: float = 1.0          # valor_real = raw * scale (em float32 também: ex. kgf→N = 9.80665)
+    scale: float = 1.0          # multiplica sempre: leitura = bruto × escala; escrita = valor × escala
     role: str = ""              # papel no controle (iniciar, parar, sentido_cima, limite_forca, ...)
     writable: bool = False      # se o software pode escrever neste registrador
     # Ordem das palavras em tipos de 32 bits: "big" (ABCD, palavra alta 1º, padrão)
