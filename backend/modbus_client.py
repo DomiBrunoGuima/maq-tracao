@@ -140,11 +140,11 @@ def _read_register(client: Any, reg: dict) -> Any:
 
     if data_type == "coil":
         resp = client.read_coils(address=address, count=1)
-        return 0 if resp.isError() else (1 if resp.bits[0] else 0)
+        return None if resp.isError() else (1 if resp.bits[0] else 0)
 
     if data_type == "input":
         resp = client.read_discrete_inputs(address=address, count=1)
-        return 0 if resp.isError() else (1 if resp.bits[0] else 0)
+        return None if resp.isError() else (1 if resp.bits[0] else 0)
 
     if data_type == "float32":
         resp = client.read_holding_registers(address=address, count=2)
