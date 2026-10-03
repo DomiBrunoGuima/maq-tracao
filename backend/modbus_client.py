@@ -57,7 +57,7 @@ def _words_to_hilo(r0: int, r1: int, word_order: Any) -> tuple[int, int]:
 # Dispositivos Delta (D/M/X/Y) → endereço Modbus
 # ---------------------------------------------------------------------------
 
-PLC_FAMILIES = ("dvp", "as")
+PLC_FAMILIES = ("dvp", "direto", "as")
 
 
 def _dvp_address(kind: str, n: int, raw: str) -> int:
@@ -97,12 +97,18 @@ def device_to_modbus(device: str, family: str = "dvp") -> tuple[int, str]:
     fam = (family or "dvp").lower()
     if fam == "as":
         address = _as_address(kind, raw)
+    elif fam == "direto":
+        # Sem offset: o número do dispositivo é o endereço (D600 → 600, M5 → 5;
+        # X/Y continuam octais). Útil quando a IHM republica os registradores.
+        if "." in raw:
+            raise ValueError(f"{device!r}: use X/Y sem ponto (ex.: X0, X10)")
+        address = int(raw, 8) if kind in "XY" else int(raw)
     elif fam == "dvp":
         if "." in raw:
             raise ValueError(f"{device!r}: no DVP use X/Y sem ponto (ex.: X0, X10)")
         address = _dvp_address(kind, int(raw), raw)
     else:
-        raise ValueError(f"família de CLP desconhecida: {family!r} (use 'dvp' ou 'as')")
+        raise ValueError(f"família de CLP desconhecida: {family!r} (use 'dvp', 'direto' ou 'as')")
     access = {"D": "holding", "M": "coil", "Y": "coil", "X": "input"}[kind]
     return address, access
 

@@ -159,3 +159,12 @@ def test_resolve_register_input_is_readonly():
 def test_resolve_register_without_device_is_unchanged():
     reg = {"name": "x", "address": 123, "data_type": "uint16"}
     assert resolve_register(reg) is reg
+
+
+@pytest.mark.parametrize("device,expected", [
+    ("D600", (600, "holding")),
+    ("M101", (101, "coil")),
+    ("X10",  (8, "input")),
+])
+def test_direto_device_addresses(device, expected):
+    assert device_to_modbus(device, "direto") == expected

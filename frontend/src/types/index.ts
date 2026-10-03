@@ -231,7 +231,7 @@ export interface AppConfig {
   clp_ip: string;
   clp_port: number;
   clp_timeout: number;
-  plc_family: "dvp" | "as";
+  plc_family: "dvp" | "direto" | "as";
   control_registers: IHMRegister[];
   control_pulse_ms: number;
   area_seccao_mm2: number;

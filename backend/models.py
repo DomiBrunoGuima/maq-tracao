@@ -153,7 +153,7 @@ class ConfigModel(BaseModel):
     clp_port: int = 502
     clp_timeout: int = 3
     # Família do CLP Delta, usada para converter "device" (D/M/X/Y) em endereço Modbus
-    plc_family: str = "dvp"     # "dvp" | "as"
+    plc_family: str = "dvp"     # "dvp" | "direto" | "as"
     control_registers: List[IHMRegister] = []
     control_pulse_ms: int = 300  # duração do pulso em coils de comando (iniciar/parar)
     area_seccao_mm2: float = 0.0       # default do setup; sobrescrito por ensaio

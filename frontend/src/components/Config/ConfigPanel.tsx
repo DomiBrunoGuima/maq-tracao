@@ -32,7 +32,7 @@ type FormState = {
   clp_ip: string;
   clp_port: number;
   clp_timeout: number;
-  plc_family: "dvp" | "as";
+  plc_family: "dvp" | "direto" | "as";
   control_registers: IHMRegister[];
   control_pulse_ms: number;
   area_seccao_mm2: number;
@@ -399,8 +399,9 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         </Field>
         <Field label="Família do CLP" hint="Converte D/M/X em endereço Modbus.">
           <select value={form.plc_family}
-            onChange={(e) => setForm((f) => ({ ...f, plc_family: e.target.value as "dvp" | "as" }))} className={smallInputCls + " w-full"}>
-            <option value="dvp">Delta DVP</option>
+            onChange={(e) => setForm((f) => ({ ...f, plc_family: e.target.value as "dvp" | "direto" | "as" }))} className={smallInputCls + " w-full"}>
+            <option value="dvp">Delta DVP (D600 → 4696)</option>
+            <option value="direto">Sem offset (D600 → 600)</option>
             <option value="as">Delta AS</option>
           </select>
         </Field>
