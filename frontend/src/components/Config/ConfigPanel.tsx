@@ -382,7 +382,7 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
       </SectionDesc>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
-        <Field label="IP do CLP" hint="Se vazio, usa o IP da Conexão IHM.">
+        <Field label="IP de conexão (IHM ou CLP)" hint="IP do equipamento que o software consulta via Modbus TCP. Se vazio, usa 192.168.11.10.">
           <input value={form.clp_ip} onChange={(e) => setForm((f) => ({ ...f, clp_ip: e.target.value }))}
             placeholder="192.168.11.10" className={inputCls} />
         </Field>
