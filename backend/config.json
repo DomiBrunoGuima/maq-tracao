@@ -374,6 +374,6 @@
   "flexao_espessura_mm": 0.0,
   "flexao_span_mm": 0.0,
   "flexao_norma": "ISO 178",
-  "simulator_enabled": true,
+  "simulator_enabled": false,
   "plc_family": "dvp"
 }
