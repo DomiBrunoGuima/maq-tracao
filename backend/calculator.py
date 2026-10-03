@@ -51,14 +51,16 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
     else:
         rigidez = 0.0
 
-    loading_for_energy = df[df["fase"].isin(_LOADING)].sort_values("Deslocamento")
+    # Energia = ∫ F dd sobre a curva inteira (inclui a estricção até a ruptura).
+    # F em N e d em mm dão N·mm (= mJ); divide por 1000 para Joules.
+    curve_for_energy = df[["Forca_N", "Deslocamento"]].dropna().sort_values("Deslocamento")
     _trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
     energia = float(
         _trapz(
-            loading_for_energy["Forca_N"].values,
-            loading_for_energy["Deslocamento"].values,
+            curve_for_energy["Forca_N"].values,
+            curve_for_energy["Deslocamento"].values,
         )
-    ) if len(loading_for_energy) > 1 else 0.0
+    ) / 1000.0 if len(curve_for_energy) > 1 else 0.0
 
     # Yield point: first point where Modulo_Elast drops > 10% below elastic mean
     tensao_escoamento = None
@@ -136,7 +138,7 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
                 velocidade_ihm = float(ihm_params[k])
                 break
 
-    return {
+    return _clean({
         "forca_max_N": forca_max,
         "forca_max_kN": forca_max / 1000,
         "tensao_max_MPa": tensao_max,
@@ -156,7 +158,19 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
         "alonga_calc_pct": alonga_calc_pct,
         "modulo_regressao_MPa": modulo_regressao_MPa,
         "velocidade_ihm": velocidade_ihm,
-    }
+    })
+
+
+def _clean(d: dict) -> dict:
+    """Converte numpy → float e NaN/inf → None (JSON não aceita NaN)."""
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool):
+            v = float(v)
+            if not np.isfinite(v):
+                v = None
+        out[k] = v
+    return out
 
 
 def format_chart_data(df: pd.DataFrame) -> dict:
@@ -210,12 +224,12 @@ def format_chart_data(df: pd.DataFrame) -> dict:
         "stress_time": safe_records(
             df_plot, ["elapsed_seconds", "Tensao_Pa", "fase"]
         ),
-        "rupture": {
-            "elapsed_seconds": float(rupture_row["elapsed_seconds"]),
-            "Forca_N": float(rupture_row["Forca_N"]),
-            "Deform_Along": float(rupture_row["Deform_Along"]),
-            "Tensao_Pa": float(rupture_row["Tensao_Pa"]),
-            "Deslocamento": float(rupture_row["Deslocamento"]),
-        },
+        "rupture": _clean({
+            "elapsed_seconds": rupture_row["elapsed_seconds"],
+            "Forca_N": rupture_row["Forca_N"],
+            "Deform_Along": rupture_row["Deform_Along"],
+            "Tensao_Pa": rupture_row["Tensao_Pa"],
+            "Deslocamento": rupture_row["Deslocamento"],
+        }),
         "E_regressao": E_regressao,
     }

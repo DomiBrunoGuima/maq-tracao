@@ -440,10 +440,10 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                               className="w-3.5 h-3.5 accent-accent shrink-0"
                             />
                             <span className="text-xs font-mono text-slate-300 truncate">
-                              {e.filename.replace(".csv", "")}
+                              {e.nome || e.filename.replace(".csv", "")}
                             </span>
                             <span className="text-xs text-muted/60 ml-auto shrink-0">
-                              {e.tensao_max_MPa.toFixed(0)} MPa
+                              {e.tensao_max_MPa != null ? `${e.tensao_max_MPa.toFixed(0)} MPa` : "—"}
                             </span>
                           </label>
                         ))}

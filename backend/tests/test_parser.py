@@ -116,15 +116,16 @@ def test_kpi_tensao_max(tmp_path):
 
 
 def test_energy_absorbed(tmp_path):
-    """Energy = trapz(F, d) over the loading + rupture phase."""
+    """Energy = trapz(F, d) over the whole curve, converted N·mm → J."""
     csv_file = _write_test_csv(tmp_path)
     _, df = parse_csv(csv_file)
     kpis = calculate_kpis(df)
 
     # Manual: loading d=[5,10,20], F=[2500,7500,15000]
     # trapz([2500,7500,15000], [5,10,20]) = (7500+2500)/2*5 + (15000+7500)/2*10
-    #                                     = 25000 + 112500 = 137500
-    assert kpis["energia_J"] == pytest.approx(137500.0, rel=0.01)
+    #                                     = 25000 + 112500 = 137500 N·mm
+    # Post-rupture rows keep d=20, so they add nothing → 137.5 J
+    assert kpis["energia_J"] == pytest.approx(137.5, rel=0.01)
 
 
 def test_kpi_required_fields(tmp_path):

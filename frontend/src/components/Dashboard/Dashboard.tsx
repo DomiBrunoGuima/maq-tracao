@@ -154,7 +154,7 @@ export default function Dashboard({ ensaioId }: Props) {
     return { sigma, eps, desl, forca, t, eLocal, stage };
   }, [selectedPoint]);
 
-  const fmt = (n: number, d = 2) => n.toFixed(d);
+  const fmt = (n: number | null | undefined, d = 2) => (n == null || !Number.isFinite(n) ? "—" : n.toFixed(d));
 
   // ── empty / loading ──
 
@@ -340,7 +340,7 @@ export default function Dashboard({ ensaioId }: Props) {
                 value={kpis.tensao_escoamento_MPa != null
                   ? `${fmt(kpis.tensao_escoamento_MPa)} MPa` : "—"} />
               <KPICard compact label="CV Módulo"
-                value={`${(kpis.cv_modulo * 100).toFixed(2)} %`} />
+                value={`${fmt(kpis.cv_modulo != null ? kpis.cv_modulo * 100 : null)} %`} />
             </div>
           </div>
 

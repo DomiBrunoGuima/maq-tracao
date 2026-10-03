@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 
 import pandas as pd
 
+from .calculator import calculate_kpis
+
 
 # ──────────────────────────────────────────────
 # Chart generation
@@ -24,9 +26,9 @@ def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
 
         ax.plot(x, y, color="#1e3a5f", linewidth=1.8, label="Tensão")
 
-        rup_pos = int(df["Forca_N"].values.argmax())
-        ax.scatter([x[rup_pos]], [y[rup_pos]], color="#c0392b", s=60, zorder=5,
-                   label=f"Ruptura  {y[rup_pos]:.1f} MPa / {x[rup_pos]:.2f}%")
+        fmax_pos = int(df["Forca_N"].fillna(float("-inf")).values.argmax())
+        ax.scatter([x[fmax_pos]], [y[fmax_pos]], color="#c0392b", s=60, zorder=5,
+                   label=f"Força máxima  {y[fmax_pos]:.1f} MPa / {x[fmax_pos]:.2f}%")
 
         ax.set_xlabel("Deformação (%)", fontsize=10)
         ax.set_ylabel("Tensão (MPa)", fontsize=10)
@@ -60,8 +62,8 @@ def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
             x = df["Deform_Along"].values * 100
             y = df["Tensao_Pa"].values
             ax.plot(x, y, color=color, linewidth=1.8, label=label)
-            rup = int(df["Forca_N"].values.argmax())
-            ax.scatter([x[rup]], [y[rup]], color=color, s=50, zorder=5)
+            fmax_pos = int(df["Forca_N"].fillna(float("-inf")).values.argmax())
+            ax.scatter([x[fmax_pos]], [y[fmax_pos]], color=color, s=50, zorder=5)
         ax.set_xlabel("Deformação (%)", fontsize=10)
         ax.set_ylabel("Tensão (MPa)", fontsize=10)
         ax.set_xlim(left=0)
@@ -137,7 +139,32 @@ def _chart_force_displacement_b64(df: pd.DataFrame) -> str:
 # ──────────────────────────────────────────────
 
 def _esc(v) -> str:
-    return str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;").replace("'", "&#39;"))
+
+
+def _src(url: str) -> str:
+    """Escapa uma data URL/URL para uso dentro de src="..."."""
+    return str(url or "").replace('"', "%22").replace("<", "%3C").replace(">", "%3E")
+
+
+def _num(v, fmt: str = ".2f") -> str:
+    """Formata número; None/NaN/inf viram '—' em vez de quebrar o relatório."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "—"
+    if f != f or f in (float("inf"), float("-inf")):
+        return "—"
+    return format(f, fmt)
+
+
+_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+          "agosto", "setembro", "outubro", "novembro", "dezembro"]
+
+
+def _data_extenso(d: datetime) -> str:
+    return f"{d.day:02d} de {_MESES[d.month - 1]} de {d.year}"
 
 
 def _td(label: str, value: str, label_width: str = "38%") -> str:
@@ -174,7 +201,7 @@ def _section_header(num: int, title: str) -> str:
 def _figure(img_src: str, caption: str) -> str:
     return (
         f'<div style="text-align:center;margin:14px 0 20px">'
-        f'<img src="{img_src}" alt="{_esc(caption)}" '
+        f'<img src="{_src(img_src)}" alt="{_esc(caption)}" '
         f'style="max-width:75%;border:1px solid #ddd;padding:2px"/>'
         f'<p style="font-style:italic;font-size:9pt;margin-top:6px">{_esc(caption)}</p>'
         f'</div>'
@@ -207,12 +234,14 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     body_parts: list[str] = []
     sec_num = 0
+    tab_num = 0   # numeração própria de tabelas
+    fig_num = 0   # numeração própria de figuras (contínua no documento)
 
     # ── HEADER ────────────────────────────────
     logo_html = ""
     if req.include_empresa and req.empresa.logo_data_url:
         logo_html = (
-            f'<img src="{req.empresa.logo_data_url}" alt="Logo" '
+            f'<img src="{_src(req.empresa.logo_data_url)}" alt="Logo" '
             f'style="max-height:55px;max-width:130px;object-fit:contain"/>'
         )
 
@@ -221,10 +250,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
 
     empresa_endereco = ""
     if req.include_empresa and req.empresa.endereco:
-        parts = [req.empresa.endereco]
-        if req.empresa.telefone: parts.append(f"Tel. {req.empresa.telefone}")
-        if req.empresa.email:    parts.append(f"E-mail {req.empresa.email}")
-        if req.empresa.site:     parts.append(req.empresa.site)
+        parts = [_esc(req.empresa.endereco)]
+        if req.empresa.telefone: parts.append(f"Tel. {_esc(req.empresa.telefone)}")
+        if req.empresa.email:    parts.append(f"E-mail {_esc(req.empresa.email)}")
+        if req.empresa.site:     parts.append(_esc(req.empresa.site))
         empresa_endereco = " &nbsp;|&nbsp; ".join(parts)
 
     numero_html = (
@@ -311,10 +340,11 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         body_parts.append(_section_header(sec_num, "Identificação da(s) Amostra(s)"))
         a = req.amostra
         if a.id_interno or a.id_cliente:
+            tab_num += 1
             body_parts.append(
-                f'<p style="margin-bottom:8px">A amostra foi identificada conforme a Tabela {sec_num}.</p>'
+                f'<p style="margin-bottom:8px">A amostra foi identificada conforme a Tabela {tab_num}.</p>'
                 f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-                f'Tabela {sec_num} – Identificação da(s) Amostra(s).</p>'
+                f'Tabela {tab_num} – Identificação da(s) Amostra(s).</p>'
                 f'<table style="width:60%;margin:0 auto 16px">'
                 f'<tr><th style="background:#1e3a5f;color:#fff;padding:6px 12px;border:1px solid #999">Identificação Interna</th>'
                 f'<th style="background:#1e3a5f;color:#fff;padding:6px 12px;border:1px solid #999">Identificação do Cliente</th></tr>'
@@ -323,7 +353,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 f'</table>'
             )
         if a.imagem_data_url:
-            body_parts.append(_figure(a.imagem_data_url, f"Figura 1 – Imagem da Amostra{': ' + a.id_interno if a.id_interno else ''}."))
+            fig_num += 1
+            body_parts.append(_figure(a.imagem_data_url, f"Figura {fig_num} – Imagem da Amostra{': ' + a.id_interno if a.id_interno else ''}."))
 
     # ── SEÇÃO 2: OBJETIVOS ────────────────────
     if req.include_objetivos and req.objetivos:
@@ -336,10 +367,11 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Condições do Ensaio de Tração"))
         c = req.condicoes
+        tab_num += 1
         body_parts.append(
-            f'<p style="margin-bottom:8px">Na Tabela {sec_num} estão apresentadas as condições do ensaio.</p>'
+            f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentadas as condições do ensaio.</p>'
             f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-            f'Tabela {sec_num} – Condições do ensaio de Tração.</p>'
+            f'Tabela {tab_num} – Condições do ensaio de Tração.</p>'
         )
         rows = []
         if c.temp_laboratorio or c.umidade_laboratorio:
@@ -386,119 +418,177 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                         f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(c.norma_referencia)}</td></tr>')
         body_parts.append(f'<table style="width:100%;margin-bottom:16px">{"".join(rows)}</table>')
 
+    # Valores "oficiais" usados tanto em Resultados quanto na Conclusão:
+    # preferem o cálculo por A e L₀ (Fmax/A, d/L₀) quando disponível.
+    tensao_max = kpis.get("tensao_max_calc_MPa")
+    if tensao_max is None:
+        tensao_max = kpis.get("tensao_max_MPa")
+    alongamento = kpis.get("alonga_calc_pct")
+    if alongamento is None:
+        alongamento = kpis.get("alonga_ruptura_pct")
+    area = kpis.get("area_secao_mm2")
+    l0 = kpis.get("comprimento_inicial_mm")
+    unidades_cruas = (area is not None and abs(float(area) - 1.0) < 1e-9
+                      and l0 is not None and abs(float(l0) - 1.0) < 1e-9)
+
     # ── SEÇÃO 4: RESULTADOS ───────────────────
     if req.include_resultados:
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Resultados"))
-        fig_num = 1
+
+        if unidades_cruas:
+            body_parts.append(
+                '<p style="color:#b45309;background:#fff7ed;border:1px solid #fed7aa;'
+                'padding:8px 12px;margin-bottom:12px">Atenção: este ensaio foi gravado sem '
+                'área da seção e comprimento inicial (L₀). Tensão e deformação estão em '
+                'unidades cruas (iguais à força em N e ao deslocamento em mm) e não devem '
+                'ser usadas como resultado.</p>'
+            )
 
         if req.include_stress_strain:
             chart_b64 = _chart_stress_strain_b64(df)
-            print(f"[relatorio] ss chart len={len(chart_b64)} include_ss={req.include_stress_strain}", flush=True)
             if chart_b64:
+                fig_num += 1
                 body_parts.append(
-                    f'<p style="margin-bottom:8px">Na Figura {fig_num} estão apresentadas as curvas de tensão em função da deformação.</p>'
+                    f'<p style="margin-bottom:8px">Na Figura {fig_num} está apresentada a curva de tensão em função da deformação.</p>'
                 )
                 body_parts.append(_figure(
                     f"data:image/png;base64,{chart_b64}",
                     f"Figura {fig_num} – Curva Tensão × Deformação — {ensaio.nome}."
                 ))
-                fig_num += 1
             else:
                 body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico σ×ε: falha na geração — ver terminal do backend]</p>')
 
         if req.include_graficos_adicionais:
             chart2 = _chart_force_displacement_b64(df)
             if chart2:
+                fig_num += 1
                 body_parts.append(_figure(
                     f"data:image/png;base64,{chart2}",
                     f"Figura {fig_num} – Curva Força × Deslocamento — {ensaio.nome}."
                 ))
-                fig_num += 1
             else:
                 body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico F×d: falha na geração]</p>')
 
         if req.include_comparativo and comparacao_series:
-            all_ss = [(ensaio.nome, df)] + comparacao_series
-            all_fd = [(ensaio.nome, df)] + comparacao_series
-
-            body_parts.append(
-                f'<p style="margin-bottom:8px">Nas Figuras {fig_num} e {fig_num+1} são apresentadas as curvas comparativas '
-                f'entre os {len(all_ss)} ensaios selecionados.</p>'
-            )
-
-            cmp_ss = _chart_comparison_ss_b64(all_ss)
+            all_series = [(ensaio.nome, df)] + comparacao_series
+            cmp_figs: list[tuple[str, str]] = []
+            cmp_ss = _chart_comparison_ss_b64(all_series)
             if cmp_ss:
-                body_parts.append(_figure(
-                    f"data:image/png;base64,{cmp_ss}",
-                    f"Figura {fig_num} – Comparativo Tensão × Deformação ({len(all_ss)} ensaios)."
-                ))
-                fig_num += 1
-
-            cmp_fd = _chart_comparison_fd_b64(all_fd)
+                cmp_figs.append((cmp_ss, f"Comparativo Tensão × Deformação ({len(all_series)} ensaios)."))
+            cmp_fd = _chart_comparison_fd_b64(all_series)
             if cmp_fd:
-                body_parts.append(_figure(
-                    f"data:image/png;base64,{cmp_fd}",
-                    f"Figura {fig_num} – Comparativo Força × Deslocamento ({len(all_fd)} ensaios)."
-                ))
-                fig_num += 1
+                cmp_figs.append((cmp_fd, f"Comparativo Força × Deslocamento ({len(all_series)} ensaios)."))
 
-        if req.include_resultados:
-            res_table_num = sec_num
-            body_parts.append(
-                f'<p style="margin-bottom:8px">Na Tabela {res_table_num} estão apresentados os resultados do ensaio.</p>'
-                f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-                f'Tabela {res_table_num} – Resultados do ensaio de Tração.</p>'
-            )
-            kpi_rows = [
-                ("Área da Seção Transversal (A)", f'{kpis["area_secao_mm2"]:.4f}', "mm²") if kpis.get("area_secao_mm2") else None,
-                ("Comprimento Inicial (L₀)", f'{kpis["comprimento_inicial_mm"]:.2f}', "mm") if kpis.get("comprimento_inicial_mm") else None,
-                ("Módulo de Elasticidade (E)", f'{kpis["modulo_elasticidade_GPa"]:.3f}', "GPa"),
-                ("Módulo de Elasticidade (E)", f'{kpis["modulo_elasticidade_MPa"]:.1f}', "MPa"),
-                ("Tensão Máxima (σmax = Fmax/A)", f'{kpis["tensao_max_calc_MPa"]:.2f}', "MPa") if kpis.get("tensao_max_calc_MPa") else ("Tensão Máxima (σmax)", f'{kpis["tensao_max_MPa"]:.2f}', "MPa"),
-                ("Força Máxima (Fmax)", f'{kpis["forca_max_N"]:.1f}', "N"),
-                ("Força Máxima (Fmax)", f'{kpis["forca_max_kN"]:.4f}', "kN"),
-                ("Alongamento na Ruptura (A% = d/L₀×100)", f'{kpis["alonga_calc_pct"]:.2f}', "%") if kpis.get("alonga_calc_pct") else ("Alongamento na Ruptura (δ)", f'{kpis["alonga_ruptura_pct"]:.2f}', "%"),
-                ("Deslocamento Máximo", f'{kpis["deslocamento_max_mm"]:.2f}', "mm"),
-                ("Tempo até a Ruptura", f'{kpis["tempo_ruptura_s"]:.1f}', "s"),
-                ("Rigidez (k)", f'{kpis["rigidez_N_mm"]:.2f}', "N/mm"),
-                ("Energia Absorvida até Ruptura", f'{kpis["energia_J"]:.2f}', "J"),
-                ("Taxa de Carregamento Média", f'{kpis["taxa_carregamento_N_s"]:.2f}', "N/s"),
-            ]
-            kpi_rows = [r for r in kpi_rows if r is not None]
-            if kpis.get("tensao_escoamento_MPa") is not None:
-                # Insere após o módulo de elasticidade (índice 3)
-                kpi_rows.insert(3, ("Tensão de Escoamento (est.)", f'{kpis["tensao_escoamento_MPa"]:.2f}', "MPa"))
-            kpi_html = "".join(
-                f'<tr>'
-                f'<td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
-                f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{r[1]}</td>'
-                f'<td style="border:1px solid #bbb;padding:5px 9px;width:60px">{r[2]}</td>'
-                f'</tr>'
-                for r in kpi_rows
-            )
-            body_parts.append(
-                f'<table style="width:70%;margin:0 auto 20px">'
-                f'<thead><tr>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999;text-align:left">Propriedade</th>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999;text-align:right">Valor</th>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Unidade</th>'
-                f'</tr></thead>'
-                f'<tbody>{kpi_html}</tbody>'
-                f'</table>'
-            )
+            if cmp_figs:
+                first = fig_num + 1
+                refs = f"Figura {first}" if len(cmp_figs) == 1 else f"Figuras {first} e {first + 1}"
+                verbo = "é apresentada a curva comparativa" if len(cmp_figs) == 1 else "são apresentadas as curvas comparativas"
+                body_parts.append(
+                    f'<p style="margin-bottom:8px">{"Na" if len(cmp_figs) == 1 else "Nas"} {refs} {verbo} '
+                    f'entre os {len(all_series)} ensaios selecionados.</p>'
+                )
+                for b64, cap in cmp_figs:
+                    fig_num += 1
+                    body_parts.append(_figure(f"data:image/png;base64,{b64}", f"Figura {fig_num} – {cap}"))
+            else:
+                body_parts.append('<p style="color:#c00;font-style:italic">[Gráficos comparativos: falha na geração]</p>')
+
+            # Tabela comparativa com os principais resultados de cada ensaio
+            cmp_rows = []
+            for nome, cdf in all_series:
+                try:
+                    ck = kpis if cdf is df else calculate_kpis(cdf)
+                except Exception as exc:
+                    print(f"[report] KPIs do comparativo falharam para {nome}: {exc}", flush=True)
+                    continue
+                ct = ck.get("tensao_max_calc_MPa")
+                if ct is None:
+                    ct = ck.get("tensao_max_MPa")
+                ca = ck.get("alonga_calc_pct")
+                if ca is None:
+                    ca = ck.get("alonga_ruptura_pct")
+                cmp_rows.append((nome, _num(ck.get("forca_max_N"), ".1f"), _num(ct), _num(ck.get("modulo_elasticidade_MPa"), ".1f"),
+                                 _num(ca), _num(ck.get("energia_J"))))
+            if cmp_rows:
+                tab_num += 1
+                th = 'style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999"'
+                td = 'style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace"'
+                body_parts.append(
+                    f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin:8px 0 4px">'
+                    f'Tabela {tab_num} – Comparativo dos resultados.</p>'
+                    f'<table style="width:90%;margin:0 auto 20px"><thead><tr>'
+                    f'<th {th}>Ensaio</th><th {th}>Fmax (N)</th><th {th}>σmax (MPa)</th>'
+                    f'<th {th}>E (MPa)</th><th {th}>Alongamento (%)</th><th {th}>Energia (J)</th>'
+                    f'</tr></thead><tbody>'
+                    + "".join(
+                        f'<tr><td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
+                        + "".join(f'<td {td}>{v}</td>' for v in r[1:]) + '</tr>'
+                        for r in cmp_rows
+                    )
+                    + '</tbody></table>'
+                )
+
+        tab_num += 1
+        body_parts.append(
+            f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentados os resultados do ensaio.</p>'
+            f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+            f'Tabela {tab_num} – Resultados do ensaio de Tração.</p>'
+        )
+        kpi_rows = []
+        if area:
+            kpi_rows.append(("Área da Seção Transversal (A)", _num(area, ".4f"), "mm²"))
+        if l0:
+            kpi_rows.append(("Comprimento Inicial (L₀)", _num(l0, ".2f"), "mm"))
+        kpi_rows += [
+            ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_GPa"), ".3f"), "GPa"),
+            ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_MPa"), ".1f"), "MPa"),
+        ]
+        if kpis.get("tensao_escoamento_MPa") is not None:
+            kpi_rows.append(("Tensão de Escoamento (est.)", _num(kpis["tensao_escoamento_MPa"]), "MPa"))
+        kpi_rows += [
+            ("Tensão Máxima (σmax = Fmax/A)" if kpis.get("tensao_max_calc_MPa") is not None else "Tensão Máxima (σmax)",
+             _num(tensao_max), "MPa"),
+            ("Força Máxima (Fmax)", _num(kpis.get("forca_max_N"), ".1f"), "N"),
+            ("Força Máxima (Fmax)", _num(kpis.get("forca_max_kN"), ".4f"), "kN"),
+            ("Alongamento (A% = d/L₀×100)" if kpis.get("alonga_calc_pct") is not None else "Alongamento (δ)",
+             _num(alongamento), "%"),
+            ("Deslocamento Máximo", _num(kpis.get("deslocamento_max_mm")), "mm"),
+            ("Tempo até a Força Máxima", _num(kpis.get("tempo_ruptura_s"), ".1f"), "s"),
+            ("Rigidez (k)", _num(kpis.get("rigidez_N_mm")), "N/mm"),
+            ("Energia Absorvida até a Ruptura", _num(kpis.get("energia_J")), "J"),
+            ("Taxa de Carregamento Média", _num(kpis.get("taxa_carregamento_N_s")), "N/s"),
+        ]
+        kpi_html = "".join(
+            f'<tr>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{r[1]}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;width:60px">{r[2]}</td>'
+            f'</tr>'
+            for r in kpi_rows
+        )
+        body_parts.append(
+            f'<table style="width:70%;margin:0 auto 20px">'
+            f'<thead><tr>'
+            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999;text-align:left">Propriedade</th>'
+            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999;text-align:right">Valor</th>'
+            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Unidade</th>'
+            f'</tr></thead>'
+            f'<tbody>{kpi_html}</tbody>'
+            f'</table>'
+        )
 
         if req.include_raw_data:
             rows_html = ""
             for _, row in df.iterrows():
                 rows_html += (
                     f"<tr>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px'>{row.get('TIME','')}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px'>{row.get('DATA','')}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{row.get('Tensao_Pa', 0):.2f}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{row.get('Deform_Along', 0)*100:.3f}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{row.get('Forca_N', 0):.2f}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{row.get('Deslocamento', 0):.2f}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px'>{_esc(row.get('TIME',''))}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px'>{_esc(row.get('DATA',''))}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Tensao_Pa'))}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num((row.get('Deform_Along') or 0) * 100, '.3f')}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Forca_N'))}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Deslocamento'))}</td>"
                     f"</tr>\n"
                 )
             body_parts.append(
@@ -520,10 +610,11 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     if req.include_conclusao:
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Conclusão"))
+        tab_num += 1
         body_parts.append(
-            f'<p style="margin-bottom:8px">Na Tabela {sec_num} está apresentado um resumo dos resultados obtidos.</p>'
+            f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
             f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-            f'Tabela {sec_num} – Resumo dos Resultados.</p>'
+            f'Tabela {tab_num} – Resumo dos Resultados.</p>'
             f'<table style="width:65%;margin:0 auto 20px">'
             f'<thead><tr>'
             f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Propriedade</th>'
@@ -532,26 +623,21 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             f'</tr></thead>'
             f'<tbody>'
             f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Módulo de Elasticidade</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{kpis["modulo_elasticidade_GPa"]:.3f}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(kpis.get("modulo_elasticidade_GPa"), ".3f")}</td>'
             f'<td style="border:1px solid #bbb;padding:5px 9px">GPa</td></tr>'
             f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Tensão Máxima</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{kpis["tensao_max_MPa"]:.2f}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(tensao_max)}</td>'
             f'<td style="border:1px solid #bbb;padding:5px 9px">MPa</td></tr>'
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Alongamento na Ruptura</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{kpis["alonga_ruptura_pct"]:.2f}</td>'
+            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Alongamento</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(alongamento)}</td>'
             f'<td style="border:1px solid #bbb;padding:5px 9px">%</td></tr>'
             f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Energia Absorvida</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{kpis["energia_J"]:.2f}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(kpis.get("energia_J"))}</td>'
             f'<td style="border:1px solid #bbb;padding:5px 9px">J</td></tr>'
             f'</tbody></table>'
         )
 
-        local_data = req.local_data or datetime.now().strftime(f"%d de %B de %Y").lower()
-        local_data = local_data.replace("january","janeiro").replace("february","fevereiro") \
-            .replace("march","março").replace("april","abril").replace("may","maio") \
-            .replace("june","junho").replace("july","julho").replace("august","agosto") \
-            .replace("september","setembro").replace("october","outubro") \
-            .replace("november","novembro").replace("december","dezembro")
+        local_data = req.local_data or _data_extenso(datetime.now())
         body_parts.append(
             f'<p style="text-align:right;margin:20px 0">{_esc(local_data)}</p>'
         )

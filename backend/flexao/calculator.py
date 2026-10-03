@@ -125,7 +125,7 @@ def calculate_kpis(df: pd.DataFrame, geom: dict | None = None) -> dict:
             loading_for_energy["Forca_N"].values,
             loading_for_energy["Deslocamento"].values,
         )
-    ) if len(loading_for_energy) > 1 else 0.0
+    ) / 1000.0 if len(loading_for_energy) > 1 else 0.0  # N·mm → J
 
     # ── Tensão de escoamento de flexão: queda do módulo local > 10% ──────────
     tensao_escoamento = None
