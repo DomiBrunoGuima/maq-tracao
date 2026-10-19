@@ -12,6 +12,11 @@ class EnsaioSummary(BaseModel):
     forca_max_N: float
     tensao_max_MPa: float
     created_at: datetime
+    cliente_id: Optional[int] = None
+    cliente_nome: str = ""
+    amostra: str = ""
+    norma: str = ""
+    operador: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -22,6 +27,51 @@ class EnsaioDetail(EnsaioSummary):
     metadata_code: str
     alonga_ruptura_pct: float
     tempo_ruptura_s: float
+    observacoes: str = ""
+    setup: Dict[str, Any] = {}
+
+
+class EnsaioUpdate(BaseModel):
+    """Edição do cadastro do teste (campos ausentes não são alterados)."""
+    nome: Optional[str] = None
+    cliente_id: Optional[int] = None
+    amostra: Optional[str] = None
+    norma: Optional[str] = None
+    operador: Optional[str] = None
+    observacoes: Optional[str] = None
+    limpar_cliente: bool = False
+
+
+class ClienteIn(BaseModel):
+    nome: str
+    documento: str = ""
+    contato: str = ""
+    email: str = ""
+    telefone: str = ""
+    endereco: str = ""
+    bairro: str = ""
+    cidade_uf: str = ""
+    cep: str = ""
+    observacoes: str = ""
+
+
+class Cliente(ClienteIn):
+    id: int
+    created_at: datetime
+    num_ensaios: int = 0
+    num_relatorios: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class RelatorioSummary(BaseModel):
+    id: int
+    ensaio_id: Optional[int] = None
+    cliente_id: Optional[int] = None
+    numero: str = ""
+    titulo: str = ""
+    cliente_nome: str = ""
+    created_at: datetime
 
 
 class KPIs(BaseModel):
@@ -100,6 +150,9 @@ class FlexaoControlStartRequest(BaseModel):
     espessura_mm: Optional[float] = None
     span_mm: Optional[float] = None
     norma: Optional[str] = None
+    cliente_id: Optional[int] = None
+    amostra: str = ""
+    operador: str = ""
 
 
 class IHMRegister(BaseModel):
@@ -178,6 +231,11 @@ class ControlStartRequest(BaseModel):
     limite_forca: Optional[float] = None
     area_seccao: Optional[float] = None
     comprimento_inicial: Optional[float] = None
+    # Cadastro do teste: vai automaticamente para o ensaio gravado
+    cliente_id: Optional[int] = None
+    amostra: str = ""
+    norma: str = ""
+    operador: str = ""
 
 
 class ControlSetpointsRequest(BaseModel):
@@ -269,6 +327,7 @@ class Assinatura(BaseModel):
 
 class ReportRequest(BaseModel):
     ensaio_id: int
+    cliente_id: Optional[int] = None   # cliente cadastrado (para salvar/buscar o relatório)
     # Flags de seção
     include_empresa: bool = True
     include_cliente: bool = False

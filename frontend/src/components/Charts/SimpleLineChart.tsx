@@ -22,6 +22,8 @@ interface Props {
   thumbnail?: boolean;
   onPointClick?: (pt: DataPoint) => void;
   xDecimals?: number;
+  /** Elementos extras do Recharts (faixas de estágio, reta de regressão...) */
+  extras?: React.ReactNode[];
 }
 
 /**
@@ -41,6 +43,7 @@ export default function SimpleLineChart({
   thumbnail = false,
   onPointClick,
   xDecimals = 2,
+  extras = [],
 }: Props) {
   // Mantém apenas os pontos com x e y numéricos, na ordem original (cronológica).
   const rows = data.filter(
@@ -59,6 +62,7 @@ export default function SimpleLineChart({
         style={{ cursor: onPointClick ? "pointer" : "default" }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="#1a1e2e" vertical={false} />
+        {extras}
         <XAxis
           dataKey={xKey}
           type="number"
@@ -98,7 +102,7 @@ export default function SimpleLineChart({
               if (!active || !payload?.length) return null;
               const p = payload[0].payload;
               return (
-                <div className="bg-[#0a0c14] border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
+                <div className="bg-tooltip border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
                   <p className="text-muted mb-0.5">
                     {(xLabel ?? xKey)}: <span className="text-white">{Number(p[xKey]).toFixed(xDecimals)}{xUnit ? ` ${xUnit}` : ""}</span>
                   </p>

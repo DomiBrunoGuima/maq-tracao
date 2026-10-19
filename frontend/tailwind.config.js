@@ -1,15 +1,29 @@
 /** @type {import('tailwindcss').Config} */
+// As cores vêm de variáveis CSS (src/index.css) para o tema claro/escuro trocar
+// tudo de uma vez. "white" e "slate" também: no tema claro o texto vira escuro.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
-        bg: "#0f1117",
-        surface: "#1a1d27",
-        border: "#2a2d3e",
-        accent: "#00d4ff",
-        rupture: "#ff6b35",
-        muted: "#64748b",
+        bg: v("bg"),
+        surface: v("surface"),
+        panel: v("panel"),
+        tooltip: v("tooltip"),
+        border: v("border"),
+        accent: v("accent"),
+        rupture: v("rupture"),
+        muted: v("muted"),
+        white: v("fg"),
+        slate: {
+          200: v("slate-200"),
+          300: v("slate-300"),
+          400: v("slate-400"),
+          500: v("slate-500"),
+          600: v("slate-600"),
+        },
       },
       fontFamily: {
         mono: ["JetBrains Mono", "IBM Plex Mono", "Fira Code", "monospace"],

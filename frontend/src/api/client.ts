@@ -1,6 +1,16 @@
 import axios from "axios";
 import type {
   AppConfig,
+  CamposRelatorio,
+  Cliente,
+  ClienteIn,
+  ConexaoCLP,
+  EnsaioUpdate,
+  Norma,
+  Qualidade,
+  RelatorioSummary,
+  ResultadoBusca,
+  TipoBusca,
   ChartData,
   ControlSetpointsRequest,
   ControlStartRequest,
@@ -36,6 +46,50 @@ export const getCurvas = (id: number): Promise<ChartData> =>
 
 export const deleteEnsaio = (id: number): Promise<void> =>
   api.delete(`/ensaios/${id}`).then(() => undefined);
+
+export const updateEnsaio = (id: number, body: EnsaioUpdate): Promise<EnsaioDetail> =>
+  api.patch(`/ensaios/${id}`, body).then((r) => r.data);
+
+export const getQualidade = (id: number): Promise<Qualidade> =>
+  api.get(`/ensaios/${id}/qualidade`).then((r) => r.data);
+
+export const getCamposRelatorio = (id: number): Promise<CamposRelatorio> =>
+  api.get(`/ensaios/${id}/campos-relatorio`).then((r) => r.data);
+
+// ── Cadastro: clientes, relatórios salvos, busca e normas ─────────────────
+
+export const getClientes = (): Promise<Cliente[]> =>
+  api.get("/clientes").then((r) => r.data);
+
+export const createCliente = (body: ClienteIn): Promise<Cliente> =>
+  api.post("/clientes", body).then((r) => r.data);
+
+export const updateCliente = (id: number, body: ClienteIn): Promise<Cliente> =>
+  api.put(`/clientes/${id}`, body).then((r) => r.data);
+
+export const deleteCliente = (id: number): Promise<void> =>
+  api.delete(`/clientes/${id}`).then(() => undefined);
+
+export const getEnsaiosDoCliente = (clienteId: number): Promise<EnsaioSummary[]> =>
+  api.get("/ensaios", { params: { cliente_id: clienteId } }).then((r) => r.data);
+
+export const getRelatorios = (params: { cliente_id?: number; ensaio_id?: number } = {}): Promise<RelatorioSummary[]> =>
+  api.get("/relatorios", { params }).then((r) => r.data);
+
+export const deleteRelatorio = (id: number): Promise<void> =>
+  api.delete(`/relatorios/${id}`).then(() => undefined);
+
+export const relatorioUrl = (id: number, download = false): string =>
+  `/api/relatorios/${id}/html${download ? "?download=true" : ""}`;
+
+export const buscar = (q: string, tipo: TipoBusca): Promise<{ total: number; resultados: ResultadoBusca[] }> =>
+  api.get("/busca", { params: { q, tipo } }).then((r) => r.data);
+
+export const getNormas = (tipo?: "tracao" | "flexao"): Promise<Norma[]> =>
+  api.get("/normas", { params: tipo ? { tipo } : {} }).then((r) => r.data);
+
+export const getConexaoCLP = (): Promise<ConexaoCLP> =>
+  api.get("/clp/conexao").then((r) => r.data);
 
 export const getConfig = (): Promise<AppConfig> =>
   api.get("/config").then((r) => r.data);

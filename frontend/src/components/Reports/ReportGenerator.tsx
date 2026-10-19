@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
-import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2 } from "lucide-react";
-import { generateReport } from "../../api/client";
-import { useEnsaios } from "../../hooks/useEnsaios";
+import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2, Sparkles } from "lucide-react";
+import { generateReport, getCamposRelatorio } from "../../api/client";
+import { useClientes, useEnsaios } from "../../hooks/useEnsaios";
 import type {
   ReportRequest, DadosEmpresa, DadosCliente, DadosAmostra,
   CondicoesEnsaio, Assinatura,
@@ -160,6 +161,10 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const { data: ensaios } = useEnsaios();
+  const { data: clientes } = useClientes();
+  const qc = useQueryClient();
+  const [clienteId, setClienteId] = useState<number | null>(null);
+  const [autoPreenchido, setAutoPreenchido] = useState(false);
 
   const [flags, setFlags] = useState({
     include_empresa: true,
@@ -189,6 +194,41 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
     { nome: "", cargo: "" },
   ]);
   const [obsFinais, setObsFinais] = useState(DEFAULT_OBS);
+
+  // Campos automáticos: setup do ensaio, cliente cadastrado, norma e dados do
+  // último relatório (empresa, assinaturas, equipamento). Só preenche o que veio.
+  useEffect(() => {
+    let cancel = false;
+    getCamposRelatorio(ensaioId).then((c) => {
+      if (cancel) return;
+      const cheios = <T extends object>(o: Partial<T>) =>
+        Object.fromEntries(Object.entries(o).filter(([, v]) => v !== "" && v != null)) as Partial<T>;
+      setEmpresaState((e) => ({ ...e, ...cheios(c.empresa), numero_relatorio: e.numero_relatorio || c.numero_relatorio_sugerido }));
+      if (c.cliente) {
+        setClienteState((x) => ({ ...x, ...cheios(c.cliente!) }));
+        setFlags((f) => ({ ...f, include_cliente: true }));
+      }
+      setClienteId(c.cliente_id);
+      setAmostraState((a) => ({ ...a, ...cheios(c.amostra) }));
+      setCondicoesState((x) => ({
+        ...x, ...cheios(c.condicoes),
+        equipamentos: x.equipamentos || c.equipamentos,
+      }));
+      if (c.assinaturas?.length) setAssinaturas(c.assinaturas);
+      setAutoPreenchido(true);
+    }).catch(() => { /* sem preenchimento automático */ });
+    return () => { cancel = true; };
+  }, [ensaioId]);
+
+  function escolherCliente(id: number | null) {
+    setClienteId(id);
+    const c = clientes?.find((x) => x.id === id);
+    if (!c) return;
+    setClienteState((x) => ({
+      ...x, nome: c.nome, contato: c.contato, email_cliente: c.email, telefone_cliente: c.telefone,
+      endereco: c.endereco, bairro: c.bairro, cidade_uf: c.cidade_uf, cep: c.cep,
+    }));
+  }
 
   function setEmpresa(field: keyof DadosEmpresa, v: string) {
     setEmpresaState(e => ({ ...e, [field]: v }));
@@ -228,6 +268,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
     try {
       const req: ReportRequest = {
         ensaio_id: ensaioId,
+        cliente_id: clienteId,
         ...flags,
         comparacao_ids: flags.include_comparativo ? comparacaoIds : [],
         empresa, cliente, amostra, objetivos,
@@ -237,6 +278,8 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
         operator_name: "", specimen_id: "", standard: "", format: "html", observations: "",
       };
       await generateReport(req);
+      qc.invalidateQueries({ queryKey: ["relatorios"] });
+      qc.invalidateQueries({ queryKey: ["clientes"] });
     } catch (err: any) {
       const detail = err?.response?.data ? await err.response.data.text?.() : null;
       setError(detail ?? err?.message ?? "Erro desconhecido ao gerar relatório");
@@ -256,6 +299,11 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
           <div className="flex items-center gap-2">
             <FileText className="text-accent" size={18} />
             <h2 className="font-semibold text-white">Gerar Relatório</h2>
+            {autoPreenchido && (
+              <span className="flex items-center gap-1 text-[10px] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+                <Sparkles size={10} /> campos preenchidos a partir do ensaio
+              </span>
+            )}
           </div>
           <button onClick={onClose} className="text-muted hover:text-white transition-colors">
             <X size={18} />
@@ -283,6 +331,14 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
           {/* Cliente */}
           <SectionCard title="Dados do Cliente / OS" enabled={flags.include_cliente} onToggle={() => toggleFlag("include_cliente")}>
             <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 col-span-2">
+                <span className="text-xs text-muted">Cliente cadastrado</span>
+                <select value={clienteId ?? ""} onChange={e => escolherCliente(e.target.value ? Number(e.target.value) : null)}
+                  className={INPUT_CLS}>
+                  <option value="">— digitar manualmente —</option>
+                  {clientes?.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </label>
               <Field label="Cliente" value={cliente.nome} onChange={v => setCliente("nome", v)} />
               <Field label="OS (Ordem de Serviço)" value={cliente.os} onChange={v => setCliente("os", v)} />
               <Field label="Contato" value={cliente.contato} onChange={v => setCliente("contato", v)} />

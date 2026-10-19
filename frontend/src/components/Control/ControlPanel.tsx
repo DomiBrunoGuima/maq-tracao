@@ -27,7 +27,20 @@ import {
 import { clsx } from "clsx";
 import { getControlStatus, startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
-import type { ControlStatus, RealtimeFrame, RealtimePoint } from "../../types";
+import type { ControlStatus, Norma, RealtimeFrame, RealtimePoint } from "../../types";
+import { BigValue, StatusEnsaioBar, fmtBig, type StatusEnsaio } from "../Common/Status";
+import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
+
+const CADASTRO_KEY = "maq-tracao.cadastro-tracao";
+
+function cadastroSalvo(): CadastroForm {
+  try {
+    const raw = localStorage.getItem(CADASTRO_KEY);
+    return raw ? { ...CADASTRO_VAZIO, ...JSON.parse(raw) } : CADASTRO_VAZIO;
+  } catch {
+    return CADASTRO_VAZIO;
+  }
+}
 
 const MAX_BUFFER = 4000;
 const DISPLAY_WINDOW = 600;
@@ -131,7 +144,7 @@ function LiveChart({
           <Tooltip
             content={({ active, payload, label: l }: any) =>
               !active || !payload?.length ? null : (
-                <div className="bg-[#0a0c14] border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
+                <div className="bg-tooltip border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
                   <p className="text-muted mb-1">t = <span className="text-white">{(Number(l) / 1000).toFixed(2)} s</span></p>
                   <p className="text-white">{Number(payload[0].value).toFixed(2)} {unit}</p>
                 </div>
@@ -168,6 +181,23 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   // Leitura ao vivo (força/deslocamento) mesmo com o ensaio parado, para conferir
   // as condições antes de iniciar. Não entra no gráfico — só nos indicadores.
   const [live, setLive] = useState<ControlStatus | null>(null);
+  const [status, setStatus] = useState<StatusEnsaio>("parado");
+  const [cadastro, setCadastro] = useState<CadastroForm>(cadastroSalvo);
+  const finalizarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lembra o cadastro entre telas/ensaios (o operador costuma repetir cliente e norma)
+  useEffect(() => {
+    try { localStorage.setItem(CADASTRO_KEY, JSON.stringify(cadastro)); } catch { /* ignore */ }
+  }, [cadastro]);
+  useEffect(() => () => { if (finalizarTimer.current) clearTimeout(finalizarTimer.current); }, []);
+
+  function aplicarNorma(n: Norma) {
+    setForm((f) => ({
+      ...f,
+      velocidade: n.velocidade_mm_min != null ? String(n.velocidade_mm_min) : f.velocidade,
+      comprimento_inicial: n.comprimento_inicial_mm != null ? String(n.comprimento_inicial_mm) : f.comprimento_inicial,
+    }));
+  }
 
   // Pré-preenche área/L0 a partir da config
   useEffect(() => {
@@ -201,14 +231,22 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       try {
         const msg: RealtimeFrame = JSON.parse(e.data);
         setFrame(msg);
-        if (msg.error) { setError(msg.error); return; }
+        if (msg.error) {
+          setError(msg.error);
+          if (msg.error !== "reconnecting") setStatus("parado");
+          return;
+        }
         if (msg.ruptura || msg.saved_ensaio_id != null) {
           if (msg.saved_ensaio_id != null) setSavedId(msg.saved_ensaio_id);
+          // Mostra a ruptura por alguns segundos e depois o ensaio como finalizado
+          setStatus("ruptura");
+          finalizarTimer.current = setTimeout(() => setStatus("finalizado"), 4000);
           setRunning(false);
           qc.invalidateQueries({ queryKey: ["ensaios"] });
           stopStream();
           return;
         }
+        if (msg.recording) setStatus((s) => (s === "preparando" ? "executando" : s));
         const f = msg.forca ?? 0;
         const d = msg.deslocamento ?? 0;
         setMaxForca((p) => Math.max(p, f));
@@ -266,6 +304,8 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
     setError(null);
     const limite = num(form.limite_forca);
     if (limite != null && limite <= 0) { setError("O limite de força deve ser maior que zero."); return; }
+    if (finalizarTimer.current) clearTimeout(finalizarTimer.current);
+    setStatus("preparando");
     try {
       await startTest({
         sentido: form.sentido,
@@ -274,10 +314,12 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
         limite_forca: limite,
         area_seccao: num(form.area_seccao),
         comprimento_inicial: num(form.comprimento_inicial),
+        ...cadastro,
       });
       setRunning(true);
       startStream();
     } catch (e: any) {
+      setStatus("parado");
       setError(e?.response?.data?.detail ?? "Falha ao iniciar o ensaio.");
     }
   }
@@ -289,6 +331,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Falha ao enviar comando de parada.");
     } finally {
+      if (running) setStatus("finalizado");
       setRunning(false);
       stopStream();
       // O backend grava o ensaio ao fechar o stream; atualiza a lista em seguida.
@@ -313,6 +356,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       setError(e?.response?.data?.detail ?? "Falha ao zerar a célula de carga.");
     } finally {
       // Zerar a célula de carga também encerra o ensaio em curso.
+      if (running) setStatus("finalizado");
       setRunning(false);
       stopStream();
     }
@@ -351,7 +395,23 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       </div>
 
       {/* Setup + ações */}
+      <StatusEnsaioBar status={status} />
+
+      {/* Valores em tempo real */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtBig(forcaShown, 1)} unit="N"
+          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
+        <BigValue icon={<MoveHorizontal size={18} />} label="Deslocamento atual" value={fmtBig(deslocShown, 2)} unit="mm"
+          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
+        <BigValue icon={<Gauge size={18} />} label="Força máxima"
+          value={forcaMaxClp != null ? fmtBig(forcaMaxClp, 1) : maxForca > 0 ? maxForca.toFixed(1) : "—"} unit="N"
+          color="text-amber-300" sub={forcaMaxClp != null ? "calculada pelo CLP" : maxForca > 0 ? "pico lido nesta tela" : undefined} />
+      </div>
+
+
       <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
+        <CadastroTeste value={cadastro} onChange={setCadastro} tipo="tracao" onNorma={aplicarNorma} disabled={running} />
+        <hr className="border-border/60" />
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <NumberField label="Deslocamento programado" unit="mm" value={form.deslocamento}
             onChange={(v) => setForm((f) => ({ ...f, deslocamento: v }))} placeholder="ex: 50" />
@@ -397,7 +457,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
           </button>
           <button
             onClick={handleStop}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-500/90 text-white text-sm font-semibold
+            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-500/90 text-[#fff] text-sm font-semibold
                        hover:bg-red-500 transition-colors ring-1 ring-red-400/30"
           >
             <Square size={14} /> Parar
@@ -437,14 +497,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       )}
 
       {/* Estado / KPIs ao vivo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(forcaShown, 1, "N")}
-          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
-        <KpiCard icon={<MoveHorizontal size={20} />} label="Deslocamento atual" value={fmtNum(deslocShown, 2, "mm")}
-          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
-        <KpiCard icon={<Gauge size={20} />} label="Força máxima"
-          value={forcaMaxClp != null ? fmtNum(forcaMaxClp, 1, "N") : maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
-          color="text-amber-300" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={clsx(
           "rounded-xl px-5 py-4 flex items-center gap-3 border",
           ruptura ? "border-red-500/40 bg-red-500/10" : integro ? "border-emerald-500/40 bg-emerald-500/10" : "border-border bg-surface",

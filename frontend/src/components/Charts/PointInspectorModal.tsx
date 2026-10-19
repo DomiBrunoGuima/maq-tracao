@@ -132,7 +132,7 @@ export default function PointInspectorModal({ point, kpis, ihmParams, onClose }:
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#0d1020] border border-border rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-panel border border-border rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border/60">

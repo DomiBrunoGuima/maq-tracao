@@ -4,8 +4,10 @@ import asyncio
 import io
 import json
 import os
+import socket
 import sys
 import time
+import unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,18 +23,30 @@ for _stream in (sys.stdout, sys.stderr):
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
-from .database import EnsaioDB, EnsaioFlexaoDB, ParametrosIHMDB, SessionLocal, get_db
+from .database import (
+    ClienteDB,
+    EnsaioDB,
+    EnsaioFlexaoDB,
+    ParametrosIHMDB,
+    RelatorioDB,
+    SessionLocal,
+    get_db,
+)
 from .flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao
 from .flexao.calculator import calculate_kpis as calculate_kpis_flexao
 from .flexao.calculator import format_chart_data as format_chart_data_flexao
 from .models import (
+    Cliente,
+    ClienteIn,
     ConfigModel,
+    EnsaioUpdate,
+    RelatorioSummary,
     ControlSetpointsRequest,
     ControlStartRequest,
     ControlStatus,
@@ -54,7 +68,9 @@ from .modbus_client import (
     resolve_register,
 )
 from .simulator import SIM, SimController, SimReader, sim_capture
+from .normas import listar_normas
 from .parser import parse_csv
+from .qualidade import avaliar_qualidade, resumo_status
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
 
@@ -313,22 +329,44 @@ app.add_middleware(
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _clientes_por_id(db) -> dict[int, str]:
+    return {c.id: c.nome for c in db.query(ClienteDB.id, ClienteDB.nome).all()}
+
+
+def _ensaio_summary_fields(r: EnsaioDB, clientes: dict[int, str]) -> dict:
+    return dict(
+        id=r.id,
+        nome=r.nome,
+        filename=r.filename,
+        data_ensaio=r.data_ensaio,
+        num_amostras=r.num_amostras,
+        forca_max_N=r.forca_max_N,
+        tensao_max_MPa=r.tensao_max_MPa,
+        created_at=r.created_at,
+        cliente_id=r.cliente_id,
+        cliente_nome=clientes.get(r.cliente_id, "") if r.cliente_id else "",
+        amostra=r.amostra or "",
+        norma=r.norma or "",
+        operador=r.operador or "",
+    )
+
+
+def _setup_of(r) -> dict:
+    try:
+        return json.loads(r.setup_json) if getattr(r, "setup_json", None) else {}
+    except ValueError:
+        return {}
+
+
 @app.get("/api/ensaios", response_model=list[EnsaioSummary])
-def list_ensaios(db: Session = Depends(get_db)):
-    rows = db.query(EnsaioDB).order_by(EnsaioDB.created_at.desc()).all()
-    return [
-        EnsaioSummary(
-            id=r.id,
-            nome=r.nome,
-            filename=r.filename,
-            data_ensaio=r.data_ensaio,
-            num_amostras=r.num_amostras,
-            forca_max_N=r.forca_max_N,
-            tensao_max_MPa=r.tensao_max_MPa,
-            created_at=r.created_at,
-        )
-        for r in rows
-    ]
+def list_ensaios(cliente_id: int | None = None, db: Session = Depends(get_db)):
+    # Sem carregar data_json (a curva inteira) só para montar a lista
+    q = db.query(EnsaioDB).options(defer(EnsaioDB.data_json))
+    if cliente_id is not None:
+        q = q.filter(EnsaioDB.cliente_id == cliente_id)
+    rows = q.order_by(EnsaioDB.created_at.desc()).all()
+    clientes = _clientes_por_id(db)
+    return [EnsaioSummary(**_ensaio_summary_fields(r, clientes)) for r in rows]
 
 
 @app.get("/api/ensaios/{id}", response_model=EnsaioDetail)
@@ -337,15 +375,46 @@ def get_ensaio(id: int, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
     return EnsaioDetail(
-        id=r.id, nome=r.nome, filename=r.filename,
-        data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
-        forca_max_N=r.forca_max_N, tensao_max_MPa=r.tensao_max_MPa,
-        created_at=r.created_at, metadata_version=r.metadata_version,
+        **_ensaio_summary_fields(r, _clientes_por_id(db)),
+        metadata_version=r.metadata_version,
         metadata_equipment_id=r.metadata_equipment_id,
         metadata_code=r.metadata_code,
         alonga_ruptura_pct=r.alonga_ruptura_pct,
         tempo_ruptura_s=r.tempo_ruptura_s,
+        observacoes=r.observacoes or "",
+        setup=_setup_of(r),
     )
+
+
+@app.patch("/api/ensaios/{id}", response_model=EnsaioDetail)
+def update_ensaio(id: int, body: EnsaioUpdate, db: Session = Depends(get_db)):
+    r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio não encontrado")
+    if body.cliente_id is not None:
+        if not db.query(ClienteDB).filter(ClienteDB.id == body.cliente_id).first():
+            raise HTTPException(status_code=422, detail="Cliente não encontrado")
+        r.cliente_id = body.cliente_id
+    if body.limpar_cliente:
+        r.cliente_id = None
+    for campo in ("nome", "amostra", "norma", "operador", "observacoes"):
+        v = getattr(body, campo)
+        if v is not None:
+            setattr(r, campo, v.strip() if campo != "observacoes" else v)
+    db.commit()
+    return get_ensaio(id, db)
+
+
+@app.get("/api/ensaios/{id}/qualidade")
+def get_qualidade(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    ihm_params = _load_ihm_params_for(r.filename, db)
+    kpis = calculate_kpis(df, ihm_params=ihm_params)
+    itens = avaliar_qualidade(df, kpis, ihm_params)
+    return {"status": resumo_status(itens), "itens": itens}
 
 
 def _load_ihm_params_for(ensaio_filename: str, db) -> dict | None:
@@ -417,6 +486,7 @@ def reimport_ensaio(id: int, db: Session = Depends(get_db)):
     filepath = r.filepath
     if not filepath or not Path(filepath).exists():
         raise HTTPException(status_code=422, detail=f"Arquivo não encontrado: {filepath}")
+    cadastro = _cadastro_de(db, r)
     db.delete(r)
     db.commit()
     ok, msg = _load_csv(filepath)
@@ -425,7 +495,29 @@ def reimport_ensaio(id: int, db: Session = Depends(get_db)):
     new_r = db.query(EnsaioDB).filter(EnsaioDB.filename == Path(filepath).name).first()
     if not new_r:
         raise HTTPException(status_code=500, detail="Falha ao reimportar — erro desconhecido")
+    _restaurar_cadastro(db, new_r, cadastro)
     return {"id": new_r.id, "nome": new_r.nome, "num_amostras": new_r.num_amostras}
+
+
+_CAMPOS_CADASTRO = ("nome", "cliente_id", "amostra", "norma", "operador", "observacoes", "setup_json")
+
+
+def _cadastro_de(db, r: EnsaioDB) -> dict:
+    """Cadastro do teste que precisa sobreviver a uma reimportação do CSV. Os
+    relatórios do ensaio ficam marcados com o id negativo até a reimportação
+    (o SQLite pode reaproveitar ids apagados)."""
+    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == r.id).update({RelatorioDB.ensaio_id: -r.id})
+    return {"id": r.id, **{c: getattr(r, c) for c in _CAMPOS_CADASTRO}}
+
+
+def _restaurar_cadastro(db, new_r: EnsaioDB, cadastro: dict) -> None:
+    for c in _CAMPOS_CADASTRO:
+        if cadastro.get(c) not in (None, ""):
+            setattr(new_r, c, cadastro[c])
+    # Relatórios salvos continuam apontando para o ensaio reimportado
+    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == -cadastro["id"]).update(
+        {RelatorioDB.ensaio_id: new_r.id})
+    db.commit()
 
 
 @app.post("/api/reimport-all")
@@ -433,12 +525,18 @@ def reimport_all(db: Session = Depends(get_db)):
     """Apaga todos os ensaios do banco e os re-importa a partir dos arquivos CSV."""
     rows = db.query(EnsaioDB).all()
     filepaths = [r.filepath for r in rows if r.filepath and Path(r.filepath).exists()]
+    cadastros = {Path(r.filepath).name: _cadastro_de(db, r) for r in rows
+                 if r.filepath and Path(r.filepath).exists()}
     for r in rows:
-        db.delete(r)
+        if r.filepath and Path(r.filepath).exists():
+            db.delete(r)
     db.commit()
     results = []
     for fp in filepaths:
         ok, msg = _load_csv(fp)
+        new_r = db.query(EnsaioDB).filter(EnsaioDB.filename == Path(fp).name).first()
+        if ok and new_r and Path(fp).name in cadastros:
+            _restaurar_cadastro(db, new_r, cadastros[Path(fp).name])
         results.append({"file": Path(fp).name, "ok": ok, "msg": msg})
     return {"reimported": len([r for r in results if r["ok"]]), "details": results}
 
@@ -465,7 +563,298 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
                     print(f"[relatorio] falha ao carregar ensaio {cid} para comparativo: {exc}", flush=True)
 
     html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series)
-    return HTMLResponse(content=html)
+
+    # Guarda o relatório gerado para abrir/buscar depois
+    cliente_id = req.cliente_id or r.cliente_id
+    cliente_nome = req.cliente.nome.strip()
+    if not cliente_nome and cliente_id:
+        c = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+        cliente_nome = c.nome if c else ""
+    req_dump = req.model_dump()
+    # A foto da amostra pesa e já está no HTML; o logo fica para reaproveitar
+    # no próximo relatório.
+    req_dump.get("amostra", {}).pop("imagem_data_url", None)
+    rel = RelatorioDB(
+        ensaio_id=r.id,
+        cliente_id=cliente_id,
+        numero=req.empresa.numero_relatorio.strip(),
+        titulo=r.nome,
+        cliente_nome=cliente_nome,
+        request_json=json.dumps(req_dump, ensure_ascii=False),
+        html=html,
+    )
+    db.add(rel)
+    db.commit()
+    return HTMLResponse(content=html, headers={"X-Relatorio-Id": str(rel.id)})
+
+
+@app.get("/api/ensaios/{id}/campos-relatorio")
+def campos_relatorio(id: int, db: Session = Depends(get_db)):
+    """Campos do relatório preenchidos automaticamente a partir do ensaio (setup,
+    parâmetros da IHM, cliente cadastrado e último relatório gerado)."""
+    r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio não encontrado")
+    setup = _setup_of(r)
+    ihm = _load_ihm_params_for(r.filename, db) or {}
+    df = pd.read_json(io.StringIO(r.data_json))
+    kpis = calculate_kpis(df, ihm_params=ihm or None)
+
+    def _n(v, d=2):
+        return "" if v in (None, "") else f"{float(v):.{d}f}".replace(".", ",")
+
+    velocidade = setup.get("velocidade") or kpis.get("velocidade_ihm")
+    l0 = setup.get("comprimento_inicial") or ihm.get("comprimento_inicial") or kpis.get("comprimento_inicial_mm")
+    condicoes = {
+        "data_realizacao": r.data_ensaio or "",
+        "comprimento_inicial_mm": _n(l0),
+        "velocidade_ensaio": _n(velocidade),
+        "norma_referencia": r.norma or "",
+        "num_corpos_prova": "1",
+    }
+    norma = next((n for n in listar_normas() if n["codigo"] == (r.norma or "")), None)
+    if norma:
+        condicoes["tipo_corpo_prova"] = norma.get("corpo_prova") or ""
+        if norma.get("distancia_garras_mm"):
+            condicoes["distancia_garras_mm"] = _n(norma["distancia_garras_mm"], 0)
+
+    cliente = None
+    if r.cliente_id:
+        c = db.query(ClienteDB).filter(ClienteDB.id == r.cliente_id).first()
+        if c:
+            cliente = {
+                "nome": c.nome, "contato": c.contato, "email_cliente": c.email,
+                "telefone_cliente": c.telefone, "endereco": c.endereco, "bairro": c.bairro,
+                "cidade_uf": c.cidade_uf, "cep": c.cep,
+            }
+
+    # Dados da empresa e assinaturas costumam se repetir: reaproveita o último relatório
+    ultimo = db.query(RelatorioDB).order_by(RelatorioDB.created_at.desc()).first()
+    anterior: dict = {}
+    if ultimo and ultimo.request_json:
+        try:
+            anterior = json.loads(ultimo.request_json)
+        except ValueError:
+            anterior = {}
+    ano = time.strftime("%Y")
+    n_ano = db.query(RelatorioDB).filter(RelatorioDB.created_at >= f"{ano}-01-01").count()
+
+    return {
+        "cliente_id": r.cliente_id,
+        "cliente": cliente,
+        "amostra": {"id_interno": r.amostra or "", "id_cliente": ""},
+        "condicoes": condicoes,
+        "empresa": {k: v for k, v in (anterior.get("empresa") or {}).items() if k != "numero_relatorio"},
+        "numero_relatorio_sugerido": f"{n_ano + 1:04d}/{ano}",
+        "assinaturas": anterior.get("assinaturas") or [],
+        "equipamentos": (anterior.get("condicoes") or {}).get("equipamentos", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Relatórios salvos
+# ---------------------------------------------------------------------------
+
+def _relatorio_summary(rel: RelatorioDB) -> RelatorioSummary:
+    return RelatorioSummary(
+        id=rel.id, ensaio_id=rel.ensaio_id, cliente_id=rel.cliente_id,
+        numero=rel.numero or "", titulo=rel.titulo or "",
+        cliente_nome=rel.cliente_nome or "", created_at=rel.created_at,
+    )
+
+
+@app.get("/api/relatorios", response_model=list[RelatorioSummary])
+def list_relatorios(cliente_id: int | None = None, ensaio_id: int | None = None,
+                    db: Session = Depends(get_db)):
+    q = db.query(RelatorioDB).options(defer(RelatorioDB.html), defer(RelatorioDB.request_json))
+    if cliente_id is not None:
+        q = q.filter(RelatorioDB.cliente_id == cliente_id)
+    if ensaio_id is not None:
+        q = q.filter(RelatorioDB.ensaio_id == ensaio_id)
+    return [_relatorio_summary(x) for x in q.order_by(RelatorioDB.created_at.desc()).all()]
+
+
+@app.get("/api/relatorios/{id}/html")
+def get_relatorio_html(id: int, download: bool = False, db: Session = Depends(get_db)):
+    rel = db.query(RelatorioDB).filter(RelatorioDB.id == id).first()
+    if not rel:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="relatorio_{rel.id}.html"'
+    return HTMLResponse(content=rel.html or "", headers=headers)
+
+
+@app.delete("/api/relatorios/{id}", status_code=204)
+def delete_relatorio(id: int, db: Session = Depends(get_db)):
+    rel = db.query(RelatorioDB).filter(RelatorioDB.id == id).first()
+    if not rel:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    db.delete(rel)
+    db.commit()
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Clientes
+# ---------------------------------------------------------------------------
+
+def _cliente_out(c: ClienteDB, db) -> Cliente:
+    return Cliente(
+        id=c.id, created_at=c.created_at,
+        **{k: getattr(c, k) or "" for k in ClienteIn.model_fields},
+        num_ensaios=db.query(EnsaioDB).filter(EnsaioDB.cliente_id == c.id).count(),
+        num_relatorios=db.query(RelatorioDB).filter(RelatorioDB.cliente_id == c.id).count(),
+    )
+
+
+@app.get("/api/clientes", response_model=list[Cliente])
+def list_clientes(db: Session = Depends(get_db)):
+    return [_cliente_out(c, db) for c in db.query(ClienteDB).order_by(ClienteDB.nome).all()]
+
+
+@app.post("/api/clientes", response_model=Cliente, status_code=201)
+def create_cliente(body: ClienteIn, db: Session = Depends(get_db)):
+    if not body.nome.strip():
+        raise HTTPException(status_code=422, detail="Informe o nome do cliente.")
+    c = ClienteDB(**{k: (v.strip() if isinstance(v, str) else v) for k, v in body.model_dump().items()})
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _cliente_out(c, db)
+
+
+@app.put("/api/clientes/{id}", response_model=Cliente)
+def update_cliente(id: int, body: ClienteIn, db: Session = Depends(get_db)):
+    c = db.query(ClienteDB).filter(ClienteDB.id == id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    if not body.nome.strip():
+        raise HTTPException(status_code=422, detail="Informe o nome do cliente.")
+    for k, v in body.model_dump().items():
+        setattr(c, k, v.strip() if isinstance(v, str) else v)
+    db.commit()
+    return _cliente_out(c, db)
+
+
+@app.delete("/api/clientes/{id}", status_code=204)
+def delete_cliente(id: int, db: Session = Depends(get_db)):
+    """Remove o cliente; ensaios e relatórios dele continuam, só sem cliente."""
+    c = db.query(ClienteDB).filter(ClienteDB.id == id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    for model in (EnsaioDB, EnsaioFlexaoDB, RelatorioDB):
+        db.query(model).filter(model.cliente_id == id).update({model.cliente_id: None})
+    db.delete(c)
+    db.commit()
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Busca inteligente (clientes, testes e relatórios)
+# ---------------------------------------------------------------------------
+
+def _norm(texto: str) -> str:
+    """Minúsculas e sem acento, para 'tracao' achar 'Tração'."""
+    t = unicodedata.normalize("NFKD", texto or "")
+    return "".join(ch for ch in t if not unicodedata.combining(ch)).lower()
+
+
+def _pontuar(termos: list[str], titulo: str, campos: str) -> int:
+    """0 se algum termo não aparece; senão, mais pontos para termos no título e
+    para palavras que começam com o termo."""
+    t_norm, c_norm = _norm(titulo), _norm(campos)
+    total = 0
+    for termo in termos:
+        if termo in t_norm:
+            total += 3 + (2 if any(w.startswith(termo) for w in t_norm.split()) else 0)
+        elif termo in c_norm:
+            total += 1 + (1 if any(w.startswith(termo) for w in c_norm.split()) else 0)
+        else:
+            return 0
+    return total
+
+
+@app.get("/api/busca")
+def busca(q: str = "", tipo: str = "todos", cliente_id: int | None = None,
+          limite: int = 50, db: Session = Depends(get_db)):
+    """Busca por várias palavras ao mesmo tempo (todas precisam aparecer), sem
+    diferenciar acento e maiúscula, em clientes, ensaios (tração e flexão) e
+    relatórios. tipo: todos | cliente | teste | relatorio."""
+    termos = [_norm(t) for t in q.split() if t.strip()]
+    clientes = {c.id: c for c in db.query(ClienteDB).all()}
+    res: list[dict] = []
+
+    def _add(score, item):
+        if score or not termos:
+            item["score"] = score
+            res.append(item)
+
+    if tipo in ("todos", "cliente"):
+        for c in clientes.values():
+            if cliente_id is not None and c.id != cliente_id:
+                continue
+            campos = " ".join([c.documento, c.contato, c.email, c.telefone, c.cidade_uf, c.observacoes or ""])
+            _add(_pontuar(termos, c.nome, campos), {
+                "tipo": "cliente", "id": c.id, "titulo": c.nome,
+                "subtitulo": " · ".join(x for x in (c.contato, c.cidade_uf) if x),
+                "data": c.created_at.isoformat() if c.created_at else None,
+            })
+
+    if tipo in ("todos", "teste"):
+        for modo, model in (("tracao", EnsaioDB), ("flexao", EnsaioFlexaoDB)):
+            q_ens = db.query(model).options(defer(model.data_json))
+            if cliente_id is not None:
+                q_ens = q_ens.filter(model.cliente_id == cliente_id)
+            for e in q_ens.all():
+                cli = clientes.get(e.cliente_id)
+                titulo = e.nome or e.filename
+                campos = " ".join(str(x) for x in (
+                    e.filename, e.data_ensaio, e.amostra or "", e.norma or "",
+                    e.operador or "", e.observacoes or "", cli.nome if cli else "",
+                    "tracao" if modo == "tracao" else "flexao",
+                ))
+                _add(_pontuar(termos, titulo, campos), {
+                    "tipo": "teste", "modo": modo, "id": e.id, "titulo": titulo,
+                    "subtitulo": " · ".join(x for x in (
+                        "Tração" if modo == "tracao" else "Flexão",
+                        cli.nome if cli else "", e.amostra or "", e.norma or "",
+                        ("Fmáx " + f"{e.forca_max_N / 1000:.2f}".replace(".", ",") + " kN") if e.forca_max_N else "",
+                    ) if x),
+                    "data": e.created_at.isoformat() if e.created_at else None,
+                    "cliente_id": e.cliente_id,
+                })
+
+    if tipo in ("todos", "relatorio"):
+        q_rel = db.query(RelatorioDB).options(defer(RelatorioDB.html), defer(RelatorioDB.request_json))
+        if cliente_id is not None:
+            q_rel = q_rel.filter(RelatorioDB.cliente_id == cliente_id)
+        for rel in q_rel.all():
+            titulo = f"Relatório {rel.numero}" if rel.numero else f"Relatório #{rel.id}"
+            campos = " ".join([rel.titulo or "", rel.cliente_nome or "", "relatorio",
+                               rel.created_at.strftime("%d/%m/%Y") if rel.created_at else ""])
+            _add(_pontuar(termos, titulo, campos), {
+                "tipo": "relatorio", "id": rel.id, "titulo": titulo,
+                "subtitulo": " · ".join(x for x in (rel.cliente_nome, rel.titulo) if x),
+                "data": rel.created_at.isoformat() if rel.created_at else None,
+                "ensaio_id": rel.ensaio_id, "cliente_id": rel.cliente_id,
+            })
+
+    res.sort(key=lambda x: (-x["score"], x["data"] and -_ts(x["data"]) or 0))
+    return {"total": len(res), "resultados": res[:max(1, min(limite, 500))]}
+
+
+def _ts(iso: str) -> float:
+    from datetime import datetime as _dt
+    try:
+        return _dt.fromisoformat(iso).timestamp()
+    except ValueError:
+        return 0.0
+
+
+@app.get("/api/normas")
+def get_normas(tipo: str | None = None):
+    return listar_normas(tipo)
 
 
 @app.get("/api/config")
@@ -546,9 +935,59 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/clp/conexao")
+def clp_conexao():
+    """Indicador de conexão: tenta ler a força atual (prova que a IHM/CLP responde
+    em Modbus); sem esse registrador mapeado, testa só a porta TCP."""
+    ip, port, timeout = _clp_conn()
+    if _sim_enabled():
+        return {"online": True, "ip": ip or "simulador", "port": port, "simulador": True,
+                "latencia_ms": 0, "motivo": ""}
+    if not ip:
+        return {"online": False, "ip": "", "port": port, "simulador": False,
+                "latencia_ms": None, "motivo": "IP não configurado"}
+    t0 = time.perf_counter()
+    forca = [r for r in _read_registers_by_role() if r.get("role") == "forca_atual"]
+    motivo = ""
+    if forca:
+        data = capture_registers(ip, port, min(timeout, 2), forca)
+        online = data is not None and data.get(forca[0]["name"]) is not None
+        if not online:
+            motivo = "sem resposta Modbus" if data is None else "registrador de força sem leitura"
+    else:
+        try:
+            with socket.create_connection((ip, port), timeout=min(timeout, 2)):
+                online = True
+        except OSError as exc:
+            online, motivo = False, str(exc)
+    return {
+        "online": online, "ip": ip, "port": port, "simulador": False,
+        "latencia_ms": round((time.perf_counter() - t0) * 1000) if online else None,
+        "motivo": motivo,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Controle da máquina — escrita de comandos/setpoints no CLP
 # ---------------------------------------------------------------------------
+
+def _aplicar_cadastro(db, rec, info: dict | None) -> None:
+    """Preenche automaticamente o ensaio recém-gravado com o cadastro informado no
+    Controle (cliente, amostra, norma, operador e setup usado)."""
+    if not info:
+        return
+    try:
+        cid = info.get("cliente_id")
+        if cid and db.query(ClienteDB).filter(ClienteDB.id == cid).first():
+            rec.cliente_id = cid
+        for campo in ("amostra", "norma", "operador"):
+            if info.get(campo) and hasattr(rec, campo):
+                setattr(rec, campo, info[campo])
+        if info.get("setup") and hasattr(rec, "setup_json"):
+            rec.setup_json = json.dumps(info["setup"])
+        db.commit()
+    except Exception as exc:
+        print(f"[control] Falha ao gravar cadastro do ensaio: {exc}", flush=True)
 
 def _apply_setpoints(ctrl: ModbusController, *, velocidade, deslocamento, limite_forca) -> dict:
     """Escreve apenas os setpoints numéricos (ignora os None e os roles não configurados).
@@ -609,8 +1048,16 @@ def control_start(req: ControlStartRequest):
             _config["area_seccao_mm2"] = req.area_seccao
         if req.comprimento_inicial is not None:
             _config["comprimento_inicial_mm"] = req.comprimento_inicial
-        if req.area_seccao is not None or req.comprimento_inicial is not None:
-            _save_config(_config)
+        _config["proximo_ensaio"] = {
+            "cliente_id": req.cliente_id, "amostra": req.amostra.strip(),
+            "norma": req.norma.strip(), "operador": req.operador.strip(),
+            "setup": {
+                "sentido": req.sentido, "velocidade": req.velocidade,
+                "deslocamento": req.deslocamento, "limite_forca": req.limite_forca,
+                "area_seccao": req.area_seccao, "comprimento_inicial": req.comprimento_inicial,
+            },
+        }
+        _save_config(_config)
 
         # Setpoints escritos → pulso de sentido (momentâneo) → pulso de início.
         sent = _pulse_sentido(ctrl, req.sentido, pulse_ms)
@@ -820,6 +1267,7 @@ async def control_stream(request: Request):
                 return None
             params = {"area_seccao": area, "comprimento_inicial": l0} if (area > 0 and l0 > 0) else None
             rec = persist_ensaio(db, metadata, df, filename=filename, params=params, source_ip=ip)
+            _aplicar_cadastro(db, rec, _config.get("proximo_ensaio"))
             return rec.id
         except Exception as exc:
             print(f"[control] Falha ao persistir ensaio: {exc}", flush=True)
@@ -1112,6 +1560,10 @@ def flexao_control_start(req: FlexaoControlStartRequest):
         ):
             if val is not None:
                 _config[cfg_key] = val
+        _config["proximo_ensaio_flexao"] = {
+            "cliente_id": req.cliente_id, "amostra": req.amostra.strip(),
+            "operador": req.operador.strip(),
+        }
         _save_config(_config)
 
         # Setpoints escritos → pulso de sentido (momentâneo) → pulso de início.
@@ -1224,6 +1676,7 @@ async def flexao_control_stream(request: Request):
             if int(df["Forca_N"].dropna().shape[0]) < 10:
                 return None
             rec = persist_ensaio_flexao(db, metadata, df, filename=filename, geom=geom, source_ip=ip)
+            _aplicar_cadastro(db, rec, _config.get("proximo_ensaio_flexao"))
             return rec.id
         except Exception as exc:
             print(f"[flexao.control] Falha ao persistir ensaio: {exc}", flush=True)

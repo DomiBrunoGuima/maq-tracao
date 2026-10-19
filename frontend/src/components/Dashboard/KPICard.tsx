@@ -14,7 +14,7 @@ export default function KPICard({ label, value, sub, highlight, compact }: Props
       <div
         className={clsx(
           "relative rounded-lg p-3 flex flex-col gap-1 overflow-hidden",
-          "bg-[#0d1020] border",
+          "bg-panel border",
           highlight ? "border-rupture/30" : "border-border/60"
         )}
       >

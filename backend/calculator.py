@@ -14,6 +14,56 @@ _PRE_UTS = frozenset([
 ])
 
 
+def elastic_fit(df: pd.DataFrame) -> dict | None:
+    """Reta de regressão σ = E·ε + b no trecho classificado como elástico linear.
+
+    Usa as mesmas colunas do gráfico σ-ε (Tensao_Pa em MPa, Deform_Along
+    adimensional), então a reta pode ser desenhada direto sobre a curva. Devolve
+    inclinação (E, MPa), intercepto, R², nº de pontos e os limites do trecho."""
+    if "fase" not in df.columns:
+        return None
+    el = df[df["fase"] == "elastico_linear"]
+    x = el["Deform_Along"].to_numpy(dtype=float)
+    y = el["Tensao_Pa"].to_numpy(dtype=float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    if len(x) < 3 or float(np.std(x)) == 0:
+        return None
+    slope, intercept = np.polyfit(x, y, 1)
+    pred = slope * x + intercept
+    ss_res = float(np.sum((y - pred) ** 2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    t = el["elapsed_seconds"].to_numpy(dtype=float)[ok] if "elapsed_seconds" in el.columns else None
+    return _clean({
+        "inclinacao": float(slope),
+        "intercepto": float(intercept),
+        "r2": r2,
+        "n_pontos": int(len(x)),
+        "eps_ini": float(x.min()),
+        "eps_fim": float(x.max()),
+        "sigma_ini": float(slope * x.min() + intercept),
+        "sigma_fim": float(slope * x.max() + intercept),
+        "t_ini": float(t.min()) if t is not None and len(t) else None,
+        "t_fim": float(t.max()) if t is not None and len(t) else None,
+    })
+
+
+def _rp02(df: pd.DataFrame, fit: dict | None) -> float | None:
+    """Limite de escoamento convencional Rp0,2: σ onde a curva cruza a reta elástica
+    deslocada de 0,2 % de deformação."""
+    if not fit or not fit.get("inclinacao") or fit["inclinacao"] <= 0:
+        return None
+    E, b = fit["inclinacao"], fit["intercepto"]
+    cur = df[~df["fase"].isin(["pos_ruptura"])] if "fase" in df.columns else df
+    eps = cur["Deform_Along"].to_numpy(dtype=float)
+    sig = cur["Tensao_Pa"].to_numpy(dtype=float)
+    after = eps > fit["eps_fim"]
+    diff = sig - (E * (eps - 0.002) + b)
+    idx = np.where(after & np.isfinite(diff) & (diff <= 0))[0]
+    return float(sig[idx[0]]) if idx.size else None
+
+
 def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
     valid_forca = df["Forca_N"].dropna()
     if valid_forca.empty:
@@ -138,6 +188,16 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
                 velocidade_ihm = float(ihm_params[k])
                 break
 
+    fit = elastic_fit(df)
+    rup = df[df["fase"] == "ruptura"] if "fase" in df.columns else df.iloc[0:0]
+    ruptura_detectada = len(rup) > 0
+    forca_ruptura = float(rup["Forca_N"].iloc[0]) if ruptura_detectada else None
+    desl_ruptura_real = float(rup["Deslocamento"].iloc[0]) if ruptura_detectada else None
+    alonga_ruptura_real = (
+        (desl_ruptura_real / comprimento_inicial_mm) * 100
+        if ruptura_detectada and comprimento_inicial_mm else None
+    )
+
     return _clean({
         "forca_max_N": forca_max,
         "forca_max_kN": forca_max / 1000,
@@ -158,6 +218,14 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
         "alonga_calc_pct": alonga_calc_pct,
         "modulo_regressao_MPa": modulo_regressao_MPa,
         "velocidade_ihm": velocidade_ihm,
+        "r2_elastico": fit["r2"] if fit else None,
+        "modulo_trecho_elastico_MPa": fit["inclinacao"] if fit else None,
+        "pontos_trecho_elastico": fit["n_pontos"] if fit else None,
+        "tensao_rp02_MPa": _rp02(df, fit),
+        "ruptura_detectada": ruptura_detectada,
+        "forca_ruptura_N": forca_ruptura,
+        "deslocamento_ruptura_mm": desl_ruptura_real,
+        "alonga_ruptura_real_pct": alonga_ruptura_real,
     })
 
 
@@ -232,4 +300,46 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             "Deslocamento": rupture_row["Deslocamento"],
         }),
         "E_regressao": E_regressao,
+        "elastic_fit": elastic_fit(df_plot),
+        "fases": resumo_fases(df_plot),
     }
+
+
+FASE_LABELS = {
+    "acomodacao": "Acomodação",
+    "elastico_linear": "Elástico linear",
+    "escoamento_superior": "Escoamento superior",
+    "patamar_escoamento": "Patamar de escoamento",
+    "encruamento": "Encruamento",
+    "estriccao": "Estricção",
+    "ruptura": "Ruptura",
+    "pos_ruptura": "Pós-ruptura",
+    "carregamento": "Carregamento",
+}
+
+
+def resumo_fases(df: pd.DataFrame) -> list[dict]:
+    """Trechos contínuos de cada estágio, na ordem do ensaio, com tempo, força e
+    deslocamento de início/fim — para colorir o gráfico e listar os estágios."""
+    if "fase" not in df.columns or df.empty:
+        return []
+    fase = df["fase"].astype(str).to_numpy()
+    out: list[dict] = []
+    start = 0
+    for i in range(1, len(fase) + 1):
+        if i == len(fase) or fase[i] != fase[start]:
+            seg = df.iloc[start:i]
+            out.append(_clean({
+                "fase": fase[start],
+                "rotulo": FASE_LABELS.get(fase[start], fase[start]),
+                "n_pontos": int(i - start),
+                "t_ini": seg["elapsed_seconds"].iloc[0],
+                "t_fim": seg["elapsed_seconds"].iloc[-1],
+                "eps_ini": seg["Deform_Along"].iloc[0],
+                "eps_fim": seg["Deform_Along"].iloc[-1],
+                "d_ini": seg["Deslocamento"].iloc[0],
+                "d_fim": seg["Deslocamento"].iloc[-1],
+                "forca_max": seg["Forca_N"].max(),
+            }))
+            start = i
+    return out

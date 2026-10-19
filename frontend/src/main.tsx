@@ -3,6 +3,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { aplicarTemaInicial } from "./hooks/useTheme";
+
+// Antes do primeiro render, para não piscar o tema escuro
+aplicarTemaInicial();
 
 const queryClient = new QueryClient({
   defaultOptions: {

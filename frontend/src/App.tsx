@@ -5,13 +5,17 @@ import ComparisonView from "./components/Comparison/ComparisonView";
 import ConfigPanel from "./components/Config/ConfigPanel";
 import ControlPanel from "./components/Control/ControlPanel";
 import FlexaoView from "./components/Flexao/FlexaoView";
+import ClientesView from "./components/Cadastro/ClientesView";
+import RelatoriosView from "./components/Cadastro/RelatoriosView";
 
-type View = "dashboard" | "comparison" | "config" | "control" | "flexao";
+type View = "dashboard" | "comparison" | "config" | "control" | "flexao" | "clientes" | "relatorios";
 
 export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [view, setView] = useState<View>("dashboard");
+  const [clienteId, setClienteId] = useState<number | null>(null);
+  const [flexaoId, setFlexaoId] = useState<number | null>(null);
 
   function handleSelectEnsaio(id: number) {
     setSelectedId(id);
@@ -34,7 +38,12 @@ export default function App() {
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
         onViewControl={() => setView("control")}
-        onViewFlexao={() => setView("flexao")}
+        onViewFlexao={() => { setFlexaoId(null); setView("flexao"); }}
+        onViewClientes={() => { setClienteId(null); setView("clientes"); }}
+        onViewRelatorios={() => setView("relatorios")}
+        onOpenCliente={(id) => { setClienteId(id); setView("clientes"); }}
+        onOpenFlexao={(id) => { setFlexaoId(id); setView("flexao"); }}
+        onSetCompare={(ids) => { setCompareIds(ids); setView("comparison"); }}
         currentView={view}
       />
 
@@ -52,7 +61,18 @@ export default function App() {
           <ControlPanel onOpenEnsaio={handleSelectEnsaio} />
         )}
         {view === "flexao" && (
-          <FlexaoView />
+          <FlexaoView key={flexaoId ?? "novo"} initialEnsaioId={flexaoId} />
+        )}
+        {view === "clientes" && (
+          <ClientesView
+            key={clienteId ?? "lista"}
+            initialId={clienteId}
+            onOpenEnsaio={handleSelectEnsaio}
+            onCompare={(ids) => { setCompareIds(ids); setView("comparison"); }}
+          />
+        )}
+        {view === "relatorios" && (
+          <RelatoriosView onOpenEnsaio={handleSelectEnsaio} />
         )}
       </main>
     </div>

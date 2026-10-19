@@ -34,7 +34,20 @@ import {
 } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao } from "../../hooks/useFlexao";
-import type { FlexaoFrame } from "../../types";
+import type { FlexaoFrame, Norma } from "../../types";
+import { BigValue, StatusEnsaioBar, fmtBig, type StatusEnsaio } from "../Common/Status";
+import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
+
+const CADASTRO_KEY = "maq-tracao.cadastro-flexao";
+
+function cadastroSalvo(): CadastroForm {
+  try {
+    const raw = localStorage.getItem(CADASTRO_KEY);
+    return raw ? { ...CADASTRO_VAZIO, ...JSON.parse(raw) } : { ...CADASTRO_VAZIO, norma: "ISO 178" };
+  } catch {
+    return { ...CADASTRO_VAZIO, norma: "ISO 178" };
+  }
+}
 
 const MAX_BUFFER = 4000;
 const DISPLAY_WINDOW = 600;
@@ -60,7 +73,6 @@ interface SetupForm {
   sentido: Sentido;
 }
 
-const NORMAS = ["ISO 178", "ASTM D790"];
 
 function fmtNum(v: number | null | undefined, dec = 2, unit = ""): string {
   if (v == null) return "—";
@@ -118,7 +130,7 @@ function LiveChart({ data, dataKey, color, unit, label, yLabel }: {
             label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 12, fill: "#475569", fontSize: 9 }} />
           <Tooltip content={({ active, payload, label: l }: any) =>
             !active || !payload?.length ? null : (
-              <div className="bg-[#0a0c14] border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
+              <div className="bg-tooltip border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
                 <p className="text-muted mb-1">t = <span className="text-white">{(Number(l) / 1000).toFixed(2)} s</span></p>
                 <p className="text-white">{Number(payload[0].value).toFixed(2)} {unit}</p>
               </div>
@@ -149,7 +161,7 @@ function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label }: {
             label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 8, fill: "#475569", fontSize: 10 }} />
           <Tooltip content={({ active, payload }: any) =>
             !active || !payload?.length ? null : (
-              <div className="bg-[#0a0c14] border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
+              <div className="bg-tooltip border border-border rounded-xl px-3 py-2 shadow-2xl text-xs font-mono">
                 <p className="text-muted">{xLabel}: <span className="text-white">{Number(payload[0].payload[xKey]).toFixed(4)}</span></p>
                 <p className="text-white">{yLabel}: {Number(payload[0].payload[yKey]).toFixed(2)}</p>
               </div>
@@ -163,9 +175,9 @@ function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label }: {
 
 // ── Aba de resultados: lista + KPIs + curvas ────────────────────────────────
 
-function EnsaiosTab() {
+function EnsaiosTab({ initialId }: { initialId?: number | null }) {
   const { data: ensaios, isLoading } = useEnsaiosFlexao();
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(initialId ?? null);
   const { data: kpis } = useKPIsFlexao(selected);
   const { data: curvas } = useCurvasFlexao(selected);
   const delMut = useDeleteEnsaioFlexao();
@@ -265,6 +277,23 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
   const [error, setError] = useState<string | null>(null);
   // Leitura ao vivo mesmo com o ensaio parado (conferir condições antes de iniciar).
   const [live, setLive] = useState<{ forca: number | null; desloc: number | null }>({ forca: null, desloc: null });
+  const [status, setStatus] = useState<StatusEnsaio>("parado");
+  const [cadastro, setCadastro] = useState<CadastroForm>(cadastroSalvo);
+
+  useEffect(() => {
+    try { localStorage.setItem(CADASTRO_KEY, JSON.stringify(cadastro)); } catch { /* ignore */ }
+  }, [cadastro]);
+
+  function aplicarNorma(n: Norma) {
+    setForm((f) => ({
+      ...f,
+      norma: n.codigo,
+      velocidade: n.velocidade_mm_min != null ? String(n.velocidade_mm_min) : f.velocidade,
+      largura: n.largura_mm != null ? String(n.largura_mm) : f.largura,
+      espessura: n.espessura_mm != null ? String(n.espessura_mm) : f.espessura,
+      span: n.span_mm != null ? String(n.span_mm) : f.span,
+    }));
+  }
 
   useEffect(() => {
     if (!config) return;
@@ -296,14 +325,20 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
       try {
         const msg: FlexaoFrame = JSON.parse(e.data);
         setFrame(msg);
-        if (msg.error) { setError(msg.error); return; }
+        if (msg.error) {
+          setError(msg.error);
+          if (msg.error !== "reconnecting") setStatus("parado");
+          return;
+        }
         if (msg.fim_ensaio || msg.saved_ensaio_id != null) {
           if (msg.saved_ensaio_id != null) setSavedId(msg.saved_ensaio_id);
+          setStatus("finalizado");
           setRunning(false);
           qc.invalidateQueries({ queryKey: ["flexao", "ensaios"] });
           stopStream();
           return;
         }
+        if (msg.recording) setStatus((s) => (s === "preparando" ? "executando" : s));
         const f = msg.forca ?? 0;
         const d = msg.deslocamento ?? 0;
         setMaxForca((p) => Math.max(p, f));
@@ -355,6 +390,7 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
       const v = num(form[k]);
       if (v == null || v <= 0) { setError(`Informe a ${label} (mm) maior que zero.`); return; }
     }
+    setStatus("preparando");
     try {
       await startFlexaoTest({
         sentido: form.sentido,
@@ -364,11 +400,15 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
         largura_mm: num(form.largura),
         espessura_mm: num(form.espessura),
         span_mm: num(form.span),
-        norma: form.norma,
+        norma: cadastro.norma || form.norma,
+        cliente_id: cadastro.cliente_id,
+        amostra: cadastro.amostra,
+        operador: cadastro.operador,
       });
       setRunning(true);
       startStream();
     } catch (e: any) {
+      setStatus("parado");
       setError(e?.response?.data?.detail ?? "Falha ao iniciar o ensaio de flexão.");
     }
   }
@@ -377,7 +417,7 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
     setError(null);
     try { await stopFlexaoTest(); }
     catch (e: any) { setError(e?.response?.data?.detail ?? "Falha ao enviar comando de parada."); }
-    finally { setRunning(false); stopStream(); }
+    finally { if (running) setStatus("finalizado"); setRunning(false); stopStream(); }
   }
 
   async function handleZerarDeslocamento() {
@@ -391,7 +431,7 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
     try { await zerarCelulaFlexao(); }
     catch (e: any) { setError(e?.response?.data?.detail ?? "Falha ao zerar a célula de carga."); }
     // Zerar a célula de carga também encerra o ensaio em curso.
-    finally { setRunning(false); stopStream(); }
+    finally { if (running) setStatus("finalizado"); setRunning(false); stopStream(); }
   }
 
   return (
@@ -414,7 +454,21 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
         </div>
       </div>
 
+      <StatusEnsaioBar status={status} />
+
+      {/* Valores em tempo real */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtBig(forcaShown, 1)} unit="N"
+          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
+        <BigValue icon={<MoveHorizontal size={18} />} label="Deflexão atual" value={fmtBig(deslocShown, 2)} unit="mm"
+          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
+        <BigValue icon={<Gauge size={18} />} label="Força máxima" value={maxForca > 0 ? maxForca.toFixed(1) : "—"} unit="N"
+          color="text-amber-300" />
+      </div>
+
       <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
+        <CadastroTeste value={cadastro} onChange={setCadastro} tipo="flexao" onNorma={aplicarNorma} disabled={running} />
+        <hr className="border-border/60" />
         <p className="text-xs font-medium text-muted uppercase tracking-wide">Geometria do corpo de prova (flexão 3 pontos)</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <NumberField label="Largura b" unit="mm" value={form.largura}
@@ -429,12 +483,6 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
             onChange={(v) => setForm((f) => ({ ...f, deslocamento: v }))} placeholder="ex: 20" />
           <NumberField label="Limite de força" unit="N" value={form.limite_forca}
             onChange={(v) => setForm((f) => ({ ...f, limite_forca: v }))} placeholder="opcional" />
-          <div>
-            <span className="text-xs font-medium text-muted block mb-1.5">Norma</span>
-            <select value={form.norma} onChange={(e) => setForm((f) => ({ ...f, norma: e.target.value }))} className={inputCls}>
-              {NORMAS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
           <div>
             <span className="text-xs font-medium text-muted block mb-1.5">Sentido</span>
             <div className="grid grid-cols-2 gap-2">
@@ -459,7 +507,7 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
             <Play size={15} /> Iniciar ensaio
           </button>
           <button onClick={handleStop}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-500/90 text-white text-sm font-semibold
+            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-500/90 text-[#fff] text-sm font-semibold
                        hover:bg-red-500 transition-colors ring-1 ring-red-400/30">
             <Square size={14} /> Parar
           </button>
@@ -491,15 +539,6 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <KpiCard icon={<Zap size={20} />} label="Força atual" value={fmtNum(forcaShown, 1, "N")}
-          color={forcaShown != null ? "text-sky-300" : "text-muted"} />
-        <KpiCard icon={<MoveHorizontal size={20} />} label="Deflexão atual" value={fmtNum(deslocShown, 2, "mm")}
-          color={deslocShown != null ? "text-violet-300" : "text-muted"} />
-        <KpiCard icon={<Gauge size={20} />} label="Força máxima" value={maxForca > 0 ? `${maxForca.toFixed(1)} N` : "—"}
-          color="text-amber-300" />
-      </div>
-
       {chartData.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <LiveChart data={chartData} dataKey="forca" color="#38bdf8" unit="N" label="Força × Tempo" yLabel="F (N)" />
@@ -519,8 +558,8 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
 
 // ── View principal ──────────────────────────────────────────────────────────
 
-export default function FlexaoView() {
-  const [tab, setTab] = useState<Tab>("controle");
+export default function FlexaoView({ initialEnsaioId }: { initialEnsaioId?: number | null }) {
+  const [tab, setTab] = useState<Tab>(initialEnsaioId != null ? "ensaios" : "controle");
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
@@ -541,7 +580,7 @@ export default function FlexaoView() {
         ))}
       </div>
 
-      {tab === "controle" ? <ControleTab onOpenEnsaios={() => setTab("ensaios")} /> : <EnsaiosTab />}
+      {tab === "controle" ? <ControleTab onOpenEnsaios={() => setTab("ensaios")} /> : <EnsaiosTab initialId={initialEnsaioId} />}
     </div>
   );
 }

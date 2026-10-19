@@ -64,3 +64,36 @@ export function useParametrosIHM(id: number | null) {
     enabled: id !== null,
   });
 }
+
+export function useQualidade(id: number | null) {
+  return useQuery({
+    queryKey: ["qualidade", id],
+    queryFn: () => api.getQualidade(id!),
+    enabled: id !== null,
+  });
+}
+
+export function useClientes() {
+  return useQuery({ queryKey: ["clientes"], queryFn: api.getClientes });
+}
+
+export function useNormas(tipo?: "tracao" | "flexao") {
+  return useQuery({ queryKey: ["normas", tipo], queryFn: () => api.getNormas(tipo), staleTime: Infinity });
+}
+
+export function useRelatorios(params: { cliente_id?: number; ensaio_id?: number } = {}) {
+  return useQuery({ queryKey: ["relatorios", params], queryFn: () => api.getRelatorios(params) });
+}
+
+export function useUpdateEnsaio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof api.updateEnsaio>[1] }) =>
+      api.updateEnsaio(id, body),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ["ensaios"] });
+      qc.invalidateQueries({ queryKey: ["ensaio", id] });
+      qc.invalidateQueries({ queryKey: ["busca"] });
+    },
+  });
+}

@@ -7,6 +7,11 @@ export interface EnsaioSummary {
   forca_max_N: number;
   tensao_max_MPa: number;
   created_at: string;
+  cliente_id: number | null;
+  cliente_nome: string;
+  amostra: string;
+  norma: string;
+  operador: string;
 }
 
 export interface EnsaioDetail extends EnsaioSummary {
@@ -15,6 +20,111 @@ export interface EnsaioDetail extends EnsaioSummary {
   metadata_code: string;
   alonga_ruptura_pct: number;
   tempo_ruptura_s: number;
+  observacoes: string;
+  setup: Record<string, number | string | null>;
+}
+
+export interface EnsaioUpdate {
+  nome?: string;
+  cliente_id?: number | null;
+  amostra?: string;
+  norma?: string;
+  operador?: string;
+  observacoes?: string;
+  limpar_cliente?: boolean;
+}
+
+export interface ClienteIn {
+  nome: string;
+  documento: string;
+  contato: string;
+  email: string;
+  telefone: string;
+  endereco: string;
+  bairro: string;
+  cidade_uf: string;
+  cep: string;
+  observacoes: string;
+}
+
+export interface Cliente extends ClienteIn {
+  id: number;
+  created_at: string;
+  num_ensaios: number;
+  num_relatorios: number;
+}
+
+export interface RelatorioSummary {
+  id: number;
+  ensaio_id: number | null;
+  cliente_id: number | null;
+  numero: string;
+  titulo: string;
+  cliente_nome: string;
+  created_at: string;
+}
+
+export type TipoBusca = "todos" | "cliente" | "teste" | "relatorio";
+
+export interface ResultadoBusca {
+  tipo: "cliente" | "teste" | "relatorio";
+  modo?: "tracao" | "flexao";
+  id: number;
+  titulo: string;
+  subtitulo: string;
+  data: string | null;
+  cliente_id?: number | null;
+  ensaio_id?: number | null;
+  score: number;
+}
+
+export interface Norma {
+  codigo: string;
+  tipo: "tracao" | "flexao";
+  material: string;
+  titulo: string;
+  corpo_prova: string;
+  velocidade_mm_min: number | null;
+  comprimento_inicial_mm?: number | null;
+  distancia_garras_mm?: number | null;
+  span_mm?: number | null;
+  largura_mm?: number | null;
+  espessura_mm?: number | null;
+  observacao: string;
+}
+
+export type StatusQualidade = "ok" | "aviso" | "erro" | "info";
+
+export interface ItemQualidade {
+  chave: string;
+  titulo: string;
+  status: StatusQualidade;
+  detalhe: string;
+}
+
+export interface Qualidade {
+  status: StatusQualidade;
+  itens: ItemQualidade[];
+}
+
+export interface ConexaoCLP {
+  online: boolean;
+  ip: string;
+  port: number;
+  simulador: boolean;
+  latencia_ms: number | null;
+  motivo: string;
+}
+
+export interface CamposRelatorio {
+  cliente_id: number | null;
+  cliente: Partial<DadosCliente> | null;
+  amostra: Partial<DadosAmostra>;
+  condicoes: Partial<CondicoesEnsaio>;
+  empresa: Partial<DadosEmpresa>;
+  numero_relatorio_sugerido: string;
+  assinaturas: Assinatura[];
+  equipamentos: string;
 }
 
 export interface KPIs {
@@ -37,6 +147,14 @@ export interface KPIs {
   alonga_calc_pct: number | null;
   modulo_regressao_MPa: number | null;
   velocidade_ihm: number | null;
+  r2_elastico: number | null;
+  modulo_trecho_elastico_MPa: number | null;
+  pontos_trecho_elastico: number | null;
+  tensao_rp02_MPa: number | null;
+  ruptura_detectada: boolean;
+  forca_ruptura_N: number | null;
+  deslocamento_ruptura_mm: number | null;
+  alonga_ruptura_real_pct: number | null;
 }
 
 export interface DataPoint {
@@ -119,6 +237,9 @@ export interface FlexaoControlStartRequest {
   espessura_mm?: number | null;
   span_mm?: number | null;
   norma?: string | null;
+  cliente_id?: number | null;
+  amostra?: string;
+  operador?: string;
 }
 
 export interface FlexaoFrame {
@@ -147,6 +268,34 @@ export interface ChartData {
   stress_time: DataPoint[];
   rupture: RupturePoint;
   E_regressao: number | null;
+  elastic_fit: ElasticFit | null;
+  fases: FaseResumo[];
+}
+
+export interface ElasticFit {
+  inclinacao: number;
+  intercepto: number;
+  r2: number;
+  n_pontos: number;
+  eps_ini: number;
+  eps_fim: number;
+  sigma_ini: number;
+  sigma_fim: number;
+  t_ini: number | null;
+  t_fim: number | null;
+}
+
+export interface FaseResumo {
+  fase: string;
+  rotulo: string;
+  n_pontos: number;
+  t_ini: number | null;
+  t_fim: number | null;
+  eps_ini: number | null;
+  eps_fim: number | null;
+  d_ini: number | null;
+  d_fim: number | null;
+  forca_max: number | null;
 }
 
 export type ModbusDataType =
@@ -278,6 +427,10 @@ export interface ControlStartRequest {
   limite_forca?: number | null;
   area_seccao?: number | null;
   comprimento_inicial?: number | null;
+  cliente_id?: number | null;
+  amostra?: string;
+  norma?: string;
+  operador?: string;
 }
 
 export interface ControlSetpointsRequest {
@@ -367,6 +520,7 @@ export interface Assinatura {
 
 export interface ReportRequest {
   ensaio_id: number;
+  cliente_id?: number | null;
   include_empresa: boolean;
   include_cliente: boolean;
   include_amostra: boolean;

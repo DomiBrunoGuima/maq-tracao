@@ -92,25 +92,84 @@ def _find_linear_region(disp: np.ndarray, forca: np.ndarray) -> tuple[int, int]:
 # Stage detection
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _r2_prefix(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """R² do ajuste linear de x[0:k+1] × y[0:k+1] para cada k (somas acumuladas,
+    sem refazer a regressão a cada ponto)."""
+    k = np.arange(1, len(x) + 1, dtype=float)
+    sx, sy = np.cumsum(x), np.cumsum(y)
+    sxx, syy, sxy = np.cumsum(x * x), np.cumsum(y * y), np.cumsum(x * y)
+    num = (k * sxy - sx * sy) ** 2
+    den = (k * sxx - sx ** 2) * (k * syy - sy ** 2)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r2 = np.where(den > 0, num / den, 0.0)
+    return r2
+
+
+R2_ELASTICO_MIN = 0.99
+
+
+def _refine_elastic_end(disp: np.ndarray, forca: np.ndarray, i_start: int, i_end: int) -> int:
+    """Encurta o fim do trecho elástico até a reta F×d ter R² ≥ R2_ELASTICO_MIN,
+    mantendo pelo menos 5 pontos. Evita incluir o início do escoamento no módulo."""
+    if i_end - i_start < 5:
+        return i_end
+    r2 = _r2_prefix(disp[i_start:i_end + 1].astype(float), forca[i_start:i_end + 1].astype(float))
+    ok = np.where(r2 >= R2_ELASTICO_MIN)[0]
+    ok = ok[ok >= 4]
+    if ok.size == 0:
+        return i_end
+    return i_start + int(ok[-1])
+
+
+def _find_break(forca: np.ndarray, uts_pos: int) -> int | None:
+    """Índice da ruptura: último ponto carregado antes da queda brusca de força.
+
+    Queda brusca = a força cai ≥ 25% de Fmáx em até 2 amostras. Sem queda brusca,
+    aceita a queda gradual até < 10% de Fmáx. Sem nenhuma das duas, o ensaio foi
+    interrompido antes de romper e não há ruptura (retorna None)."""
+    n = len(forca)
+    fmax = float(forca[uts_pos])
+    if fmax <= 0:
+        return None
+    # Queda num único passo; depois, em dois passos (leitura no meio da quebra)
+    for passos in (1, 2):
+        for i in range(uts_pos, n - 1):
+            nxt = float(np.min(forca[i + 1:min(i + 1 + passos, n)]))
+            if forca[i] - nxt >= 0.25 * fmax:
+                return i
+    below = np.where(forca[uts_pos:] < 0.10 * fmax)[0]
+    if below.size:
+        return max(uts_pos, uts_pos + int(below[0]) - 1)
+    return None
+
+
 def _detect_stages(df: pd.DataFrame) -> pd.Series:
-    """Classifica cada ponto em uma das etapas do ensaio de tração."""
+    """Classifica cada ponto em uma das etapas do ensaio de tração:
+
+    acomodacao → elastico_linear → escoamento_superior → patamar_escoamento →
+    encruamento → (Fmáx) → estriccao → ruptura → pos_ruptura
+
+    ``ruptura`` marca só o ponto da quebra (queda brusca de força); sem quebra
+    detectada (ensaio parado antes), não há ponto de ruptura."""
     n = len(df)
     stages = pd.Series("encruamento", index=df.index)
-    if n < 8:
-        print(f"[stages] n={n} < 8, retornando encruamento total", flush=True)
+    if n == 0:
         return stages
 
     sig   = df["Tensao_Pa"].values.astype(float)
     forca = df["Forca_N"].values.astype(float)
     disp  = df["Deslocamento"].values.astype(float)
 
-    uts_pos = int(np.argmax(forca))
+    uts_pos = int(np.nanargmax(forca))
+    brk = _find_break(forca, uts_pos)
 
-    if uts_pos < n - 1:
+    if brk is not None:
+        if brk > uts_pos:
+            stages.iloc[uts_pos + 1:brk] = "estriccao"
+        stages.iloc[brk] = "ruptura"
+        stages.iloc[brk + 1:] = "pos_ruptura"
+    elif uts_pos < n - 1:
         stages.iloc[uts_pos + 1:] = "estriccao"
-        stages.iloc[-1] = "ruptura"
-    else:
-        stages.iloc[-1] = "ruptura"
 
     n_load = uts_pos + 1
     if n_load < 8:
@@ -119,12 +178,16 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
 
     # ── Detect true elastic linear region ────────────────────────────────────
     i_el_start, i_el_end = _find_linear_region(disp[:n_load], forca[:n_load])
+    i_el_end = _refine_elastic_end(disp[:n_load], forca[:n_load], i_el_start, i_el_end)
 
     # Accommodation: toe region before elastic start
     if i_el_start > 0:
         stages.iloc[:i_el_start] = "acomodacao"
 
     stages.iloc[i_el_start:i_el_end + 1] = "elastico_linear"
+    # Fmáx é o fim do encruamento (o ponto em si só é ruptura em material frágil)
+    if stages.iloc[uts_pos] not in ("ruptura", "elastico_linear"):
+        stages.iloc[uts_pos] = "encruamento"
 
     # ── Yield / plateau / encruamento in the post-elastic region ─────────────
     post_start = i_el_end + 1
@@ -174,7 +237,7 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
     # ── Debug: phase coverage ─────────────────────────────────────────────────
     counts = {p: int((stages.values == p).sum()) for p in [
         "acomodacao", "elastico_linear", "escoamento_superior",
-        "patamar_escoamento", "encruamento", "estriccao", "ruptura",
+        "patamar_escoamento", "encruamento", "estriccao", "ruptura", "pos_ruptura",
     ]}
     total_assigned = sum(counts.values())
     coverage = (
@@ -183,7 +246,7 @@ def _detect_stages(df: pd.DataFrame) -> pd.Series:
         f"uy_abs={uy_pos_abs} "
         f"plat_end={plat_end_abs} "
         f"encruamento->{uts_pos} "
-        f"estriccao[{uts_pos+1}:{n-1}]"
+        f"ruptura={brk}"
     )
     print(
         f"[stages] n={n} uts={uts_pos} el=({i_el_start},{i_el_end}) | {coverage}",

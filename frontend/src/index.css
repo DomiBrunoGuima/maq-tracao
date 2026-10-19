@@ -2,13 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Tema escuro (padrão) ─────────────────────────────────── */
 :root {
   color-scheme: dark;
+  --bg: 15 17 23;
+  --surface: 26 29 39;
+  --panel: 13 16 32;
+  --tooltip: 10 12 20;
+  --border: 42 45 62;
+  --accent: 0 212 255;
+  --rupture: 255 107 53;
+  --muted: 100 116 139;
+  --fg: 255 255 255;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --grid: 30 36 53;
+  --axis: 71 85 105;
 }
 
+/* ── Tema claro ───────────────────────────────────────────── */
+:root.light {
+  color-scheme: light;
+  --bg: 241 245 249;
+  --surface: 255 255 255;
+  --panel: 248 250 252;
+  --tooltip: 255 255 255;
+  --border: 203 213 225;
+  --accent: 2 132 199;
+  --rupture: 234 88 12;
+  --muted: 100 116 139;
+  --fg: 15 23 42;
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 71 85 105;
+  --slate-500: 100 116 139;
+  --slate-600: 148 163 184;
+  --grid: 226 232 240;
+  --axis: 100 116 139;
+}
+
+/* Cores de status claras (feitas para fundo escuro) ficam ilegíveis no branco:
+   no tema claro usa os tons escuros da mesma cor. */
+:root.light .text-emerald-200, :root.light .text-emerald-300, :root.light .text-emerald-400,
+:root.light .text-green-400 { color: rgb(4 120 87); }
+:root.light .text-sky-300, :root.light .text-sky-400 { color: rgb(3 105 161); }
+:root.light .text-amber-300, :root.light .text-amber-400 { color: rgb(180 83 9); }
+:root.light .text-red-300, :root.light .text-red-400 { color: rgb(185 28 28); }
+:root.light .text-rose-300 { color: rgb(190 18 60); }
+:root.light .text-violet-300 { color: rgb(109 40 217); }
+
 body {
-  background-color: #0f1117;
-  color: #e2e8f0;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--slate-200));
   font-family: "Inter", system-ui, sans-serif;
   overflow: hidden;
 }
@@ -19,26 +67,34 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1d27;
+  background: rgb(var(--surface));
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2d3e;
+  background: rgb(var(--border));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3d4e;
+  background: rgb(var(--muted));
 }
 
-/* Recharts overrides */
+/* Recharts: grade, eixos e textos seguem o tema (CSS vence os atributos SVG) */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #1e2435;
+  stroke: rgb(var(--grid));
+}
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: rgb(var(--grid));
 }
 .recharts-text {
-  fill: #64748b;
+  fill: rgb(var(--axis));
   font-family: "JetBrains Mono", monospace;
   font-size: 11px;
 }
 .recharts-tooltip-wrapper {
   outline: none;
+}
+.recharts-default-tooltip {
+  background: rgb(var(--surface)) !important;
+  border-color: rgb(var(--border)) !important;
 }

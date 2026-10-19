@@ -186,7 +186,7 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
           >
             <span
               className={clsx(
-                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200",
+                "inline-block h-4 w-4 transform rounded-full bg-[#fff] shadow transition duration-200",
                 form.auto_load ? "translate-x-4" : "translate-x-0"
               )}
             />
@@ -225,7 +225,7 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
         >
           <span
             className={clsx(
-              "inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200",
+              "inline-block h-4 w-4 transform rounded-full bg-[#fff] shadow transition duration-200",
               form.simulator_enabled ? "translate-x-4" : "translate-x-0"
             )}
           />

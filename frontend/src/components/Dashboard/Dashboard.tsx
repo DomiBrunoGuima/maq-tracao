@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { FileText, X as XIcon, MousePointerClick } from "lucide-react";
+import { FileText, X as XIcon, MousePointerClick, ClipboardList, Layers } from "lucide-react";
 import { clsx } from "clsx";
-import type { ChartData, DataPoint, RupturePoint } from "../../types";
-import { useKPIs, useCurvas, useEnsaio, useParametrosIHM } from "../../hooks/useEnsaios";
+import { ReferenceArea, ReferenceLine } from "recharts";
+import type { ChartData, DataPoint } from "../../types";
+import { useKPIs, useCurvas, useEnsaio, useParametrosIHM, useQualidade } from "../../hooks/useEnsaios";
+import QualidadePanel from "./QualidadePanel";
+import DadosTesteModal from "./DadosTesteModal";
 import { useConfig } from "../../hooks/useConfig";
 import KPICard from "./KPICard";
 import SimpleLineChart from "../Charts/SimpleLineChart";
@@ -21,14 +24,63 @@ const CHARTS: { key: ChartKey; label: string; sub: string }[] = [
   { key: "st", label: "σ × t", sub: "Tensão × Tempo" },
 ];
 
+export const FASE_CORES: Record<string, string> = {
+  acomodacao: "#94a3b8",
+  elastico_linear: "#22c55e",
+  escoamento_superior: "#eab308",
+  patamar_escoamento: "#f59e0b",
+  encruamento: "#3b82f6",
+  estriccao: "#a855f7",
+  ruptura: "#ef4444",
+  pos_ruptura: "#64748b",
+};
+
+// Em que coluna cada gráfico tem o eixo x — para posicionar as faixas de estágio
+const FASE_X: Record<ChartKey, ["eps" | "d" | "t"]> = {
+  ss: ["eps"], fd: ["d"], ft: ["t"], em: ["t"], st: ["t"],
+};
+
+/** Faixas coloridas dos estágios e reta de regressão do trecho elástico. */
+function chartExtras(key: ChartKey, curvas: ChartData, mostrarFases: boolean): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  if (mostrarFases) {
+    const eixo = FASE_X[key][0];
+    curvas.fases?.forEach((f, i) => {
+      const x1 = f[`${eixo}_ini` as const];
+      const x2 = f[`${eixo}_fim` as const];
+      if (x1 == null || x2 == null || x1 === x2) return;
+      out.push(
+        <ReferenceArea key={`fase-${i}`} x1={x1} x2={x2} ifOverflow="hidden"
+          fill={FASE_CORES[f.fase] ?? "#64748b"} fillOpacity={0.1} strokeOpacity={0} />,
+      );
+    });
+  }
+  const fit = curvas.elastic_fit;
+  if (key === "ss" && fit) {
+    // Prolonga a reta além do trecho para mostrar onde a curva se afasta dela
+    const xs = curvas.stress_strain.map((p) => p.Deform_Along).filter((v): v is number => typeof v === "number");
+    const xMax = xs.length ? Math.max(...xs) : fit.eps_fim;
+    const x2 = Math.min(xMax, fit.eps_ini + (fit.eps_fim - fit.eps_ini) * 1.6);
+    out.push(
+      <ReferenceLine key="reg" ifOverflow="hidden" stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="6 4"
+        segment={[
+          { x: fit.eps_ini, y: fit.inclinacao * fit.eps_ini + fit.intercepto },
+          { x: x2, y: fit.inclinacao * x2 + fit.intercepto },
+        ]} />,
+    );
+  }
+  return out;
+}
+
 function renderChart(
   key: ChartKey,
   curvas: ChartData,
   height: number,
   onPointClick?: (pt: DataPoint) => void,
   thumbnail = false,
+  mostrarFases = false,
 ) {
-  const p = { height, onPointClick, thumbnail };
+  const p = { height, onPointClick, thumbnail, extras: thumbnail ? [] : chartExtras(key, curvas, mostrarFases) };
   switch (key) {
     case "ss": return <SimpleLineChart data={curvas.stress_strain}        xKey="Deform_Along"     yKey="Tensao_Pa"   xUnit="" yUnit="MPa" xLabel="ε" yLabel="σ (MPa)" color="#38bdf8" xDecimals={3} {...p} />;
     case "fd": return <SimpleLineChart data={curvas.force_displacement}   xKey="Deslocamento"     yKey="Forca_N"     xUnit="mm" yUnit="N" xLabel="d (mm)" yLabel="F (N)" color="#a78bfa" {...p} />;
@@ -63,7 +115,7 @@ function MiniStat({
   formula: string; label: string; value: string; note?: string; highlight?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/50 bg-[#0d1020] p-2.5 flex flex-col gap-0.5">
+    <div className="rounded-lg border border-border/50 bg-panel p-2.5 flex flex-col gap-0.5">
       <span className="text-[8px] font-mono text-accent/50 tracking-wide leading-none">{formula}</span>
       <span className="text-[9px] font-semibold text-muted/60 uppercase tracking-wider leading-none mt-0.5">
         {label}
@@ -75,6 +127,21 @@ function MiniStat({
         {value}
       </span>
       {note && <span className="text-[9px] text-muted/50 font-mono leading-tight mt-0.5">{note}</span>}
+    </div>
+  );
+}
+
+function HeroValue({ label, value, unit, sub, cor }: {
+  label: string; value: string; unit: string; sub?: string; cor: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-3">
+      <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">{label}</p>
+      <p className={clsx("font-mono font-bold leading-none mt-1.5", cor)}>
+        <span className="text-3xl tabular-nums">{value}</span>
+        <span className="text-sm ml-1.5 opacity-70">{unit}</span>
+      </p>
+      {sub && <p className="text-[10px] text-muted font-mono mt-1 truncate">{sub}</p>}
     </div>
   );
 }
@@ -124,6 +191,8 @@ export default function Dashboard({ ensaioId }: Props) {
   const [selectedPoint, setSelectedPoint] = useState<DataPoint | null>(null);
   const [activeChart, setActiveChart]     = useState<ChartKey>("ss");
   const [chartH, setChartH]               = useState(380);
+  const [mostrarFases, setMostrarFases]   = useState(true);
+  const [editarDados, setEditarDados]     = useState(false);
   const chartBodyRef                      = useRef<HTMLDivElement>(null);
 
   const { data: ensaio }                           = useEnsaio(ensaioId);
@@ -131,6 +200,7 @@ export default function Dashboard({ ensaioId }: Props) {
   const { data: curvas, isLoading: curvasLoading } = useCurvas(ensaioId);
   const { data: ihmParams }                        = useParametrosIHM(ensaioId);
   const { data: config }                           = useConfig();
+  const { data: qualidade }                        = useQualidade(ensaioId);
 
   useEffect(() => { setSelectedPoint(null); }, [ensaioId]);
 
@@ -214,7 +284,21 @@ export default function Dashboard({ ensaioId }: Props) {
             {ensaio?.data_ensaio ? ` · ${ensaio.data_ensaio}` : ""}
             {ensaio?.metadata_equipment_id ? ` · ${ensaio.metadata_equipment_id}` : ""}
           </p>
+          <p className="text-xs mt-0.5 truncate">
+            <span className="text-muted">Cliente </span><span className="text-slate-300">{ensaio?.cliente_nome || "—"}</span>
+            <span className="text-muted"> · Amostra </span><span className="text-slate-300">{ensaio?.amostra || "—"}</span>
+            <span className="text-muted"> · Norma </span><span className="text-slate-300">{ensaio?.norma || "—"}</span>
+            {ensaio?.operador ? <><span className="text-muted"> · Operador </span><span className="text-slate-300">{ensaio.operador}</span></> : null}
+          </p>
         </div>
+        <button
+          onClick={() => setEditarDados(true)}
+          className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 border border-border hover:border-accent
+                     text-muted hover:text-white rounded-lg text-xs font-medium transition-colors ml-auto"
+        >
+          <ClipboardList size={13} />
+          Dados do teste
+        </button>
         <button
           onClick={() => setShowReport(true)}
           className="flex-shrink-0 flex items-center gap-2 px-4 py-1.5 bg-accent/10
@@ -224,6 +308,18 @@ export default function Dashboard({ ensaioId }: Props) {
           Gerar Relatório
         </button>
       </header>
+
+      {/* ── Valores principais em destaque ── */}
+      <div className="flex-shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 pt-4">
+        <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N`} cor="text-rupture" />
+        <HeroValue label="Tensão máxima" value={fmt(kpis.tensao_max_calc_MPa ?? kpis.tensao_max_MPa, 1)} unit="MPa"
+          sub={kpis.tensao_rp02_MPa != null ? `Rp0,2 = ${fmt(kpis.tensao_rp02_MPa, 1)} MPa` : undefined} cor="text-sky-300" />
+        <HeroValue label="Módulo de elasticidade"
+          value={fmt((kpis.modulo_trecho_elastico_MPa ?? kpis.modulo_elasticidade_MPa) / 1000, 2)} unit="GPa"
+          sub={kpis.r2_elastico != null ? `R² = ${kpis.r2_elastico.toFixed(4)}` : undefined} cor="text-emerald-300" />
+        <HeroValue label="Alongamento" value={fmt(kpis.alonga_calc_pct ?? kpis.alonga_ruptura_pct, 1)} unit="%"
+          sub={kpis.ruptura_detectada ? "na força máxima · ruptura detectada" : "na força máxima"} cor="text-violet-300" />
+      </div>
 
       {/* ── Content area: flex row, fills remaining height ── */}
       <div className="flex-1 min-h-0 flex gap-4 p-4 overflow-hidden">
@@ -239,6 +335,21 @@ export default function Dashboard({ ensaioId }: Props) {
             <div className="flex items-baseline gap-3 mb-1 flex-shrink-0">
               <p className="text-sm font-semibold text-white">{activeConfig.label}</p>
               <p className="text-xs text-muted">{activeConfig.sub}</p>
+              {activeChart === "ss" && curvas.elastic_fit && (
+                <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  - - reta elástica: E = {fmt(curvas.elastic_fit.inclinacao, 0)} MPa · R² = {curvas.elastic_fit.r2.toFixed(4)}
+                </span>
+              )}
+              <button
+                onClick={() => setMostrarFases((v) => !v)}
+                className={clsx(
+                  "flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-colors",
+                  mostrarFases ? "border-accent/40 text-accent bg-accent/10" : "border-border text-muted",
+                  !pt && "ml-auto",
+                )}
+              >
+                <Layers size={10} /> Estágios
+              </button>
               {pt && (
                 <div className="ml-auto flex items-center gap-2">
                   <span className="text-[10px] font-mono text-accent bg-accent/10 px-2 py-0.5 rounded-full">
@@ -263,7 +374,7 @@ export default function Dashboard({ ensaioId }: Props) {
 
             {/* Chart body — measured by ResizeObserver, height drives ResponsiveContainer */}
             <div ref={chartBodyRef} className="flex-1 min-h-0 overflow-hidden">
-              {renderChart(activeChart, curvas, chartH, setSelectedPoint)}
+              {renderChart(activeChart, curvas, chartH, setSelectedPoint, false, mostrarFases)}
             </div>
           </div>
 
@@ -289,7 +400,7 @@ export default function Dashboard({ ensaioId }: Props) {
                 {Object.entries(ihmParamsFiltered).map(([key, val]) => (
                   <div
                     key={key}
-                    className="flex items-center gap-2 bg-[#0d1020] border border-border/40
+                    className="flex items-center gap-2 bg-panel border border-border/40
                                rounded-lg px-3 py-1.5 text-xs font-mono"
                   >
                     <span className="text-muted/60">{key.replace(/_/g, " ")}</span>
@@ -306,6 +417,42 @@ export default function Dashboard({ ensaioId }: Props) {
 
         {/* ── Right column: scrolls independently, stretches full height ── */}
         <div className="w-[276px] flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-0.5">
+
+          {qualidade && <QualidadePanel qualidade={qualidade} />}
+
+          {/* Trecho elástico / regressão */}
+          <div className="rounded-xl border border-border bg-surface p-3 flex-shrink-0">
+            <SectionLabel>Trecho elástico · regressão</SectionLabel>
+            <div className="grid grid-cols-2 gap-2">
+              <KPICard compact highlight label="E (reta)"
+                value={kpis.modulo_trecho_elastico_MPa != null ? `${fmt(kpis.modulo_trecho_elastico_MPa, 0)} MPa` : "—"} />
+              <KPICard compact label="R²"
+                value={kpis.r2_elastico != null ? kpis.r2_elastico.toFixed(4) : "—"}
+                sub={kpis.pontos_trecho_elastico != null ? `${kpis.pontos_trecho_elastico.toFixed(0)} pontos` : undefined} />
+              <KPICard compact label="Rp0,2"
+                value={kpis.tensao_rp02_MPa != null ? `${fmt(kpis.tensao_rp02_MPa)} MPa` : "—"} />
+              <KPICard compact label="Trecho ε"
+                value={curvas.elastic_fit ? `${fmt(curvas.elastic_fit.eps_ini, 4)}–${fmt(curvas.elastic_fit.eps_fim, 4)}` : "—"} />
+            </div>
+          </div>
+
+          {/* Estágios do ensaio */}
+          {curvas.fases?.length > 0 && (
+            <div className="rounded-xl border border-border bg-surface p-3 flex-shrink-0">
+              <SectionLabel>Estágios do ensaio</SectionLabel>
+              <div className="space-y-1">
+                {curvas.fases.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: FASE_CORES[f.fase] ?? "#64748b" }} />
+                    <span className="text-slate-300 flex-1 truncate">{f.rotulo}</span>
+                    <span className="font-mono text-muted">
+                      {f.t_ini != null && f.t_fim != null ? `${fmt(f.t_ini, 1)}–${fmt(f.t_fim, 1)} s` : `${f.n_pontos.toFixed(0)} pts`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* KPIs card */}
           <div className="rounded-xl border border-border bg-surface p-3 flex-shrink-0">
@@ -409,6 +556,10 @@ export default function Dashboard({ ensaioId }: Props) {
 
         </div>
       </div>
+
+      {editarDados && ensaio && (
+        <DadosTesteModal ensaio={ensaio} onClose={() => setEditarDados(false)} />
+      )}
 
       {showReport && ensaioId && (
         <ReportGenerator ensaioId={ensaioId} onClose={() => setShowReport(false)} />

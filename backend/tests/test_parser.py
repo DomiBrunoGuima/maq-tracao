@@ -79,19 +79,29 @@ def test_elapsed_seconds(tmp_path):
     assert df["elapsed_seconds"].iloc[4] == pytest.approx(4.0)
 
 
-def test_rupture_detection(tmp_path):
+def test_no_rupture_when_force_only_eases(tmp_path):
+    # A força cai só 7% depois do pico: o ensaio parou antes de romper
     csv_file = _write_test_csv(tmp_path)
     _, df = parse_csv(csv_file)
 
-    # Rupture must be at the row with max Forca_N
-    rupture_rows = df[df["fase"] == "ruptura"]
-    assert len(rupture_rows) == 1
-    assert rupture_rows.iloc[0]["Forca_N"] == pytest.approx(15000.0)
+    assert not (df["fase"] == "ruptura").any()
+    assert (df.loc[df["Forca_N"] < 15000.0].iloc[-2:]["fase"] == "estriccao").all()
 
-    # Everything after rupture is post-rupture
-    post = df[df["fase"] == "pos_ruptura"]
-    assert len(post) == 2
-    assert (post["Forca_N"] < 15000.0).all()
+
+def test_rupture_detection_on_sudden_drop():
+    import pandas as pd
+    from backend.parser import _detect_stages
+
+    forca = [100, 300, 600, 900, 1200, 1500, 1800, 2000, 2150, 2250, 2300, 2280, 2250, 40, 5, 3]
+    disp = [0.1 * i for i in range(len(forca))]
+    df = pd.DataFrame({"Forca_N": forca, "Deslocamento": disp, "Tensao_Pa": [f / 10 for f in forca]})
+    fase = _detect_stages(df)
+
+    # Ruptura = último ponto carregado antes da queda brusca; depois disso, pós-ruptura
+    assert list(fase[fase == "ruptura"].index) == [12]
+    assert (fase.iloc[13:] == "pos_ruptura").all()
+    assert (fase.iloc[11:12] == "estriccao").all()
+    assert (fase == "elastico_linear").any()
 
 
 # ---------------------------------------------------------------------------

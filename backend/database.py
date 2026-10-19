@@ -30,6 +30,14 @@ class EnsaioDB(Base):
     filepath = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     data_json = Column(Text)
+    # Cadastro do teste (preenchido no Controle antes do ensaio ou editado depois)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
+    amostra = Column(String, default="")
+    norma = Column(String, default="")
+    operador = Column(String, default="")
+    observacoes = Column(Text, default="")
+    # JSON com o setup usado (velocidade, deslocamento, limite de força, área, L0, sentido)
+    setup_json = Column(Text, default="")
 
 
 class EnsaioFlexaoDB(Base):
@@ -56,6 +64,10 @@ class EnsaioFlexaoDB(Base):
     filepath = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     data_json = Column(Text)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
+    amostra = Column(String, default="")
+    operador = Column(String, default="")
+    observacoes = Column(Text, default="")
 
 
 class ParametrosIHMDB(Base):
@@ -68,6 +80,39 @@ class ParametrosIHMDB(Base):
     params_json      = Column(Text)  # JSON: {name: value}
 
 
+class ClienteDB(Base):
+    __tablename__ = "clientes"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    nome       = Column(String, index=True, nullable=False)
+    documento  = Column(String, default="")   # CNPJ/CPF
+    contato    = Column(String, default="")
+    email      = Column(String, default="")
+    telefone   = Column(String, default="")
+    endereco   = Column(String, default="")
+    bairro     = Column(String, default="")
+    cidade_uf  = Column(String, default="")
+    cep        = Column(String, default="")
+    observacoes = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RelatorioDB(Base):
+    """Relatório gerado: guarda o HTML final e o pedido que o gerou, para abrir de novo
+    ou buscar depois sem precisar refazer."""
+    __tablename__ = "relatorios"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    ensaio_id    = Column(Integer, index=True)
+    cliente_id   = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
+    numero       = Column(String, default="")
+    titulo       = Column(String, default="")
+    cliente_nome = Column(String, default="")
+    request_json = Column(Text, default="")
+    html         = Column(Text, default="")
+    created_at   = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -76,4 +121,26 @@ def get_db():
         db.close()
 
 
+def migrate(eng=engine) -> None:
+    """SQLite não ganha colunas novas com create_all: adiciona as que faltam em bancos
+    criados por versões anteriores (sem perder os ensaios já gravados)."""
+    from sqlalchemy import inspect, text
+    insp = inspect(eng)
+    with eng.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                ddl_type = col.type.compile(dialect=eng.dialect)
+                default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
+                sql = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}'
+                if isinstance(default, str):
+                    sql += " DEFAULT '" + default.replace("'", "''") + "'"
+                conn.execute(text(sql))
+
+
 Base.metadata.create_all(bind=engine)
+migrate()
