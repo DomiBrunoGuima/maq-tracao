@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -61,7 +62,10 @@ from .watcher import DirectoryWatcher
 # State
 # ---------------------------------------------------------------------------
 
-_CONFIG_FILE = Path(__file__).resolve().parent / "config.json"
+# Na instalação do cliente (servidor.py / executável) MAQ_TRACAO_HOME aponta
+# para a pasta da instalação, onde ficam config.json, tracao.db e data/.
+_HOME = os.environ.get("MAQ_TRACAO_HOME")
+_CONFIG_FILE = (Path(_HOME) if _HOME else Path(__file__).resolve().parent) / "config.json"
 
 _CONFIG_DEFAULTS: dict = {
     "watch_directory": str(Path("data").resolve()),
@@ -292,7 +296,9 @@ async def lifespan(app: FastAPI):
 # App
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Analisador de Ensaios de Tração", version="1.0.0", lifespan=lifespan)
+# Na instalação do cliente a documentação da API (/docs, /redoc) fica desligada.
+_api_docs = {} if not _HOME else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="Analisador de Ensaios de Tração", version="1.0.0", lifespan=lifespan, **_api_docs)
 
 app.add_middleware(
     CORSMiddleware,

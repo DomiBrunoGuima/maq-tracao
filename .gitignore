@@ -19,6 +19,10 @@ frontend/node_modules/
 # git pull sem buildar o frontend (o backend serve frontend/dist no :8000).
 # Rode `npm run build` e commite o dist sempre que mudar o frontend.
 
+# Pacote do cliente (instalacao/build_cliente.bat)
+build-cliente/
+venv-build/
+
 # Stray files
 =*
 

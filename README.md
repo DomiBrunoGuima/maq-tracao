@@ -52,6 +52,12 @@ cd frontend
 npm run dev
 ```
 
+## Instalação no cliente (sem código-fonte)
+
+Para entregar ao cliente só o programa compilado (backend + tela em um
+`MaqTracao.exe`, iniciando sozinho com o Windows), veja
+[instalacao/README.md](instalacao/README.md).
+
 ## Formato do Arquivo CSV
 
 O software lê arquivos `.csv` com as seguintes características:

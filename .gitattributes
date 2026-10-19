@@ -1,0 +1,2 @@
+# Scripts do instalador do cliente rodam no cmd do Windows
+instalacao/*.bat text eol=crlf
