@@ -222,6 +222,11 @@ class ConfigModel(BaseModel):
     flexao_norma: str = "ISO 178"
     # ── Simulador: gera valores plausíveis sem IHM/máquina real ─────────────
     simulator_enabled: bool = False
+    # ── Backup automático numa pasta sincronizada (Google Drive, OneDrive...) ─
+    backup_ativo: bool = False
+    backup_dir: str = ""
+    backup_intervalo_h: float = 24.0
+    backup_manter: int = 30
 
 
 class ControlStartRequest(BaseModel):

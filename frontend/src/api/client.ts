@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   AppConfig,
+  BackupStatus,
   CamposRelatorio,
   Cliente,
   ClienteIn,
@@ -177,3 +178,11 @@ export const generateReport = async (req: ReportRequest): Promise<void> => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
+
+// ── Backup automático ─────────────────────────────────────────────────────
+
+export const getBackupStatus = (): Promise<BackupStatus> =>
+  api.get("/backup").then((r) => r.data);
+
+export const fazerBackupAgora = (): Promise<{ arquivo: string; pasta: string; data: string }> =>
+  api.post("/backup/agora").then((r) => r.data);

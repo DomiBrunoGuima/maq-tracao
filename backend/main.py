@@ -36,8 +36,10 @@ from .database import (
     ParametrosIHMDB,
     RelatorioDB,
     SessionLocal,
+    engine,
     get_db,
 )
+from .backup import BackupAgendado
 from .flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao
 from .flexao.calculator import calculate_kpis as calculate_kpis_flexao
 from .flexao.calculator import format_chart_data as format_chart_data_flexao
@@ -114,6 +116,10 @@ _CONFIG_DEFAULTS: dict = {
     "flexao_espessura_mm": 0.0,
     "flexao_span_mm": 0.0,
     "flexao_norma": "ISO 178",
+    "backup_ativo": False,
+    "backup_dir": "",
+    "backup_intervalo_h": 24.0,
+    "backup_manter": 30,
 }
 
 
@@ -137,6 +143,8 @@ def _save_config(cfg: dict) -> None:
 _config: dict = _load_config()
 
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
+
+_backup = BackupAgendado(lambda: _config, Path(engine.url.database).resolve(), _CONFIG_FILE)
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +312,9 @@ async def lifespan(app: FastAPI):
         for csv_file in sorted(Path(watch_dir).glob("*.csv")):
             _load_csv(str(csv_file))
         _watcher.start(watch_dir)
+    _backup.start()
     yield
+    _backup.stop()
     _watcher.stop()
 
 
@@ -850,6 +860,21 @@ def _ts(iso: str) -> float:
         return _dt.fromisoformat(iso).timestamp()
     except ValueError:
         return 0.0
+
+
+@app.get("/api/backup")
+def backup_status():
+    return _backup.status()
+
+
+@app.post("/api/backup/agora")
+def backup_agora():
+    try:
+        return _backup.executar()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha no backup: {exc}")
 
 
 @app.get("/api/normas")

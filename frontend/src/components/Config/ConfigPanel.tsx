@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2, FolderOpen, Info, Settings, SlidersHorizontal } from "lucide-react";
+import { Save, X, Plus, Trash2, FolderOpen, Info, Settings, SlidersHorizontal, CloudUpload } from "lucide-react";
+import BackupSection from "./BackupSection";
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 import RegisterProbe from "./RegisterProbe";
 
-type Section = "geral" | "controle" | "sobre";
+type Section = "geral" | "controle" | "backup" | "sobre";
 
 interface Props {
   onClose: () => void;
@@ -43,7 +44,13 @@ type FormState = {
   flexao_span_mm: number;
   flexao_norma: string;
   simulator_enabled: boolean;
+  backup_ativo: boolean;
+  backup_dir: string;
+  backup_intervalo_h: number;
+  backup_manter: number;
 };
+
+export type { FormState };
 
 const DEFAULT_FORM: FormState = {
   watch_directory: "",
@@ -77,6 +84,10 @@ const DEFAULT_FORM: FormState = {
   flexao_span_mm: 0,
   flexao_norma: "ISO 178",
   simulator_enabled: false,
+  backup_ativo: false,
+  backup_dir: "",
+  backup_intervalo_h: 24,
+  backup_manter: 30,
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -473,6 +484,7 @@ function SobreSection() {
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "geral",          label: "Geral",           icon: <FolderOpen size={15} /> },
   { id: "controle",       label: "Controle (CLP)",   icon: <SlidersHorizontal size={15} /> },
+  { id: "backup",         label: "Backup",           icon: <CloudUpload size={15} /> },
 ];
 
 export default function ConfigPanel({ onClose }: Props) {
@@ -541,6 +553,7 @@ export default function ConfigPanel({ onClose }: Props) {
           <div className="p-8 max-w-2xl">
             {section === "geral"         && <GeralSection         form={form} setForm={setForm} />}
             {section === "controle"      && <ControleSection      form={form} setForm={setForm} />}
+            {section === "backup"        && <BackupSection        form={form} setForm={setForm} salvo={config} />}
             {section === "sobre"         && <SobreSection />}
           </div>
         </div>

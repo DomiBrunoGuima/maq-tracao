@@ -393,6 +393,20 @@ export interface AppConfig {
   flexao_span_mm: number;
   flexao_norma: string;
   simulator_enabled: boolean;
+  backup_ativo: boolean;
+  backup_dir: string;
+  backup_intervalo_h: number;
+  backup_manter: number;
+}
+
+export interface BackupStatus {
+  ativo: boolean;
+  pasta: string;
+  pasta_existe: boolean;
+  ultimo: string | null;
+  proximo: string | null;
+  erro: string | null;
+  backups: { arquivo: string; tamanho_kb: number; data: string }[];
 }
 
 export interface RealtimePoint {
