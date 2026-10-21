@@ -1472,7 +1472,14 @@ _FLEXAO_READ_ROLES = ("forca_atual", "deslocamento_atual", "fim_ensaio_bit")
 
 
 def _flexao_registers() -> list[dict]:
-    return _resolve_registers(_config.get("flexao_registers", []))
+    """A flexão roda na mesma máquina: usa os registradores da tração (o que é
+    configurado em Controle vale para as duas) e de flexao_registers só entram
+    os papéis que a tração não tem, como fim_ensaio_bit."""
+    tracao = _control_registers()
+    papeis = {r.get("role") for r in tracao if r.get("role")}
+    extras = [r for r in _resolve_registers(_config.get("flexao_registers", []))
+              if r.get("role") not in papeis]
+    return tracao + extras
 
 
 def _flexao_make_controller():

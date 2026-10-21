@@ -194,3 +194,22 @@ def test_write_multiplies_by_scale():
     ctrl.write_register({"address": 0, "data_type": "float32", "scale": 2, "word_order": "little"}, 1.5)
     lo, hi = ctrl._client.sent
     assert _decode_float32(hi, lo) == pytest.approx(3.0)
+
+
+def test_flexao_usa_registradores_da_tracao(monkeypatch):
+    from backend import main
+
+    cfg = {
+        **main._config,
+        "control_registers": [
+            {"name": "zerar_desl", "role": "zerar_deslocamento", "address": 4019, "data_type": "coil"},
+            {"name": "tara", "role": "zerar_celula", "address": 4020, "data_type": "coil"},
+        ],
+        "flexao_registers": [
+            {"name": "zerar_deslocamento", "role": "zerar_deslocamento", "address": 0, "data_type": "coil"},
+            {"name": "fim_ensaio_bit", "role": "fim_ensaio_bit", "address": 4010, "data_type": "coil"},
+        ],
+    }
+    monkeypatch.setattr(main, "_config", cfg)
+    regs = {r["role"]: r["address"] for r in main._flexao_registers()}
+    assert regs == {"zerar_deslocamento": 4019, "zerar_celula": 4020, "fim_ensaio_bit": 4010}
