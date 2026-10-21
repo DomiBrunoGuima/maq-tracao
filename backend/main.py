@@ -112,6 +112,7 @@ _CONFIG_DEFAULTS: dict = {
     "area_seccao_mm2": 0.0,
     "comprimento_inicial_mm": 0.0,
     "flexao_registers": [],
+    "flexao_separados": [],
     "flexao_largura_mm": 0.0,
     "flexao_espessura_mm": 0.0,
     "flexao_span_mm": 0.0,
@@ -1472,14 +1473,18 @@ _FLEXAO_READ_ROLES = ("forca_atual", "deslocamento_atual", "fim_ensaio_bit")
 
 
 def _flexao_registers() -> list[dict]:
-    """A flexão roda na mesma máquina: usa os registradores da tração (o que é
-    configurado em Controle vale para as duas) e de flexao_registers só entram
-    os papéis que a tração não tem, como fim_ensaio_bit."""
+    """A flexão roda na mesma máquina: por padrão usa os registradores da tração.
+    Os papéis listados em flexao_separados usam o registrador próprio da flexão
+    (flexao_registers), e papéis que só a flexão tem (ex.: fim_ensaio_bit) entram sempre."""
+    proprios = {r.get("role"): r for r in _resolve_registers(_config.get("flexao_registers", []))
+                if r.get("role")}
+    separados = set(_config.get("flexao_separados") or [])
     tracao = _control_registers()
-    papeis = {r.get("role") for r in tracao if r.get("role")}
-    extras = [r for r in _resolve_registers(_config.get("flexao_registers", []))
-              if r.get("role") not in papeis]
-    return tracao + extras
+    papeis_tracao = {r.get("role") for r in tracao if r.get("role")}
+    regs = [proprios[r["role"]] if r.get("role") in separados and r.get("role") in proprios else r
+            for r in tracao]
+    regs += [r for role, r in proprios.items() if role not in papeis_tracao]
+    return regs
 
 
 def _flexao_make_controller():

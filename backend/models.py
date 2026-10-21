@@ -216,6 +216,8 @@ class ConfigModel(BaseModel):
     comprimento_inicial_mm: float = 0.0
     # ── Flexão (3 pontos) — registradores e geometria default do setup ──────
     flexao_registers: List[IHMRegister] = []
+    # Papéis em que a flexão usa o registrador próprio (flexao_registers) em vez do da tração
+    flexao_separados: List[str] = []
     flexao_largura_mm: float = 0.0
     flexao_espessura_mm: float = 0.0
     flexao_span_mm: float = 0.0

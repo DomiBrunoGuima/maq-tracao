@@ -39,6 +39,7 @@ type FormState = {
   area_seccao_mm2: number;
   comprimento_inicial_mm: number;
   flexao_registers: IHMRegister[];
+  flexao_separados: string[];
   flexao_largura_mm: number;
   flexao_espessura_mm: number;
   flexao_span_mm: number;
@@ -79,6 +80,7 @@ const DEFAULT_FORM: FormState = {
   area_seccao_mm2: 0,
   comprimento_inicial_mm: 0,
   flexao_registers: [],
+  flexao_separados: [],
   flexao_largura_mm: 0,
   flexao_espessura_mm: 0,
   flexao_span_mm: 0,
@@ -449,7 +451,101 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
       />
 
       <Divider />
+      <FlexaoRegistros form={form} setForm={setForm} />
+
+      <Divider />
       <RegisterProbe registers={form.control_registers} />
+    </div>
+  );
+}
+
+function FlexaoRegistros({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  const comPapel = form.control_registers.filter((r) => r.role);
+  const papeisTracao = new Set(comPapel.map((r) => r.role));
+  const soFlexao = form.flexao_registers.filter((r) => r.role && !papeisTracao.has(r.role));
+  const proprio = (role: string) => form.flexao_registers.find((r) => r.role === role);
+  const cell =
+    "bg-bg border border-border rounded px-2 py-1 text-xs font-mono text-white " +
+    "focus:outline-none focus:border-accent transition-colors w-full";
+
+  const updateProprio = (role: string, patch: Partial<IHMRegister>) => setForm((f) => ({
+    ...f,
+    flexao_registers: f.flexao_registers.map((r) => (r.role === role ? { ...r, ...patch } : r)),
+  }));
+
+  const toggle = (base: IHMRegister) => setForm((f) => {
+    const role = base.role!;
+    if (f.flexao_separados.includes(role)) {
+      return { ...f, flexao_separados: f.flexao_separados.filter((x) => x !== role) };
+    }
+    // Ao separar, começa de uma cópia do registrador da tração (ou do próprio já salvo, se tiver endereço).
+    const regs = [...f.flexao_registers];
+    const i = regs.findIndex((r) => r.role === role);
+    if (i < 0) regs.push({ ...base });
+    else if (!regs[i].device && !regs[i].address) regs[i] = { ...base };
+    return { ...f, flexao_separados: [...f.flexao_separados, role], flexao_registers: regs };
+  });
+
+  const editaveis = (r: IHMRegister) => (
+    <>
+      <input value={r.device || String(r.address ?? "")} placeholder="D412"
+        onChange={(e) => updateProprio(r.role!, addressPatch(e.target.value))} className={cell} />
+      <select value={r.data_type}
+        onChange={(e) => updateProprio(r.role!, { data_type: e.target.value as IHMRegister["data_type"] })} className={cell}>
+        {DATA_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>
+      {r.data_type !== "coil" && r.data_type !== "input" ? (
+        <input type="number" step="0.001" value={r.scale ?? 1}
+          onChange={(e) => updateProprio(r.role!, { scale: Number(e.target.value) })} className={cell} />
+      ) : <span className="text-xs text-muted/30 font-mono text-center">—</span>}
+      {WORD2_TYPES.includes(r.data_type) ? (
+        <select value={r.word_order ?? "big"}
+          onChange={(e) => updateProprio(r.role!, { word_order: e.target.value as "big" | "little" })} className={cell}>
+          <option value="big">big</option>
+          <option value="little">little</option>
+        </select>
+      ) : <span className="text-xs text-muted/30 font-mono text-center">—</span>}
+    </>
+  );
+
+  const cols = "grid-cols-[1fr_70px_84px_72px_64px_64px]";
+  return (
+    <div>
+      <SectionTitle>Flexão</SectionTitle>
+      <SectionDesc>
+        A flexão usa os mesmos registradores da tração. Marque "Separar" só nos que forem
+        diferentes na flexão e informe o endereço próprio.
+      </SectionDesc>
+      <div className={clsx("grid gap-2 px-3 mb-1.5", cols)}>
+        {["Role", "Separar", "Disp./End.", "Tipo", "Escala", "Ordem"].map((h) => (
+          <span key={h} className="text-[10px] font-medium text-muted/50 uppercase tracking-wider">{h}</span>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {comPapel.map((base) => {
+          const role = base.role!;
+          const sep = form.flexao_separados.includes(role) && proprio(role);
+          return (
+            <div key={role} className={clsx("grid gap-2 items-center rounded-lg px-3 py-2 border", cols,
+              sep ? "bg-surface border-accent/40" : "bg-surface/50 border-border")}>
+              <span className="text-xs font-mono text-slate-300 truncate" title={base.description}>{role}</span>
+              <input type="checkbox" checked={!!sep} onChange={() => toggle(base)} className="accent-current w-4 h-4" />
+              {sep ? editaveis(sep) : (
+                <span className="col-span-4 text-xs text-muted/60 font-mono">
+                  igual à tração ({base.device || base.address})
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {soFlexao.map((r) => (
+          <div key={r.role} className={clsx("grid gap-2 items-center rounded-lg px-3 py-2 border bg-surface border-border", cols)}>
+            <span className="text-xs font-mono text-slate-300 truncate" title={r.description}>{r.role}</span>
+            <span className="text-[10px] text-muted/60">só flexão</span>
+            {editaveis(r)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -500,6 +596,7 @@ export default function ConfigPanel({ onClose }: Props) {
       ihm_registers: config.ihm_registers ?? [],
       control_registers: config.control_registers ?? [],
       flexao_registers: config.flexao_registers ?? [],
+      flexao_separados: config.flexao_separados ?? [],
     }));
   }, [config]);
 

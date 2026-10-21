@@ -213,3 +213,9 @@ def test_flexao_usa_registradores_da_tracao(monkeypatch):
     monkeypatch.setattr(main, "_config", cfg)
     regs = {r["role"]: r["address"] for r in main._flexao_registers()}
     assert regs == {"zerar_deslocamento": 4019, "zerar_celula": 4020, "fim_ensaio_bit": 4010}
+
+    # Separado: a flexão passa a usar o registrador próprio para esse papel
+    cfg["flexao_registers"][0]["address"] = 4004
+    cfg["flexao_separados"] = ["zerar_deslocamento"]
+    regs = {r["role"]: r["address"] for r in main._flexao_registers()}
+    assert regs == {"zerar_deslocamento": 4004, "zerar_celula": 4020, "fim_ensaio_bit": 4010}

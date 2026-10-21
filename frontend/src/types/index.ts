@@ -388,6 +388,8 @@ export interface AppConfig {
   area_seccao_mm2: number;
   comprimento_inicial_mm: number;
   flexao_registers: IHMRegister[];
+  // Papéis em que a flexão usa o registrador próprio em vez do da tração
+  flexao_separados?: string[];
   flexao_largura_mm: number;
   flexao_espessura_mm: number;
   flexao_span_mm: number;
