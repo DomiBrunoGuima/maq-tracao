@@ -9,65 +9,110 @@
     {
       "name": "velocidade_processamento",
       "address": 40000,
+      "device": "",
+      "clp_ref": "",
       "description": "Velocidade Processamento",
       "data_type": "decimal",
-      "scale": 0.01
+      "scale": 0.01,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "deslocamento_programado",
       "address": 40005,
+      "device": "",
+      "clp_ref": "",
       "description": "Deslocamento Programado",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "forca_maxima",
       "address": 40010,
+      "device": "",
+      "clp_ref": "",
       "description": "Força Máxima",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "area_seccao",
       "address": 40020,
+      "device": "",
+      "clp_ref": "",
       "description": "Área da Secção",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "comprimento_inicial",
       "address": 40030,
+      "device": "",
+      "clp_ref": "",
       "description": "Comprimento Inicial",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "deslocamento_atual",
       "address": 40040,
+      "device": "",
+      "clp_ref": "",
       "description": "Deslocamento Atual",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "forca_atual",
       "address": 40050,
+      "device": "",
+      "clp_ref": "",
       "description": "Força Atual",
       "data_type": "float32",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "teste_ativo_bit",
       "address": 3999,
+      "device": "",
+      "clp_ref": "",
       "description": "BIT INICIO",
       "data_type": "coil",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "teste_parada_bit",
       "address": 3997,
+      "device": "",
+      "clp_ref": "",
       "description": "BIT PARADA",
       "data_type": "coil",
-      "scale": 1.0
+      "scale": 1.0,
+      "role": "",
+      "writable": false,
+      "word_order": "big"
     }
   ],
   "ftp_port": 21,
@@ -80,226 +125,238 @@
   "realtime_stop_bit_name": "teste_parada_bit",
   "realtime_forca_name": "forca_atual",
   "realtime_deslocamento_name": "deslocamento_atual",
-  "clp_ip": "",
+  "clp_ip": "192.168.15.50",
   "clp_port": 502,
   "clp_timeout": 3,
+  "plc_family": "dvp",
   "control_registers": [
     {
       "name": "iniciar",
-      "role": "iniciar",
-      "device": "",
       "address": 4003,
+      "device": "",
       "clp_ref": "M9",
       "description": "IHM coil 4004 → M9 (INICIAR)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "iniciar",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "parar",
-      "role": "parar",
-      "device": "",
       "address": 4001,
+      "device": "",
       "clp_ref": "M7",
       "description": "IHM coil 4002 → M7 (PARAR)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "parar",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "sentido_cima",
-      "role": "sentido_cima",
-      "device": "",
       "address": 3999,
+      "device": "",
       "clp_ref": "M5",
       "description": "IHM coil 4000 → M5 (seta para cima)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "sentido_cima",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "sentido_baixo",
-      "role": "sentido_baixo",
-      "device": "",
       "address": 4000,
+      "device": "",
       "clp_ref": "M6",
       "description": "IHM coil 4001 → M6 (seta para baixo)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "sentido_baixo",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "zerar_deslocamento",
-      "role": "zerar_deslocamento",
+      "address": 4019,
       "device": "",
-      "address": 4004,
-      "clp_ref": "M10",
+      "clp_ref": "M100",
       "description": "IHM coil 4005 → M10 (ZERA DESLC.)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "zerar_deslocamento",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "tara",
-      "role": "zerar_celula",
-      "device": "",
       "address": 4020,
+      "device": "",
       "clp_ref": "M101",
       "description": "IHM coil 4021 → M101 (TARA)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "zerar_celula",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "material_integro",
-      "role": "material_integro_bit",
-      "device": "",
       "address": 4009,
+      "device": "",
       "clp_ref": "M30",
       "description": "IHM coil 4010 → M30 (material íntegro)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "material_integro_bit",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "ruptura",
-      "role": "ruptura_bit",
-      "device": "",
       "address": 4010,
+      "device": "",
       "clp_ref": "M31",
       "description": "IHM coil 4011 → M31 (ruptura)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "ruptura_bit",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "velocidade",
-      "role": "velocidade",
-      "device": "",
       "address": 40000,
+      "device": "",
       "clp_ref": "D408",
       "description": "IHM 40001 → D408 (velocidade programada)",
-      "data_type": "float32",
-      "scale": 1.0,
+      "data_type": "decimal",
+      "scale": 100.0,
+      "role": "velocidade",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "deslocamento_programado",
-      "role": "deslocamento_programado",
-      "device": "",
       "address": 40004,
+      "device": "",
       "clp_ref": "D412",
       "description": "IHM 40005 → D412 (deslocamento programado)",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "deslocamento_programado",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "limite_forca",
-      "role": "limite_forca",
-      "device": "",
       "address": 40023,
+      "device": "",
       "clp_ref": "D2006",
       "description": "IHM 40024 → D2006 (limite de força)",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "limite_forca",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "forca_maxima",
-      "role": "forca_maxima",
-      "device": "",
       "address": 40009,
+      "device": "",
       "clp_ref": "D2012",
       "description": "IHM 40010 → D2012 (força máxima)",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "forca_maxima",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "deslocamento_atual",
-      "role": "deslocamento_atual",
-      "device": "",
       "address": 40039,
+      "device": "",
       "clp_ref": "D600",
       "description": "IHM 40040 → D600 (deslocamento atual)",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "deslocamento_atual",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "forca_atual",
-      "role": "forca_atual",
+      "address": 40079,
       "device": "",
-      "address": 40049,
-      "clp_ref": "D92",
+      "clp_ref": "D650",
       "description": "IHM 40050 → D92 (força atual; D650 não está na tabela da IHM)",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "forca_atual",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "tensao_maxima",
-      "role": "tensao_maxima",
+      "address": 40060,
       "device": "",
-      "address": 40059,
       "clp_ref": "D3004",
       "description": "PRECISA da linha Registers 40060 → {Link1}1@D3004 na IHM",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "tensao_maxima",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "deslocamento_maximo",
-      "role": "deslocamento_maximo",
+      "address": 40070,
       "device": "",
-      "address": 40069,
       "clp_ref": "D610",
       "description": "PRECISA da linha Registers 40070 → {Link1}1@D610 na IHM",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "deslocamento_maximo",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "emergencia",
-      "role": "emergencia",
-      "device": "",
       "address": 4029,
+      "device": "",
       "clp_ref": "X0",
       "description": "PRECISA da linha Coils 4030 → {Link1}1@X0 (tam. 3) na IHM",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "emergencia",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "limite_inferior",
-      "role": "limite_inferior",
-      "device": "",
       "address": 4030,
+      "device": "",
       "clp_ref": "X1",
       "description": "IHM coil 4031 → X1 (mesma linha nova)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "limite_inferior",
+      "writable": false,
+      "word_order": "big"
     },
     {
       "name": "limite_superior",
-      "role": "limite_superior",
-      "device": "",
       "address": 4031,
+      "device": "",
       "clp_ref": "X2",
       "description": "IHM coil 4032 → X2 (mesma linha nova)",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "limite_superior",
+      "writable": false,
+      "word_order": "big"
     }
   ],
   "control_pulse_ms": 300,
@@ -308,122 +365,178 @@
   "flexao_registers": [
     {
       "name": "iniciar",
-      "role": "iniciar",
       "address": 4003,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — iniciar",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "iniciar",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "parar",
-      "role": "parar",
       "address": 4001,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — parar",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "parar",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "sentido_cima",
-      "role": "sentido_cima",
       "address": 3999,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — sentido_cima",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "sentido_cima",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "sentido_baixo",
-      "role": "sentido_baixo",
       "address": 4000,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — sentido_baixo",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "sentido_baixo",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "deslocamento_programado",
-      "role": "deslocamento_programado",
       "address": 40004,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — deslocamento_programado",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "deslocamento_programado",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "velocidade",
-      "role": "velocidade",
       "address": 40000,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — velocidade",
       "data_type": "decimal32",
       "scale": 1.0,
+      "role": "velocidade",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "limite_forca",
-      "role": "limite_forca",
       "address": 40023,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — limite_forca",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "limite_forca",
       "writable": true,
       "word_order": "little"
     },
     {
       "name": "forca_atual",
-      "role": "forca_atual",
-      "address": 40049,
+      "address": 40089,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — forca_atual",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "forca_atual",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "deslocamento_atual",
-      "role": "deslocamento_atual",
       "address": 40039,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — deslocamento_atual",
       "data_type": "float32",
       "scale": 1.0,
+      "role": "deslocamento_atual",
       "writable": false,
       "word_order": "little"
     },
     {
       "name": "zerar_deslocamento",
-      "role": "zerar_deslocamento",
       "address": 0,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — zerar_deslocamento",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "zerar_deslocamento",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "zerar_celula",
-      "role": "zerar_celula",
       "address": 0,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao (mesma maquina da tracao) — zerar_celula",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": true
+      "role": "zerar_celula",
+      "writable": true,
+      "word_order": "big"
     },
     {
       "name": "fim_ensaio_bit",
-      "role": "fim_ensaio_bit",
       "address": 4010,
+      "device": "",
+      "clp_ref": "",
       "description": "Flexao — bit de fim de ensaio (ruptura/deflexao-alvo); mesmo bit da tracao",
       "data_type": "coil",
       "scale": 1.0,
-      "writable": false
+      "role": "fim_ensaio_bit",
+      "writable": false,
+      "word_order": "big"
     }
   ],
-  "flexao_largura_mm": 0.0,
-  "flexao_espessura_mm": 0.0,
-  "flexao_span_mm": 0.0,
+  "flexao_separados": [
+    "forca_atual"
+  ],
+  "flexao_largura_mm": 10.0,
+  "flexao_espessura_mm": 5.0,
+  "flexao_span_mm": 62.0,
   "flexao_norma": "ISO 178",
+  "backup_ativo": false,
+  "backup_dir": "",
+  "backup_intervalo_h": 24.0,
+  "backup_manter": 30,
   "simulator_enabled": false,
-  "plc_family": "dvp"
+  "proximo_ensaio": {
+    "cliente_id": 1,
+    "amostra": "testes 1",
+    "norma": "ISO 527-2",
+    "operador": "Vinicius",
+    "setup": {
+      "sentido": "cima",
+      "velocidade": 100.0,
+      "deslocamento": 10.0,
+      "limite_forca": null,
+      "area_seccao": 20.0,
+      "comprimento_inicial": 50.0
+    }
+  },
+  "proximo_ensaio_flexao": {
+    "cliente_id": 1,
+    "amostra": "teste flexão",
+    "operador": ""
+  }
 }
