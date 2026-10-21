@@ -21,12 +21,14 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, defer
 
+from . import acesso
 from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
 from .database import (
@@ -883,12 +885,57 @@ def get_normas(tipo: str | None = None):
     return listar_normas(tipo)
 
 
+def exigir_tecnico(x_config_token: str | None = Header(default=None)) -> None:
+    """Rotas que mudam configuração/registradores exigem o token da senha."""
+    if not acesso.token_valido(x_config_token):
+        raise HTTPException(status_code=401, detail="Senha das Configurações necessária.")
+
+
+class _SenhaIn(BaseModel):
+    senha: str
+
+
+class _TrocaSenhaIn(BaseModel):
+    atual: str
+    nova: str
+
+
+@app.post("/api/config/login")
+def config_login(body: _SenhaIn):
+    if not acesso.confere(body.senha, _config):
+        time.sleep(1)  # atrasa tentativas por força bruta
+        raise HTTPException(status_code=401, detail="Senha incorreta.")
+    return {"token": acesso.novo_token()}
+
+
+@app.post("/api/config/logout")
+def config_logout(x_config_token: str | None = Header(default=None)):
+    acesso.encerrar(x_config_token)
+    return {"ok": True}
+
+
+@app.get("/api/config/sessao")
+def config_sessao(x_config_token: str | None = Header(default=None)):
+    return {"ok": acesso.token_valido(x_config_token)}
+
+
+@app.post("/api/config/senha", dependencies=[Depends(exigir_tecnico)])
+def config_trocar_senha(body: _TrocaSenhaIn):
+    if not acesso.confere(body.atual, _config):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta.")
+    if len(body.nova) < 4:
+        raise HTTPException(status_code=422, detail="A senha nova precisa ter ao menos 4 caracteres.")
+    _config["senha_config"] = acesso.hash_senha(body.nova)
+    _save_config(_config)
+    return {"ok": True}
+
+
 @app.get("/api/config")
 def get_config():
-    return JSONResponse(content=_config)
+    return JSONResponse(content={k: v for k, v in _config.items() if k != "senha_config"})
 
 
-@app.put("/api/config")
+@app.put("/api/config", dependencies=[Depends(exigir_tecnico)])
 def update_config(body: ConfigModel):
     _config.update(body.model_dump())
     _save_config(_config)
@@ -898,7 +945,7 @@ def update_config(body: ConfigModel):
             _load_csv(str(csv_file))
     else:
         _watcher.stop()
-    return JSONResponse(content=_config)
+    return JSONResponse(content={k: v for k, v in _config.items() if k != "senha_config"})
 
 
 @app.post("/api/scan")
@@ -1154,7 +1201,7 @@ def control_zerar_celula():
     return _pulse_command(_make_controller, "zerar_celula", "zerar a célula de carga")
 
 
-@app.post("/api/control/probe")
+@app.post("/api/control/probe", dependencies=[Depends(exigir_tecnico)])
 def control_probe(req: RegisterProbeRequest):
     """Testa um registrador isolado (leitura/escrita) contra a IHM/CLP e devolve
     o que foi/voltou no fio. Útil para descobrir tipo, endereço e ordem de palavra

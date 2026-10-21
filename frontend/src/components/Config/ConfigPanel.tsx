@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Save, X, Plus, Trash2, FolderOpen, Info, Settings, SlidersHorizontal, CloudUpload } from "lucide-react";
+import { Save, X, Plus, Trash2, FolderOpen, Info, Settings, SlidersHorizontal, CloudUpload, Lock } from "lucide-react";
 import BackupSection from "./BackupSection";
 import { clsx } from "clsx";
 import type { IHMRegister } from "../../types";
 import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 import RegisterProbe from "./RegisterProbe";
+import { loginConfig, logoutConfig, sessaoConfig, trocarSenhaConfig } from "../../api/client";
 
 type Section = "geral" | "controle" | "backup" | "sobre";
 
@@ -550,6 +551,88 @@ function FlexaoRegistros({ form, setForm }: { form: FormState; setForm: React.Di
   );
 }
 
+function TrocarSenha() {
+  const [atual, setAtual] = useState("");
+  const [nova, setNova] = useState("");
+  const [conf, setConf] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  async function salvar() {
+    if (nova !== conf) { setMsg({ ok: false, texto: "A confirmação não confere." }); return; }
+    try {
+      await trocarSenhaConfig(atual, nova);
+      setMsg({ ok: true, texto: "Senha alterada." });
+      setAtual(""); setNova(""); setConf("");
+    } catch (e: any) {
+      setMsg({ ok: false, texto: e?.response?.data?.detail ?? "Falha ao trocar a senha." });
+    }
+  }
+
+  return (
+    <div>
+      <SectionTitle>Senha das Configurações</SectionTitle>
+      <SectionDesc>Senha pedida para abrir esta tela e alterar registradores.</SectionDesc>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <input type="password" value={atual} onChange={(e) => setAtual(e.target.value)} placeholder="Senha atual" className={inputCls} />
+        <input type="password" value={nova} onChange={(e) => setNova(e.target.value)} placeholder="Nova senha" className={inputCls} />
+        <input type="password" value={conf} onChange={(e) => setConf(e.target.value)} placeholder="Confirmar" className={inputCls} />
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={!atual || !nova}
+          className="px-4 py-2 rounded-lg bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50">
+          Trocar senha
+        </button>
+        {msg && <span className={clsx("text-sm", msg.ok ? "text-green-400" : "text-red-400")}>{msg.texto}</span>}
+      </div>
+    </div>
+  );
+}
+
+function TelaSenha({ onLiberar, onClose }: { onLiberar: () => void; onClose: () => void }) {
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function entrar(e: React.FormEvent) {
+    e.preventDefault();
+    setEnviando(true); setErro(null);
+    try {
+      await loginConfig(senha);
+      onLiberar();
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail ?? "Não foi possível verificar a senha.");
+      setSenha("");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full">
+      <form onSubmit={entrar} className="w-80 bg-surface border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Lock size={16} className="text-accent" />
+          <span className="font-semibold text-sm text-white">Configurações protegidas</span>
+        </div>
+        <p className="text-xs text-muted">Digite a senha do técnico para alterar as configurações.</p>
+        <input type="password" autoFocus value={senha} onChange={(e) => setSenha(e.target.value)}
+          placeholder="Senha" className={inputCls} />
+        {erro && <p className="text-xs text-red-400">{erro}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={!senha || enviando}
+            className="flex-1 px-4 py-2 bg-accent text-bg rounded-lg font-semibold text-sm hover:bg-accent/90 transition-colors disabled:opacity-50">
+            {enviando ? "Verificando..." : "Entrar"}
+          </button>
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-lg border border-border text-sm text-muted hover:text-white transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function SobreSection() {
   const items = [
     { label: "Software", value: "Analisador de Ensaios de Tração" },
@@ -571,6 +654,8 @@ function SobreSection() {
           </div>
         ))}
       </div>
+      <Divider />
+      <TrocarSenha />
     </div>
   );
 }
@@ -583,7 +668,18 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "backup",         label: "Backup",           icon: <CloudUpload size={15} /> },
 ];
 
-export default function ConfigPanel({ onClose }: Props) {
+export default function ConfigPanel({ onClose: fechar }: Props) {
+  const [liberado, setLiberado] = useState<boolean | null>(null);
+  useEffect(() => { sessaoConfig().then(setLiberado).catch(() => setLiberado(false)); }, []);
+  // Ao sair da tela, a senha volta a ser pedida.
+  const onClose = () => { logoutConfig(); fechar(); };
+
+  if (liberado === null) return null;
+  if (!liberado) return <TelaSenha onLiberar={() => setLiberado(true)} onClose={fechar} />;
+  return <ConfigConteudo onClose={onClose} />;
+}
+
+function ConfigConteudo({ onClose }: Props) {
   const { data: config, isLoading } = useConfig();
   const updateMut = useUpdateConfig();
   const [section, setSection] = useState<Section>("geral");

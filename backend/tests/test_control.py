@@ -219,3 +219,27 @@ def test_flexao_usa_registradores_da_tracao(monkeypatch):
     cfg["flexao_separados"] = ["zerar_deslocamento"]
     regs = {r["role"]: r["address"] for r in main._flexao_registers()}
     assert regs == {"zerar_deslocamento": 4004, "zerar_celula": 4020, "fim_ensaio_bit": 4010}
+
+
+def test_configuracoes_exigem_senha(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from backend import acesso, main
+
+    monkeypatch.setattr(main, "_CONFIG_FILE", tmp_path / "config.json")
+    cfg = {k: v for k, v in main._config.items() if k != "senha_config"}
+    monkeypatch.setattr(main, "_config", cfg)
+    cli = TestClient(main.app)
+
+    corpo = {**cfg, "auto_load": False}
+    assert cli.put("/api/config", json=corpo).status_code == 401
+    assert cli.post("/api/config/login", json={"senha": "errada"}).status_code == 401
+
+    token = cli.post("/api/config/login", json={"senha": acesso.SENHA_PADRAO}).json()["token"]
+    h = {"X-Config-Token": token}
+    assert cli.put("/api/config", json=corpo, headers=h).status_code == 200
+
+    assert cli.post("/api/config/senha", json={"atual": acesso.SENHA_PADRAO, "nova": "nova123"},
+                    headers=h).status_code == 200
+    assert "senha_config" not in cli.get("/api/config").json()
+    assert cli.post("/api/config/login", json={"senha": acesso.SENHA_PADRAO}).status_code == 401
+    assert cli.post("/api/config/login", json={"senha": "nova123"}).status_code == 200

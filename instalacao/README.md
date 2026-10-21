@@ -22,6 +22,9 @@ C:\MaqTracao\
 - A pasta `C:\MaqTracao` só abre para Administradores. A subpasta `data\` fica
   liberada para usuários comuns (digite `C:\MaqTracao\data` no Explorer) caso
   precisem colocar CSVs à mão.
+- A tela **Configurações** pede a senha do técnico (padrão `tracao2026`; troque
+  em Configurações → Sobre logo depois de instalar). Sem ela não dá para salvar
+  configurações nem testar registradores, nem pela tela nem direto pela API.
 - A documentação da API (`/docs`) fica desligada nessa versão.
 - Só atende no próprio PC (`127.0.0.1`). Para abrir de outro PC da rede, coloque
   `"server_host": "0.0.0.0"` no `config.json` e reinicie (talvez precise liberar
