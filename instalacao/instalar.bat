@@ -16,7 +16,10 @@ timeout /t 2 /nobreak >nul
 
 echo [2/5] Copiando arquivos para %DEST%...
 :: Troca so o programa. config.json, tracao.db, data\ e logs\ sao mantidos.
-if exist "%DEST%\_internal" rmdir /s /q "%DEST%\_internal"
+if exist "%DEST%" (
+  for /d %%D in ("%DEST%\*") do if /i not "%%~nxD"=="data" if /i not "%%~nxD"=="logs" rmdir /s /q "%%D"
+  for %%F in ("%DEST%\*") do (echo %%~nxF| findstr /b /i "config.json tracao.db" >nul || del /f /q "%%F")
+)
 if not exist "%DEST%\data" mkdir "%DEST%\data"
 xcopy "%SRC%" "%DEST%\" /e /i /q /y >nul || (echo [ERRO] Falha ao copiar & pause & exit /b 1)
 

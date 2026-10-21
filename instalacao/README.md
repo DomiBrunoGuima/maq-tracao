@@ -43,6 +43,13 @@ Precisa de Python 3.11+ e Node 20+, os mesmos do `setup.bat`.
 3. Rode `instalacao\build_cliente.bat` (duplo clique). Leva alguns minutos.
 4. Sai `build-cliente\MaqTracao-instalador.zip`.
 
+#### Versão compilada com Nuitka (recomendada para o cliente)
+
+`instalacao\build_cliente_nuitka.bat` gera o mesmo zip, mas com o backend
+compilado em código de máquina pelo Nuitka, bem mais difícil de reverter do que
+o PyInstaller. Na primeira vez ele baixa sozinho um compilador C (gcc ou zig);
+o build leva de 20 a 40 minutos. Instalação e uso são iguais.
+
 ### 2. Instalar no PC do cliente
 
 1. Copie o zip para o PC do cliente (pen drive) e extraia.
@@ -91,7 +98,7 @@ O que ele **não** impede:
 - O JavaScript da tela chega ao navegador (é assim que qualquer site funciona).
   Ele vai minificado e sem source map, mas pode ser lido.
 
-Para dificultar mais, o próximo passo seria compilar o backend com **Nuitka**
-(vira código C compilado, bem mais difícil de reverter) no lugar do PyInstaller.
+Com o build do **Nuitka** o primeiro ponto fica bem mais difícil: não há
+bytecode Python para extrair, só código de máquina.
 Na prática, a proteção mais forte é contratual: licença ou contrato com cláusula
 de não engenharia reversa.

@@ -23,10 +23,17 @@ import time
 import webbrowser
 from pathlib import Path
 
-FROZEN = getattr(sys, "frozen", False)
+# PyInstaller marca sys.frozen; o Nuitka define __compiled__.
+NUITKA = "__compiled__" in globals()
+FROZEN = getattr(sys, "frozen", False) or NUITKA
 
 # Pasta da instalação (gravável) e pasta com os arquivos empacotados.
-HOME = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+if NUITKA:
+    HOME = Path(sys.argv[0]).resolve().parent
+elif FROZEN:
+    HOME = Path(sys.executable).resolve().parent
+else:
+    HOME = Path(__file__).resolve().parent.parent
 BUNDLE = Path(getattr(sys, "_MEIPASS", HOME))
 
 
