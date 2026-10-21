@@ -1725,6 +1725,7 @@ async def flexao_control_stream(request: Request):
         samples: list[dict] = []
         t_start: float | None = None
         last_fim = False
+        saved = False
         try:
             if not await loop.run_in_executor(None, reader.connect):
                 yield f"data: {json.dumps({'error': 'clp_offline'})}\n\n"
@@ -1752,6 +1753,7 @@ async def flexao_control_stream(request: Request):
                     samples.append({"t_ms": elapsed_ms, "forca": forca, "deslocamento": desl or 0.0})
 
                 if fim and not last_fim:
+                    saved = True
                     saved_id = await loop.run_in_executor(None, _persist, samples)
                     yield f"data: {json.dumps({'fim_ensaio': True, 'saved_ensaio_id': saved_id})}\n\n"
                     break
@@ -1769,7 +1771,12 @@ async def flexao_control_stream(request: Request):
         except asyncio.CancelledError:
             pass
         finally:
-            await loop.run_in_executor(None, reader.close)
+            # Síncrono de propósito: na desconexão a task está cancelada e um await aqui
+            # seria interrompido antes de gravar.
+            reader.close()
+            # Parado pelo usuário (ou o bit de fim não subiu): grava o que foi coletado.
+            if not saved and samples:
+                _persist(samples)
 
     return StreamingResponse(
         generate(),
