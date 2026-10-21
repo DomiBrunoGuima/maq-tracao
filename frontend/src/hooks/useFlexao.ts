@@ -32,3 +32,11 @@ export function useDeleteEnsaioFlexao() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["flexao", "ensaios"] }),
   });
 }
+
+export function useQualidadeFlexao(id: number | null) {
+  return useQuery({
+    queryKey: ["flexao", "qualidade", id],
+    queryFn: () => api.getQualidadeFlexao(id!),
+    enabled: id !== null,
+  });
+}

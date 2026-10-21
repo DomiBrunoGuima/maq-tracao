@@ -97,7 +97,7 @@ function num(pt: DataPoint, key: string): number | null {
   return typeof v === "number" ? v : null;
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[10px] font-semibold text-muted/50 uppercase tracking-widest mb-2.5">
       {children}
@@ -109,7 +109,7 @@ function Divider() {
   return <hr className="border-border/60 my-3" />;
 }
 
-function MiniStat({
+export function MiniStat({
   formula, label, value, note, highlight,
 }: {
   formula: string; label: string; value: string; note?: string; highlight?: boolean;
@@ -131,7 +131,7 @@ function MiniStat({
   );
 }
 
-function HeroValue({ label, value, unit, sub, cor }: {
+export function HeroValue({ label, value, unit, sub, cor }: {
   label: string; value: string; unit: string; sub?: string; cor: string;
 }) {
   return (

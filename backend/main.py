@@ -74,7 +74,7 @@ from .modbus_client import (
 from .simulator import SIM, SimController, SimReader, sim_capture
 from .normas import listar_normas
 from .parser import parse_csv
-from .qualidade import avaliar_qualidade, resumo_status
+from .qualidade import avaliar_qualidade, avaliar_qualidade_flexao, resumo_status
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
 
@@ -1595,6 +1595,16 @@ def get_kpis_flexao(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
     df = pd.read_json(io.StringIO(r.data_json))
     return JSONResponse(content=calculate_kpis_flexao(df, geom=_flexao_geom(r)))
+
+
+@app.get("/api/flexao/ensaios/{id}/qualidade")
+def get_qualidade_flexao(id: int, db: Session = Depends(get_db)):
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    itens = avaliar_qualidade_flexao(df, calculate_kpis_flexao(df, geom=_flexao_geom(r)))
+    return {"status": resumo_status(itens), "itens": itens}
 
 
 @app.get("/api/flexao/ensaios/{id}/curvas")

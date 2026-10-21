@@ -38,6 +38,7 @@ import { useConfig } from "../../hooks/useConfig";
 import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao } from "../../hooks/useFlexao";
 import type { AjusteElastico, FlexaoFrame, Norma } from "../../types";
 import { BigValue, StatusEnsaioBar, fmtBig, type StatusEnsaio } from "../Common/Status";
+import FlexaoResultado from "./FlexaoResultado";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-flexao";
@@ -199,9 +200,10 @@ function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label, fit, fitLe
 function EnsaiosTab({ initialId }: { initialId?: number | null }) {
   const { data: ensaios, isLoading } = useEnsaiosFlexao();
   const [selected, setSelected] = useState<number | null>(initialId ?? null);
-  const { data: kpis } = useKPIsFlexao(selected);
-  const { data: curvas } = useCurvasFlexao(selected);
   const delMut = useDeleteEnsaioFlexao();
+
+  // Clique num ensaio de flexão na barra lateral troca o ensaio mostrado
+  useEffect(() => { if (initialId != null) setSelected(initialId); }, [initialId]);
 
   useEffect(() => {
     if (selected == null && ensaios && ensaios.length > 0) setSelected(ensaios[0].id);
@@ -219,62 +221,12 @@ function EnsaiosTab({ initialId }: { initialId?: number | null }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
-      {/* Lista */}
-      <div className="space-y-2">
-        {ensaios.map((e) => (
-          <div key={e.id}
-            onClick={() => setSelected(e.id)}
-            className={clsx(
-              "group rounded-lg border p-3 cursor-pointer transition-all",
-              selected === e.id ? "border-accent/50 bg-accent/10" : "border-border hover:border-border hover:bg-border/30",
-            )}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">{e.filename.replace(".csv", "")}</p>
-                <p className="text-xs text-muted">{e.data_ensaio}</p>
-              </div>
-              <button onClick={(ev) => { ev.stopPropagation(); delMut.mutate(e.id); if (selected === e.id) setSelected(null); }}
-                className="text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
-                <Trash2 size={13} />
-              </button>
-            </div>
-            <div className="flex gap-3 mt-1.5 text-xs font-mono">
-              <span className="text-muted">σfM <span className="text-slate-300">{e.tensao_flexao_max_MPa.toFixed(1)}</span></span>
-              <span className="text-muted">Ef <span className="text-slate-300">{(e.modulo_flexao_MPa / 1000).toFixed(2)}GPa</span></span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Detalhe */}
-      <div className="space-y-5">
-        {kpis && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KpiCard icon={<Zap size={20} />} label="Resistência à flexão σfM" value={fmtNum(kpis.tensao_flexao_max_MPa, 1, "MPa")} color="text-sky-300" />
-            <KpiCard icon={<Gauge size={20} />} label="Módulo de flexão Ef" value={fmtNum(kpis.modulo_flexao_GPa, 2, "GPa")} color="text-amber-300" />
-            <KpiCard icon={<MoveHorizontal size={20} />} label="Deflexão máxima" value={fmtNum(kpis.deflexao_max_mm, 2, "mm")} color="text-violet-300" />
-            <KpiCard icon={<Ruler size={20} />} label="Força máxima" value={fmtNum(kpis.forca_max_kN, 2, "kN")} />
-          </div>
-        )}
-        {kpis && (
-          <p className="text-xs text-muted">
-            Norma: <span className="text-slate-300">{kpis.norma}</span> · b={fmtNum(kpis.largura_mm, 1)}mm · h={fmtNum(kpis.espessura_mm, 1)}mm · L={fmtNum(kpis.span_mm, 1)}mm
-            {kpis.modulo_cordal_MPa != null && <> · Ef cordal {(kpis.modulo_cordal_MPa / 1000).toFixed(2)}GPa</>}
-          </p>
-        )}
-        {curvas && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <CurveChart data={curvas.stress_strain} xKey="Deform_Flexao" yKey="Tensao_Flexao"
-              xLabel="εf" yLabel="σf (MPa)" color="#38bdf8" label="Tensão × Deformação de flexão"
-              fit={curvas.trecho_elastico?.ss} fitLegenda={(f) => `Ef = ${(f.inclinacao / 1000).toFixed(2)} GPa`} />
-            <CurveChart data={curvas.force_displacement} xKey="Deslocamento" yKey="Forca_N"
-              xLabel="δ (mm)" yLabel="F (N)" color="#a78bfa" label="Força × Deflexão"
-              fit={curvas.trecho_elastico?.fd} fitLegenda={(f) => `k = ${f.inclinacao.toFixed(1)} N/mm`} />
-          </div>
-        )}
-      </div>
-    </div>
+    <FlexaoResultado
+      ensaios={ensaios}
+      selected={selected}
+      onSelect={setSelected}
+      onDelete={(id) => { delMut.mutate(id); if (selected === id) setSelected(null); }}
+    />
   );
 }
 

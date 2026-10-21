@@ -173,6 +173,9 @@ export const getKPIsFlexao = (id: number): Promise<KPIsFlexao> =>
 export const getCurvasFlexao = (id: number): Promise<FlexaoChartData> =>
   api.get(`/flexao/ensaios/${id}/curvas`).then((r) => r.data);
 
+export const getQualidadeFlexao = (id: number): Promise<Qualidade> =>
+  api.get(`/flexao/ensaios/${id}/qualidade`).then((r) => r.data);
+
 export const deleteEnsaioFlexao = (id: number): Promise<void> =>
   api.delete(`/flexao/ensaios/${id}`).then(() => undefined);
 

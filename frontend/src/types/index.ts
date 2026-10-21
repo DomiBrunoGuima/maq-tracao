@@ -206,6 +206,9 @@ export interface KPIsFlexao {
   energia_J: number;
   tensao_escoamento_MPa: number | null;
   cv_modulo: number;
+  r2_elastico?: number | null;
+  pontos_trecho_elastico?: number | null;
+  ruptura_detectada?: boolean;
   norma: string;
   largura_mm: number | null;
   espessura_mm: number | null;
@@ -226,10 +229,24 @@ export interface FlexaoChartData {
     Deslocamento: number;
   };
   Ef_regressao: number | null;
+  fases?: FaseFlexao[];
   trecho_elastico?: {
     ss: AjusteElastico | null;   // σf × εf
     fd: AjusteElastico | null;   // F × δ
   };
+}
+
+export interface FaseFlexao {
+  fase: string;
+  rotulo: string;
+  n_pontos: number;
+  t_ini: number | null;
+  t_fim: number | null;
+  eps_ini: number | null;
+  eps_fim: number | null;
+  d_ini: number | null;
+  d_fim: number | null;
+  forca_max: number | null;
 }
 
 export interface AjusteElastico {

@@ -144,6 +144,8 @@ def calculate_kpis(df: pd.DataFrame, geom: dict | None = None) -> dict:
         )
 
     modulo_final = modulo_cordal_MPa or modulo_flexao_MPa or 0.0
+    ajuste = _ajuste_linear(elastic_df, "Deform_Flexao", "Tensao_Flexao")
+    ruptura_detectada = bool("fase" in df.columns and (df["fase"] == "ruptura").any())
 
     return {
         "forca_max_N": forca_max,
@@ -164,6 +166,9 @@ def calculate_kpis(df: pd.DataFrame, geom: dict | None = None) -> dict:
         "energia_J": energia,
         "tensao_escoamento_MPa": tensao_escoamento,
         "cv_modulo": cv_modulo,
+        "r2_elastico": ajuste["r2"] if ajuste else None,
+        "pontos_trecho_elastico": ajuste["n_pontos"] if ajuste else None,
+        "ruptura_detectada": ruptura_detectada,
         "norma": ncfg["label"],
         "largura_mm": geom.get("largura_mm"),
         "espessura_mm": geom.get("espessura_mm"),
@@ -194,6 +199,47 @@ def _ajuste_linear(sub: pd.DataFrame, xcol: str, ycol: str) -> dict | None:
         "x_ini": float(x.min()),
         "x_fim": float(x.max()),
     }
+
+
+FASE_LABELS = {
+    "acomodacao": "Acomodação",
+    "elastico_linear": "Elástico linear",
+    "pos_escoamento": "Pós-escoamento",
+    "ruptura": "Ruptura",
+    "fim_ensaio": "Fim do ensaio",
+}
+
+
+def resumo_fases(df: pd.DataFrame) -> list[dict]:
+    """Trechos contínuos de cada estágio (mesmo formato da tração): tempo, εf e
+    deflexão de início/fim, para colorir os gráficos e listar os estágios."""
+    if "fase" not in df.columns or df.empty:
+        return []
+
+    def _v(x):
+        x = float(x)
+        return x if np.isfinite(x) else None
+
+    fase = df["fase"].astype(str).to_numpy()
+    out: list[dict] = []
+    start = 0
+    for i in range(1, len(fase) + 1):
+        if i == len(fase) or fase[i] != fase[start]:
+            seg = df.iloc[start:i]
+            out.append({
+                "fase": fase[start],
+                "rotulo": FASE_LABELS.get(fase[start], fase[start]),
+                "n_pontos": int(i - start),
+                "t_ini": _v(seg["elapsed_seconds"].iloc[0]),
+                "t_fim": _v(seg["elapsed_seconds"].iloc[-1]),
+                "eps_ini": _v(seg["Deform_Flexao"].iloc[0]),
+                "eps_fim": _v(seg["Deform_Flexao"].iloc[-1]),
+                "d_ini": _v(seg["Deslocamento"].iloc[0]),
+                "d_fim": _v(seg["Deslocamento"].iloc[-1]),
+                "forca_max": _v(seg["Forca_N"].max()),
+            })
+            start = i
+    return out
 
 
 def format_chart_data(df: pd.DataFrame) -> dict:
@@ -250,6 +296,7 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             "Deslocamento": float(peak_row["Deslocamento"]),
         },
         "Ef_regressao": Ef_regressao,
+        "fases": resumo_fases(df_plot),
         # Trecho elástico (faixa + reta de regressão) nos gráficos finais
         "trecho_elastico": {
             "ss": _ajuste_linear(elastic_df, "Deform_Flexao", "Tensao_Flexao"),
