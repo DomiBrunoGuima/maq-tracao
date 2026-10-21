@@ -4,6 +4,8 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,7 +36,7 @@ import {
 } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao } from "../../hooks/useFlexao";
-import type { FlexaoFrame, Norma } from "../../types";
+import type { AjusteElastico, FlexaoFrame, Norma } from "../../types";
 import { BigValue, StatusEnsaioBar, fmtBig, type StatusEnsaio } from "../Common/Status";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
 
@@ -143,12 +145,20 @@ function LiveChart({ data, dataKey, color, unit, label, yLabel }: {
   );
 }
 
-function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label }: {
+function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label, fit, fitLegenda }: {
   data: any[]; xKey: string; yKey: string; xLabel: string; yLabel: string; color: string; label: string;
+  fit?: AjusteElastico | null; fitLegenda?: (f: AjusteElastico) => string;
 }) {
+  // Reta do trecho elástico prolongada além do trecho, para mostrar onde a curva se afasta dela
+  const xs = data.map((p) => p[xKey]).filter((v): v is number => typeof v === "number");
+  const xMax = xs.length ? Math.max(...xs) : fit?.x_fim ?? 0;
+  const x2 = fit ? Math.min(xMax, fit.x_ini + (fit.x_fim - fit.x_ini) * 1.6) : 0;
   return (
     <div className="bg-surface border border-border rounded-xl p-4">
-      <p className="text-xs font-medium text-muted mb-3">{label}</p>
+      <p className="text-xs font-medium text-muted mb-1">{label}</p>
+      <p className="text-[11px] font-mono text-muted/70 mb-2 min-h-[1rem]">
+        {fit && fitLegenda ? <><span className="text-emerald-400">■</span> trecho elástico · <span className="text-rose-400">- -</span> {fitLegenda(fit)} · R² = {fit.r2.toFixed(4)}</> : null}
+      </p>
       <ResponsiveContainer width="100%" height={260}>
         <ComposedChart data={data} margin={{ top: 8, right: 20, left: 8, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1a1e2e" />
@@ -166,7 +176,18 @@ function CurveChart({ data, xKey, yKey, xLabel, yLabel, color, label }: {
                 <p className="text-white">{yLabel}: {Number(payload[0].payload[yKey]).toFixed(2)}</p>
               </div>
             )} />
+          {fit && fit.x_fim > fit.x_ini && (
+            <ReferenceArea x1={fit.x_ini} x2={fit.x_fim} ifOverflow="hidden"
+              fill="#22c55e" fillOpacity={0.12} strokeOpacity={0} />
+          )}
           <Line dataKey={yKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+          {fit && (
+            <ReferenceLine ifOverflow="hidden" stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="6 4"
+              segment={[
+                { x: fit.x_ini, y: fit.inclinacao * fit.x_ini + fit.intercepto },
+                { x: x2, y: fit.inclinacao * x2 + fit.intercepto },
+              ]} />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -245,9 +266,11 @@ function EnsaiosTab({ initialId }: { initialId?: number | null }) {
         {curvas && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <CurveChart data={curvas.stress_strain} xKey="Deform_Flexao" yKey="Tensao_Flexao"
-              xLabel="εf" yLabel="σf (MPa)" color="#38bdf8" label="Tensão × Deformação de flexão" />
+              xLabel="εf" yLabel="σf (MPa)" color="#38bdf8" label="Tensão × Deformação de flexão"
+              fit={curvas.trecho_elastico?.ss} fitLegenda={(f) => `Ef = ${(f.inclinacao / 1000).toFixed(2)} GPa`} />
             <CurveChart data={curvas.force_displacement} xKey="Deslocamento" yKey="Forca_N"
-              xLabel="δ (mm)" yLabel="F (N)" color="#a78bfa" label="Força × Deflexão" />
+              xLabel="δ (mm)" yLabel="F (N)" color="#a78bfa" label="Força × Deflexão"
+              fit={curvas.trecho_elastico?.fd} fitLegenda={(f) => `k = ${f.inclinacao.toFixed(1)} N/mm`} />
           </div>
         )}
       </div>

@@ -171,6 +171,31 @@ def calculate_kpis(df: pd.DataFrame, geom: dict | None = None) -> dict:
     }
 
 
+def _ajuste_linear(sub: pd.DataFrame, xcol: str, ycol: str) -> dict | None:
+    """Reta y = a·x + b no trecho elástico, com R² e os limites em x, para
+    desenhar a faixa e a reta sobre o gráfico."""
+    if xcol not in sub.columns or ycol not in sub.columns:
+        return None
+    x = sub[xcol].to_numpy(dtype=float)
+    y = sub[ycol].to_numpy(dtype=float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    if len(x) < 3 or float(np.std(x)) == 0:
+        return None
+    a, b = np.polyfit(x, y, 1)
+    pred = a * x + b
+    ss_res = float(np.sum((y - pred) ** 2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    return {
+        "inclinacao": float(a),
+        "intercepto": float(b),
+        "r2": 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0,
+        "n_pontos": int(len(x)),
+        "x_ini": float(x.min()),
+        "x_fim": float(x.max()),
+    }
+
+
 def format_chart_data(df: pd.DataFrame) -> dict:
     def safe_records(sub: pd.DataFrame, fields: list[str]) -> list[dict]:
         out = []
@@ -225,4 +250,9 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             "Deslocamento": float(peak_row["Deslocamento"]),
         },
         "Ef_regressao": Ef_regressao,
+        # Trecho elástico (faixa + reta de regressão) nos gráficos finais
+        "trecho_elastico": {
+            "ss": _ajuste_linear(elastic_df, "Deform_Flexao", "Tensao_Flexao"),
+            "fd": _ajuste_linear(elastic_df, "Deslocamento", "Forca_N"),
+        },
     }

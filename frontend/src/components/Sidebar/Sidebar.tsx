@@ -19,8 +19,9 @@ import {
 import { clsx } from "clsx";
 import { buscar, relatorioUrl } from "../../api/client";
 import { useEnsaios, useDeleteEnsaio, useReimportAll } from "../../hooks/useEnsaios";
+import { useEnsaiosFlexao, useDeleteEnsaioFlexao } from "../../hooks/useFlexao";
 import { useTheme } from "../../hooks/useTheme";
-import type { EnsaioSummary, ResultadoBusca, TipoBusca } from "../../types";
+import type { EnsaioFlexaoSummary, EnsaioSummary, ResultadoBusca, TipoBusca } from "../../types";
 import { ConexaoCLPIndicator } from "../Common/Status";
 
 const FILTROS: { key: TipoBusca; label: string }[] = [
@@ -65,6 +66,13 @@ export default function Sidebar({
 }: Props) {
   const { data: ensaios, isLoading } = useEnsaios();
   const deleteMut = useDeleteEnsaio();
+  const { data: flexoes } = useEnsaiosFlexao();
+  const deleteFlexaoMut = useDeleteEnsaioFlexao();
+  // Lista única com tração e flexão, mais recentes primeiro
+  const lista: ({ modo: "tracao"; e: EnsaioSummary } | { modo: "flexao"; e: EnsaioFlexaoSummary })[] = [
+    ...(ensaios ?? []).map((e) => ({ modo: "tracao" as const, e })),
+    ...(flexoes ?? []).map((e) => ({ modo: "flexao" as const, e })),
+  ].sort((a, b) => (b.e.created_at ?? "").localeCompare(a.e.created_at ?? ""));
   const reimportMut = useReimportAll();
   const { tema, alternar } = useTheme();
 
@@ -235,7 +243,7 @@ export default function Sidebar({
         {isLoading && (
           <p className="text-xs text-muted text-center mt-8">Carregando...</p>
         )}
-        {!isLoading && (!ensaios || ensaios.length === 0) && (
+        {!isLoading && lista.length === 0 && (
           <div className="text-center mt-8 px-4">
             <p className="text-xs text-muted">Nenhum ensaio carregado.</p>
             <p className="text-xs text-muted mt-1">
@@ -243,15 +251,22 @@ export default function Sidebar({
             </p>
           </div>
         )}
-        {ensaios?.map((e) => (
+        {lista.map((item) => item.modo === "tracao" ? (
           <EnsaioItem
-            key={e.id}
-            ensaio={e}
-            selected={selectedId === e.id}
-            inCompare={compareIds.includes(e.id)}
-            onSelect={() => onSelect(e.id)}
-            onToggleCompare={() => onToggleCompare(e.id)}
-            onDelete={() => deleteMut.mutate(e.id)}
+            key={`t-${item.e.id}`}
+            ensaio={item.e}
+            selected={selectedId === item.e.id}
+            inCompare={compareIds.includes(item.e.id)}
+            onSelect={() => onSelect(item.e.id)}
+            onToggleCompare={() => onToggleCompare(item.e.id)}
+            onDelete={() => deleteMut.mutate(item.e.id)}
+          />
+        ) : (
+          <FlexaoItem
+            key={`f-${item.e.id}`}
+            ensaio={item.e}
+            onSelect={() => onOpenFlexao(item.e.id)}
+            onDelete={() => deleteFlexaoMut.mutate(item.e.id)}
           />
         ))}
       </div>
@@ -383,6 +398,39 @@ function EnsaioItem({
         >
           {inCompare ? "✓ Comparar" : "+ Comparar"}
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="px-3 py-1.5 text-xs text-muted hover:text-red-400 transition-colors"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FlexaoItem({
+  ensaio, onSelect, onDelete,
+}: {
+  ensaio: EnsaioFlexaoSummary; onSelect: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className="group mx-2 mb-1 rounded-lg border border-transparent hover:border-border hover:bg-border/30 transition-all cursor-pointer">
+      <div className="flex items-start gap-2 p-3" onClick={onSelect}>
+        <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-muted" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-white truncate">{ensaio.filename.replace(".csv", "")}</p>
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 flex-shrink-0">FLEXÃO</span>
+          </div>
+          <p className="text-xs text-muted truncate">{ensaio.data_ensaio}</p>
+          <div className="flex gap-3 mt-1.5">
+            <Stat label="Fmax" value={`${((ensaio.forca_max_N ?? 0) / 1000).toFixed(2)} kN`} />
+            <Stat label="σfM" value={`${(ensaio.tensao_flexao_max_MPa ?? 0).toFixed(1)} MPa`} />
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end border-t border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="px-3 py-1.5 text-xs text-muted hover:text-red-400 transition-colors"

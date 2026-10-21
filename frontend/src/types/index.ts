@@ -226,6 +226,19 @@ export interface FlexaoChartData {
     Deslocamento: number;
   };
   Ef_regressao: number | null;
+  trecho_elastico?: {
+    ss: AjusteElastico | null;   // σf × εf
+    fd: AjusteElastico | null;   // F × δ
+  };
+}
+
+export interface AjusteElastico {
+  inclinacao: number;
+  intercepto: number;
+  r2: number;
+  n_pontos: number;
+  x_ini: number;
+  x_fim: number;
 }
 
 export interface FlexaoControlStartRequest {
