@@ -44,6 +44,7 @@ mkdir "%PKG%"
 xcopy "build-cliente\nuitka\servidor.dist" "%PKG%\MaqTracao\" /e /i /q /y >nul
 copy /y instalacao\instalar.bat "%PKG%\" >nul
 copy /y instalacao\desinstalar.bat "%PKG%\" >nul
+copy /y instalacao\icone.ico "%PKG%\" >nul
 if exist build-cliente\MaqTracao-instalador.zip del build-cliente\MaqTracao-instalador.zip
 powershell -NoProfile -Command "Compress-Archive -Path '%PKG%\*' -DestinationPath 'build-cliente\MaqTracao-instalador.zip'"
 

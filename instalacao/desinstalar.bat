@@ -15,6 +15,8 @@ if exist "%DEST%" (
   for %%F in ("%DEST%\*") do (echo %%~nxF| findstr /b /i "config.json tracao.db" >nul || del /f /q "%%F")
 )
 if exist "%PUBLIC%\Desktop\Maquina de Tracao.url" del /f /q "%PUBLIC%\Desktop\Maquina de Tracao.url"
+if exist "%PUBLIC%\Desktop\Maquina de Tracao.lnk" del /f /q "%PUBLIC%\Desktop\Maquina de Tracao.lnk"
+if exist "%ProgramData%\MaqTracao" rmdir /s /q "%ProgramData%\MaqTracao"
 
 echo Programa removido. Os dados (config.json, tracao.db, data\, logs\)
 echo continuam em %DEST%; apague a pasta manualmente se nao precisar deles.

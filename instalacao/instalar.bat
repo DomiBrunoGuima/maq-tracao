@@ -40,10 +40,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 schtasks /run /tn %TASK% >nul
 
 echo [5/5] Criando atalho na area de trabalho...
-(
-  echo [InternetShortcut]
-  echo URL=http://localhost:8000
-) > "%PUBLIC%\Desktop\Maquina de Tracao.url"
+:: Icone: icone.ico ao lado deste script (troque pelo logo de voces, se quiser).
+:: Fica fora de C:\MaqTracao porque usuarios comuns nao leem aquela pasta.
+set "ICODIR=%ProgramData%\MaqTracao"
+if not exist "%ICODIR%" mkdir "%ICODIR%"
+if exist "%~dp0icone.ico" copy /y "%~dp0icone.ico" "%ICODIR%\icone.ico" >nul
+if exist "%PUBLIC%\Desktop\Maquina de Tracao.url" del /f /q "%PUBLIC%\Desktop\Maquina de Tracao.url"
+:: Atalho abre a tela no Edge em modo aplicativo (janela propria, sem barra de endereco).
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$edge = @(\"${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe\", \"$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe\") | Where-Object { Test-Path $_ } | Select-Object -First 1;" ^
+  "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(\"$env:PUBLIC\Desktop\Maquina de Tracao.lnk\");" ^
+  "if ($edge) { $s.TargetPath = $edge; $s.Arguments = '--app=http://localhost:8000' } else { $s.TargetPath = 'http://localhost:8000' };" ^
+  "if (Test-Path \"$env:ProgramData\MaqTracao\icone.ico\") { $s.IconLocation = \"$env:ProgramData\MaqTracao\icone.ico,0\" };" ^
+  "$s.Description = 'Maquina de Tracao'; $s.Save()"
 
 echo.
 echo ============================================

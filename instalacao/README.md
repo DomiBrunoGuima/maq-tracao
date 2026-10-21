@@ -18,7 +18,10 @@ C:\MaqTracao\
 
 - Inicia sozinho com o Windows (tarefa agendada `MaqTracao`, como SYSTEM, antes
   do login) e é reiniciado se cair.
-- Atalho **Maquina de Tracao** na área de trabalho abre a tela no navegador.
+- Atalho **Maquina de Tracao** na área de trabalho abre a tela no Edge em modo
+  aplicativo (janela própria, sem barra de endereço). O ícone é o
+  `instalacao\icone.ico`; para trocar, substitua esse arquivo antes do build
+  (ou o `icone.ico` dentro do zip, antes de rodar o `instalar.bat`).
 - A pasta `C:\MaqTracao` só abre para Administradores. A subpasta `data\` fica
   liberada para usuários comuns (digite `C:\MaqTracao\data` no Explorer) caso
   precisem colocar CSVs à mão.
