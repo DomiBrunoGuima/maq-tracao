@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useMemo } from "react";
 import type { DataPoint, KPIs, ParametrosIHM } from "../../types";
+import { N_POR_KGF } from "../Common/Status";
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -157,7 +158,8 @@ export default function PointInspectorModal({ point, kpis, ihmParams, onClose }:
             </p>
             <table className="w-full">
               <tbody>
-                <RawRow label="Forca_N"       value={calc.F  != null ? fmt(calc.F,  2) : null} unit="N"   source={<Badge color="blue">CSV</Badge>} />
+                <RawRow label="Força"         value={calc.F  != null ? fmt(calc.F,  2) : null} unit="N"   source={<Badge color="blue">CSV</Badge>} />
+                <RawRow label="Força (kgf)"   value={calc.F  != null ? fmt(calc.F / N_POR_KGF, 2) : null} unit="kgf" source={<Badge color="green">F ÷ 9,80665</Badge>} />
                 <RawRow label="Deslocamento"  value={calc.d  != null ? fmt(calc.d,  3) : null} unit="mm"  source={<Badge color="blue">CSV</Badge>} />
                 <RawRow label="Tensao_Pa"     value={calc.σ  != null ? fmt(calc.σ,  4) : null} unit="MPa" source={<Badge color="blue">CSV</Badge>} />
                 <RawRow label="Deform_Along"  value={calc.ε  != null ? fmt(calc.ε,  6) : null}            source={<Badge color="blue">CSV</Badge>} />
@@ -210,7 +212,7 @@ export default function PointInspectorModal({ point, kpis, ihmParams, onClose }:
                 <CalcBlock
                   title="Tensão  σ = F ÷ A"
                   steps={[
-                    { label: `F = ${fmt(calc.F, 2)} N  ÷  A = ${fmt(calc.A, 4)} mm²`, value: "" },
+                    { label: `F = ${fmt(calc.F, 2)} N (${fmt(calc.F / N_POR_KGF, 2)} kgf)  ÷  A = ${fmt(calc.A, 4)} mm²`, value: "" },
                     ...(calc.σ != null ? [{ label: `CSV reportou`, value: `${fmt(calc.σ, 4)} MPa` }] : []),
                   ]}
                   result={`${fmt(calc.sigma_calc!, 4)}`}

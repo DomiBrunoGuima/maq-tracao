@@ -82,9 +82,11 @@ export function StatusEnsaioBar({ status }: { status: StatusEnsaio }) {
 // ── Valor em tempo real grande ──────────────────────────────────────────────
 
 export function BigValue({
-  icon, label, value, unit, color = "text-white", sub,
+  icon, label, value, unit, color = "text-white", sub, alt,
 }: {
   icon: React.ReactNode; label: string; value: string; unit: string; color?: string; sub?: string;
+  /** Mesmo valor em outra unidade, em destaque menor (ex.: "455.3 kgf"). */
+  alt?: string;
 }) {
   return (
     <div className="bg-surface border border-border rounded-xl px-5 py-4">
@@ -96,9 +98,18 @@ export function BigValue({
         <span className="text-5xl tabular-nums">{value}</span>
         <span className="text-xl ml-2 opacity-70">{unit}</span>
       </p>
+      {alt && <p className={clsx("mt-2 font-mono text-2xl font-semibold tabular-nums opacity-75", color)}>{alt}</p>}
       {sub && <p className="text-xs text-muted mt-2 font-mono">{sub}</p>}
     </div>
   );
+}
+
+/** 1 kgf = 9,80665 N (gravidade padrão). */
+export const N_POR_KGF = 9.80665;
+
+/** Força em N convertida e formatada em kgf ("—" sem leitura). */
+export function fmtKgf(n: number | null | undefined, dec = 1): string {
+  return n == null || !Number.isFinite(n) ? "—" : (n / N_POR_KGF).toFixed(dec);
 }
 
 /** Número formatado para os mostradores grandes ("—" sem leitura). */

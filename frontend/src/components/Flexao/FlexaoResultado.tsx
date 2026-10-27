@@ -8,6 +8,7 @@ import SimpleLineChart from "../Charts/SimpleLineChart";
 import KPICard from "../Dashboard/KPICard";
 import QualidadePanel from "../Dashboard/QualidadePanel";
 import { FASE_CORES, HeroValue, MiniStat, SectionLabel } from "../Dashboard/Dashboard";
+import { fmtKgf } from "../Common/Status";
 
 // Mesmo layout do resultado da tração (Dashboard): valores em destaque, gráfico
 // principal com miniaturas e, à direita, qualidade, trecho elástico, estágios e resultados.
@@ -115,7 +116,7 @@ export default function FlexaoResultado({
 
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N`} cor="text-rupture" />
+          <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} cor="text-rupture" />
           <HeroValue label="Resistência à flexão σfM" value={fmt(kpis.tensao_flexao_max_MPa, 1)} unit="MPa" cor="text-sky-300" />
           <HeroValue label="Módulo de flexão Ef" value={fmt(kpis.modulo_flexao_GPa, 2)} unit="GPa"
             sub={kpis.r2_elastico != null ? `R² = ${kpis.r2_elastico.toFixed(4)}` : undefined} cor="text-emerald-300" />
@@ -216,7 +217,7 @@ function Resultados({ kpis }: { kpis: KPIsFlexao }) {
       <div className="rounded-xl border border-border bg-surface p-3">
         <SectionLabel>Resultados</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
-          <KPICard compact highlight label="Força Máx." value={`${fmt(kpis.forca_max_kN, 2)} kN`} sub={`${fmt(kpis.forca_max_N, 0)} N`} />
+          <KPICard compact highlight label="Força Máx." value={`${fmt(kpis.forca_max_kN, 2)} kN`} sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} />
           <KPICard compact highlight label="σfM" value={`${fmt(kpis.tensao_flexao_max_MPa)} MPa`} />
           <KPICard compact label="Módulo Ef" value={`${fmt(kpis.modulo_flexao_MPa, 0)} MPa`} sub={`${fmt(kpis.modulo_flexao_GPa, 2)} GPa`} />
           <KPICard compact label="Ef cordal" value={kpis.modulo_cordal_MPa != null ? `${fmt(kpis.modulo_cordal_MPa, 0)} MPa` : "—"} />

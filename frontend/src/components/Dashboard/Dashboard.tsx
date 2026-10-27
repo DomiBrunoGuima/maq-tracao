@@ -11,6 +11,7 @@ import KPICard from "./KPICard";
 import SimpleLineChart from "../Charts/SimpleLineChart";
 import ReportGenerator from "../Reports/ReportGenerator";
 import PointInspectorModal from "../Charts/PointInspectorModal";
+import { fmtKgf } from "../Common/Status";
 
 // ── chart registry ────────────────────────────────────────────
 
@@ -311,7 +312,7 @@ export default function Dashboard({ ensaioId }: Props) {
 
       {/* ── Valores principais em destaque ── */}
       <div className="flex-shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 pt-4">
-        <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N`} cor="text-rupture" />
+        <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} cor="text-rupture" />
         <HeroValue label="Tensão máxima" value={fmt(kpis.tensao_max_calc_MPa ?? kpis.tensao_max_MPa, 1)} unit="MPa"
           sub={kpis.tensao_rp02_MPa != null ? `Rp0,2 = ${fmt(kpis.tensao_rp02_MPa, 1)} MPa` : undefined} cor="text-sky-300" />
         <HeroValue label="Módulo de elasticidade"
@@ -460,7 +461,7 @@ export default function Dashboard({ ensaioId }: Props) {
             <div className="grid grid-cols-2 gap-2">
               <KPICard compact highlight label="Força Máx."
                 value={`${fmt(kpis.forca_max_kN, 2)} kN`}
-                sub={`${fmt(kpis.forca_max_N, 0)} N`} />
+                sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} />
               <KPICard compact highlight label="Tensão Máx."
                 value={`${fmt(kpis.tensao_max_MPa)} MPa`} />
               <KPICard compact label="Módulo E"

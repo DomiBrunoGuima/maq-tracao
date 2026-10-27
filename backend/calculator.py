@@ -276,22 +276,18 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             coeffs = np.polyfit(eps_el[valid], sig_el[valid], 1)
             E_regressao = float(coeffs[0])
 
+    # Força e deslocamento vão em todas as séries para a inspeção do ponto
+    # mostrá-los qualquer que seja o gráfico clicado.
+    base = ["Forca_N", "Deslocamento", "fase", "elapsed_seconds"]
     return {
-        "stress_strain": safe_records(
-            df_plot,
-            ["Deform_Along", "Tensao_Pa", "fase", "elapsed_seconds"],
-        ),
-        "force_displacement": safe_records(
-            df_plot, ["Deslocamento", "Forca_N", "fase", "elapsed_seconds"]
-        ),
-        "force_time": safe_records(df_plot, ["elapsed_seconds", "Forca_N", "fase"]),
+        "stress_strain": safe_records(df_plot, ["Deform_Along", "Tensao_Pa", *base]),
+        "force_displacement": safe_records(df_plot, base),
+        "force_time": safe_records(df_plot, base),
         "elastic_modulus_time": safe_records(
             elastic_df if len(elastic_df) > 0 else df_plot,
-            ["elapsed_seconds", "Modulo_Elast", "fase"],
+            ["Modulo_Elast", *base],
         ),
-        "stress_time": safe_records(
-            df_plot, ["elapsed_seconds", "Tensao_Pa", "fase"]
-        ),
+        "stress_time": safe_records(df_plot, ["Tensao_Pa", *base]),
         "rupture": _clean({
             "elapsed_seconds": rupture_row["elapsed_seconds"],
             "Forca_N": rupture_row["Forca_N"],

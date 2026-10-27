@@ -28,7 +28,7 @@ import { clsx } from "clsx";
 import { getControlStatus, startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import type { ControlStatus, Norma, RealtimeFrame, RealtimePoint } from "../../types";
-import { BigValue, StatusEnsaioBar, fmtBig, type StatusEnsaio } from "../Common/Status";
+import { BigValue, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-tracao";
@@ -400,11 +400,13 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       {/* Valores em tempo real */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtBig(forcaShown, 1)} unit="N"
+          alt={forcaShown != null ? `${fmtKgf(forcaShown)} kgf` : undefined}
           color={forcaShown != null ? "text-sky-300" : "text-muted"} />
         <BigValue icon={<MoveHorizontal size={18} />} label="Deslocamento atual" value={fmtBig(deslocShown, 2)} unit="mm"
           color={deslocShown != null ? "text-violet-300" : "text-muted"} />
         <BigValue icon={<Gauge size={18} />} label="Força máxima"
           value={forcaMaxClp != null ? fmtBig(forcaMaxClp, 1) : maxForca > 0 ? maxForca.toFixed(1) : "—"} unit="N"
+          alt={forcaMaxClp != null ? `${fmtKgf(forcaMaxClp)} kgf` : maxForca > 0 ? `${fmtKgf(maxForca)} kgf` : undefined}
           color="text-amber-300" sub={forcaMaxClp != null ? "calculada pelo CLP" : maxForca > 0 ? "pico lido nesta tela" : undefined} />
       </div>
 
