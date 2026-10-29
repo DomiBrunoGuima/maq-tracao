@@ -45,6 +45,7 @@ type FormState = {
   flexao_espessura_mm: number;
   flexao_span_mm: number;
   flexao_norma: string;
+  flexao_habilitada: boolean;
   simulator_enabled: boolean;
   backup_ativo: boolean;
   backup_dir: string;
@@ -86,6 +87,7 @@ const DEFAULT_FORM: FormState = {
   flexao_espessura_mm: 0,
   flexao_span_mm: 0,
   flexao_norma: "ISO 178",
+  flexao_habilitada: true,
   simulator_enabled: false,
   backup_ativo: false,
   backup_dir: "",
@@ -220,6 +222,31 @@ function GeralSection({ form, setForm }: { form: FormState; setForm: React.Dispa
       </div>
 
       <Divider />
+
+      <div className="flex items-center justify-between rounded-lg border border-border bg-bg/40 px-4 py-3 mb-3">
+        <div>
+          <p className="text-sm text-white font-medium">Máquina com flexão</p>
+          <p className="text-xs text-muted/70 mt-0.5 max-w-md">
+            Desligue quando a máquina não tem o dispositivo de flexão: o botão FLEXÃO e os
+            ensaios de flexão somem da tela e o programa não deixa iniciar esse ensaio.
+          </p>
+        </div>
+        <button
+          onClick={() => setForm((f) => ({ ...f, flexao_habilitada: !f.flexao_habilitada }))}
+          className={clsx(
+            "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+            "transition-colors duration-200 focus:outline-none",
+            form.flexao_habilitada ? "bg-violet-500" : "bg-border"
+          )}
+        >
+          <span
+            className={clsx(
+              "inline-block h-4 w-4 transform rounded-full bg-[#fff] shadow transition duration-200",
+              form.flexao_habilitada ? "translate-x-4" : "translate-x-0"
+            )}
+          />
+        </button>
+      </div>
 
       <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
         <div>
@@ -451,8 +478,12 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         showRole addLabel="Adicionar registrador"
       />
 
-      <Divider />
-      <FlexaoRegistros form={form} setForm={setForm} />
+      {form.flexao_habilitada && (
+        <>
+          <Divider />
+          <FlexaoRegistros form={form} setForm={setForm} />
+        </>
+      )}
 
       <Divider />
       <RegisterProbe registers={form.control_registers} />

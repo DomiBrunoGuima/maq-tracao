@@ -119,6 +119,7 @@ _CONFIG_DEFAULTS: dict = {
     "flexao_espessura_mm": 0.0,
     "flexao_span_mm": 0.0,
     "flexao_norma": "ISO 178",
+    "flexao_habilitada": True,
     "backup_ativo": False,
     "backup_dir": "",
     "backup_intervalo_h": 24.0,
@@ -1627,6 +1628,8 @@ def delete_ensaio_flexao(id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/flexao/control/start")
 def flexao_control_start(req: FlexaoControlStartRequest):
+    if not _config.get("flexao_habilitada", True):
+        raise HTTPException(status_code=403, detail="Flexão desabilitada nesta máquina (Configurações → Geral).")
     ip, port, timeout = _clp_conn()
     if not ip:
         raise HTTPException(status_code=400, detail="IP do CLP não configurado — preencha em Configurações → Controle (CLP).")

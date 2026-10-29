@@ -7,6 +7,7 @@ import ControlPanel from "./components/Control/ControlPanel";
 import FlexaoView from "./components/Flexao/FlexaoView";
 import ClientesView from "./components/Cadastro/ClientesView";
 import RelatoriosView from "./components/Cadastro/RelatoriosView";
+import { useConfig } from "./hooks/useConfig";
 
 type View = "dashboard" | "comparison" | "config" | "control" | "flexao" | "clientes" | "relatorios";
 
@@ -14,6 +15,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [view, setView] = useState<View>("dashboard");
+  // Máquina sem flexão: a tela de flexão cai no controle de tração
+  const flexaoOn = useConfig().data?.flexao_habilitada !== false;
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [flexaoId, setFlexaoId] = useState<number | null>(null);
 
@@ -57,10 +60,10 @@ export default function App() {
         {view === "config" && (
           <ConfigPanel onClose={() => setView("dashboard")} />
         )}
-        {view === "control" && (
+        {(view === "control" || (view === "flexao" && !flexaoOn)) && (
           <ControlPanel onOpenEnsaio={handleSelectEnsaio} />
         )}
-        {view === "flexao" && (
+        {view === "flexao" && flexaoOn && (
           <FlexaoView key={flexaoId ?? "novo"} initialEnsaioId={flexaoId} />
         )}
         {view === "clientes" && (

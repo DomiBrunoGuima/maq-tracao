@@ -424,6 +424,7 @@ export interface AppConfig {
   flexao_espessura_mm: number;
   flexao_span_mm: number;
   flexao_norma: string;
+  flexao_habilitada?: boolean;
   simulator_enabled: boolean;
   backup_ativo: boolean;
   backup_dir: string;

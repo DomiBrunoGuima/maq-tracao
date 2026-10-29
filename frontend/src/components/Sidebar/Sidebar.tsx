@@ -21,6 +21,7 @@ import { buscar, relatorioUrl } from "../../api/client";
 import { useEnsaios, useDeleteEnsaio, useReimportAll } from "../../hooks/useEnsaios";
 import { useEnsaiosFlexao, useDeleteEnsaioFlexao } from "../../hooks/useFlexao";
 import { useTheme } from "../../hooks/useTheme";
+import { useConfig } from "../../hooks/useConfig";
 import type { EnsaioFlexaoSummary, EnsaioSummary, ResultadoBusca, TipoBusca } from "../../types";
 import { ConexaoCLPIndicator } from "../Common/Status";
 
@@ -68,10 +69,12 @@ export default function Sidebar({
   const deleteMut = useDeleteEnsaio();
   const { data: flexoes } = useEnsaiosFlexao();
   const deleteFlexaoMut = useDeleteEnsaioFlexao();
+  const { data: config } = useConfig();
+  const flexaoOn = config?.flexao_habilitada !== false;
   // Lista única com tração e flexão, mais recentes primeiro
   const lista: ({ modo: "tracao"; e: EnsaioSummary } | { modo: "flexao"; e: EnsaioFlexaoSummary })[] = [
     ...(ensaios ?? []).map((e) => ({ modo: "tracao" as const, e })),
-    ...(flexoes ?? []).map((e) => ({ modo: "flexao" as const, e })),
+    ...(flexaoOn ? flexoes ?? [] : []).map((e) => ({ modo: "flexao" as const, e })),
   ].sort((a, b) => (b.e.created_at ?? "").localeCompare(a.e.created_at ?? ""));
   const reimportMut = useReimportAll();
   const { tema, alternar } = useTheme();
@@ -90,7 +93,8 @@ export default function Sidebar({
     queryFn: () => buscar(q, filtro),
     enabled: buscando,
   });
-  const testesTracao = (busca?.resultados ?? []).filter((r) => r.tipo === "teste" && r.modo === "tracao");
+  const resultados = (busca?.resultados ?? []).filter((r) => flexaoOn || r.modo !== "flexao");
+  const testesTracao = resultados.filter((r) => r.tipo === "teste" && r.modo === "tracao");
 
   function abrirResultado(r: ResultadoBusca) {
     if (r.tipo === "cliente") onOpenCliente(r.id);
@@ -123,17 +127,19 @@ export default function Sidebar({
       </div>
 
       {/* Modos de ensaio — Tração e Flexão em destaque */}
-      <div className="p-3 border-b border-border grid grid-cols-2 gap-2">
+      <div className={clsx("p-3 border-b border-border grid gap-2", flexaoOn ? "grid-cols-2" : "grid-cols-1")}>
         <ModoButton
           ativo={currentView === "control"} onClick={onViewControl}
           icon={<ArrowUpFromLine size={30} strokeWidth={2.4} />} label="TRAÇÃO"
           cor="sky"
         />
-        <ModoButton
-          ativo={currentView === "flexao"} onClick={onViewFlexao}
-          icon={<ArrowDownToLine size={30} strokeWidth={2.4} />} label="FLEXÃO"
-          cor="violet"
-        />
+        {flexaoOn && (
+          <ModoButton
+            ativo={currentView === "flexao"} onClick={onViewFlexao}
+            icon={<ArrowDownToLine size={30} strokeWidth={2.4} />} label="FLEXÃO"
+            cor="violet"
+          />
+        )}
       </div>
 
       {/* Busca */}
@@ -218,7 +224,7 @@ export default function Sidebar({
               </button>
             )}
           </div>
-          {busca?.resultados.map((r) => (
+          {busca && resultados.map((r) => (
             <button
               key={`${r.tipo}-${r.modo ?? ""}-${r.id}`}
               onClick={() => abrirResultado(r)}
@@ -232,7 +238,7 @@ export default function Sidebar({
               {r.subtitulo && <p className="text-[11px] text-muted truncate pl-5">{r.subtitulo}</p>}
             </button>
           ))}
-          {!isFetching && busca && busca.resultados.length === 0 && (
+          {!isFetching && busca && resultados.length === 0 && (
             <p className="text-xs text-muted text-center mt-6 px-4">Nada encontrado. Tente menos palavras.</p>
           )}
         </div>

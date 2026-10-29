@@ -243,3 +243,13 @@ def test_configuracoes_exigem_senha(monkeypatch, tmp_path):
     assert "senha_config" not in cli.get("/api/config").json()
     assert cli.post("/api/config/login", json={"senha": acesso.SENHA_PADRAO}).status_code == 401
     assert cli.post("/api/config/login", json={"senha": "nova123"}).status_code == 200
+
+
+def test_flexao_desabilitada_bloqueia_inicio(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend import main
+
+    monkeypatch.setattr(main, "_config", {**main._config, "flexao_habilitada": False})
+    r = TestClient(main.app).post("/api/flexao/control/start", json={})
+    assert r.status_code == 403
+    assert "desabilitada" in r.json()["detail"]

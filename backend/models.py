@@ -222,6 +222,8 @@ class ConfigModel(BaseModel):
     flexao_espessura_mm: float = 0.0
     flexao_span_mm: float = 0.0
     flexao_norma: str = "ISO 178"
+    # Máquina sem dispositivo de flexão: some o botão/lista e o backend recusa iniciar
+    flexao_habilitada: bool = True
     # ── Simulador: gera valores plausíveis sem IHM/máquina real ─────────────
     simulator_enabled: bool = False
     # ── Backup automático numa pasta sincronizada (Google Drive, OneDrive...) ─
