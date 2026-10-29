@@ -48,6 +48,10 @@ copy /y instalacao\icone.ico "%PKG%\" >nul
 if exist build-cliente\MaqTracao-instalador.zip del build-cliente\MaqTracao-instalador.zip
 powershell -NoProfile -Command "Compress-Archive -Path '%PKG%\*' -DestinationPath 'build-cliente\MaqTracao-instalador.zip'"
 
+:: frontend/dist e versionado no git: desfaz a recompilacao local para
+:: o proximo git pull nao travar com "local changes would be overwritten".
+git --version >nul 2>&1 && (git checkout -- frontend/dist >nul 2>&1 & git clean -fdq frontend/dist >nul 2>&1)
+
 echo.
 echo ============================================
 echo  Pronto: build-cliente\MaqTracao-instalador.zip
