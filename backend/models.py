@@ -209,6 +209,9 @@ class ConfigModel(BaseModel):
     clp_port: int = 502
     clp_timeout: int = 3
     # Família do CLP Delta, usada para converter "device" (D/M/X/Y) em endereço Modbus
+    # Força nos registradores do CLP/IHM em kgf: o software converte para N na
+    # leitura (e o limite de força de N para kgf na escrita)
+    forca_clp_kgf: bool = True
     plc_family: str = "dvp"     # "dvp" | "direto" | "as"
     control_registers: List[IHMRegister] = []
     control_pulse_ms: int = 300  # duração do pulso em coils de comando (iniciar/parar)

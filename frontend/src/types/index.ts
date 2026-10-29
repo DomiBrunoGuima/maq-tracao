@@ -425,6 +425,7 @@ export interface AppConfig {
   flexao_span_mm: number;
   flexao_norma: string;
   flexao_habilitada?: boolean;
+  forca_clp_kgf?: boolean;
   simulator_enabled: boolean;
   backup_ativo: boolean;
   backup_dir: string;

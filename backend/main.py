@@ -109,6 +109,7 @@ _CONFIG_DEFAULTS: dict = {
     "clp_port": 502,
     "clp_timeout": 3,
     "plc_family": "dvp",
+    "forca_clp_kgf": True,
     "control_registers": [],
     "control_pulse_ms": 300,
     "area_seccao_mm2": 0.0,
@@ -186,6 +187,28 @@ def _make_reader(ip: str, port: int, timeout: int, regs: list[dict]):
     return SimReader(regs) if _sim_enabled() else RealtimeModbusReader(ip, port, timeout, regs)
 
 
+N_POR_KGF = 9.80665
+# Registradores de força lidos (role ou nome) e o setpoint de limite de força
+_FORCA_LIDA = ("forca_atual", "forca_maxima")
+_FORCA_ESCRITA = ("limite_forca",)
+
+
+def _forca_em_newton(r: dict) -> dict:
+    """Com a força do CLP em kgf (forca_clp_kgf), ajusta a escala dos registradores
+    de força para o software trabalhar sempre em N: leitura × 9,80665 e escrita do
+    limite de força ÷ 9,80665 (a escrita também multiplica pela escala)."""
+    if not _config.get("forca_clp_kgf", True):
+        return r
+    chaves = {r.get("role"), r.get("name")}
+    if chaves & {*_FORCA_LIDA, _config.get("realtime_forca_name", "forca_atual")}:
+        fator = N_POR_KGF
+    elif chaves & set(_FORCA_ESCRITA):
+        fator = 1 / N_POR_KGF
+    else:
+        return r
+    return {**r, "scale": float(r.get("scale", 1.0)) * fator}
+
+
 def _resolve_registers(regs: list[dict]) -> list[dict]:
     """Converte os dispositivos Delta (D412, M5, X0...) em endereços Modbus conforme
     a família do CLP. Registradores com dispositivo inválido são ignorados (com log)."""
@@ -193,7 +216,7 @@ def _resolve_registers(regs: list[dict]) -> list[dict]:
     out: list[dict] = []
     for r in regs or []:
         try:
-            out.append(resolve_register(r, family))
+            out.append(_forca_em_newton(resolve_register(r, family)))
         except ValueError as exc:
             print(f"[config] Registrador '{r.get('name')}' ignorado: {exc}", flush=True)
     return out

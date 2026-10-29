@@ -399,14 +399,14 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
 
       {/* Valores em tempo real */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtBig(forcaShown, 1)} unit="N"
-          alt={forcaShown != null ? `${fmtKgf(forcaShown)} kgf` : undefined}
+        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtKgf(forcaShown)} unit="kgf"
+          alt={forcaShown != null ? `${fmtBig(forcaShown, 1)} N` : undefined}
           color={forcaShown != null ? "text-sky-300" : "text-muted"} />
         <BigValue icon={<MoveHorizontal size={18} />} label="Deslocamento atual" value={fmtBig(deslocShown, 2)} unit="mm"
           color={deslocShown != null ? "text-violet-300" : "text-muted"} />
         <BigValue icon={<Gauge size={18} />} label="Força máxima"
-          value={forcaMaxClp != null ? fmtBig(forcaMaxClp, 1) : maxForca > 0 ? maxForca.toFixed(1) : "—"} unit="N"
-          alt={forcaMaxClp != null ? `${fmtKgf(forcaMaxClp)} kgf` : maxForca > 0 ? `${fmtKgf(maxForca)} kgf` : undefined}
+          value={forcaMaxClp != null ? fmtKgf(forcaMaxClp) : maxForca > 0 ? fmtKgf(maxForca) : "—"} unit="kgf"
+          alt={forcaMaxClp != null ? `${fmtBig(forcaMaxClp, 1)} N` : maxForca > 0 ? `${maxForca.toFixed(1)} N` : undefined}
           color="text-amber-300" sub={forcaMaxClp != null ? "calculada pelo CLP" : maxForca > 0 ? "pico lido nesta tela" : undefined} />
       </div>
 

@@ -312,7 +312,7 @@ export default function Dashboard({ ensaioId }: Props) {
 
       {/* ── Valores principais em destaque ── */}
       <div className="flex-shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 pt-4">
-        <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} cor="text-rupture" />
+        <HeroValue label="Força máxima" value={fmtKgf(kpis.forca_max_N)} unit="kgf" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmt(kpis.forca_max_kN, 2)} kN`} cor="text-rupture" />
         <HeroValue label="Tensão máxima" value={fmt(kpis.tensao_max_calc_MPa ?? kpis.tensao_max_MPa, 1)} unit="MPa"
           sub={kpis.tensao_rp02_MPa != null ? `Rp0,2 = ${fmt(kpis.tensao_rp02_MPa, 1)} MPa` : undefined} cor="text-sky-300" />
         <HeroValue label="Módulo de elasticidade"

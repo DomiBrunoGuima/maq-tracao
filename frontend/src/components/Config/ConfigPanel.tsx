@@ -35,6 +35,7 @@ type FormState = {
   clp_port: number;
   clp_timeout: number;
   plc_family: "dvp" | "direto" | "as";
+  forca_clp_kgf: boolean;
   control_registers: IHMRegister[];
   control_pulse_ms: number;
   area_seccao_mm2: number;
@@ -77,6 +78,7 @@ const DEFAULT_FORM: FormState = {
   clp_port: 502,
   clp_timeout: 3,
   plc_family: "dvp",
+  forca_clp_kgf: true,
   control_registers: [],
   control_pulse_ms: 300,
   area_seccao_mm2: 0,
@@ -453,6 +455,18 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
           <input type="number" min={50} max={2000} step={10} value={form.control_pulse_ms}
             onChange={(e) => setForm((f) => ({ ...f, control_pulse_ms: Number(e.target.value) }))} className={smallInputCls + " w-full"} />
         </Field>
+      </div>
+
+      <div className="mb-5">
+      <Field label="Unidade da força no CLP"
+        hint="kgf: a força lida é convertida para N (× 9,80665) e o limite de força é enviado em kgf. Os cálculos de tensão usam sempre N.">
+        <select value={form.forca_clp_kgf ? "kgf" : "N"}
+          onChange={(e) => setForm((f) => ({ ...f, forca_clp_kgf: e.target.value === "kgf" }))}
+          className={smallInputCls + " w-48"}>
+          <option value="kgf">kgf</option>
+          <option value="N">N (newton)</option>
+        </select>
+      </Field>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-2">

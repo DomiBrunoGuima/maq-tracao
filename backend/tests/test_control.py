@@ -253,3 +253,25 @@ def test_flexao_desabilitada_bloqueia_inicio(monkeypatch):
     r = TestClient(main.app).post("/api/flexao/control/start", json={})
     assert r.status_code == 403
     assert "desabilitada" in r.json()["detail"]
+
+
+def test_forca_do_clp_em_kgf_vira_newton(monkeypatch):
+    from backend import main
+
+    regs = [
+        {"name": "forca", "role": "forca_atual", "address": 40050, "data_type": "float32", "scale": 1.0},
+        {"name": "fmax", "role": "forca_maxima", "address": 40052, "data_type": "float32"},
+        {"name": "limite_forca", "role": "limite_forca", "address": 40008, "data_type": "float32"},
+        {"name": "desl", "role": "deslocamento_atual", "address": 40040, "data_type": "float32", "scale": 1.0},
+    ]
+    monkeypatch.setattr(main, "_config", {**main._config, "plc_family": "direto",
+                                          "forca_clp_kgf": True, "control_registers": regs})
+    escala = {r["role"]: r["scale"] for r in main._control_registers()}
+    assert escala["forca_atual"] == pytest.approx(9.80665)
+    assert escala["forca_maxima"] == pytest.approx(9.80665)
+    assert escala["limite_forca"] == pytest.approx(1 / 9.80665)
+    assert escala["deslocamento_atual"] == 1.0
+    assert regs[0]["scale"] == 1.0  # a config não é alterada
+
+    main._config["forca_clp_kgf"] = False
+    assert all(r.get("scale", 1.0) == 1.0 for r in main._control_registers())

@@ -158,8 +158,8 @@ export default function PointInspectorModal({ point, kpis, ihmParams, onClose }:
             </p>
             <table className="w-full">
               <tbody>
-                <RawRow label="Força"         value={calc.F  != null ? fmt(calc.F,  2) : null} unit="N"   source={<Badge color="blue">CSV</Badge>} />
-                <RawRow label="Força (kgf)"   value={calc.F  != null ? fmt(calc.F / N_POR_KGF, 2) : null} unit="kgf" source={<Badge color="green">F ÷ 9,80665</Badge>} />
+                <RawRow label="Força"         value={calc.F  != null ? fmt(calc.F / N_POR_KGF, 2) : null} unit="kgf" source={<Badge color="blue">CLP</Badge>} />
+                <RawRow label="Força (N)"     value={calc.F  != null ? fmt(calc.F,  2) : null} unit="N"   source={<Badge color="green">kgf × 9,80665</Badge>} />
                 <RawRow label="Deslocamento"  value={calc.d  != null ? fmt(calc.d,  3) : null} unit="mm"  source={<Badge color="blue">CSV</Badge>} />
                 <RawRow label="Tensao_Pa"     value={calc.σ  != null ? fmt(calc.σ,  4) : null} unit="MPa" source={<Badge color="blue">CSV</Badge>} />
                 <RawRow label="Deform_Along"  value={calc.ε  != null ? fmt(calc.ε,  6) : null}            source={<Badge color="blue">CSV</Badge>} />

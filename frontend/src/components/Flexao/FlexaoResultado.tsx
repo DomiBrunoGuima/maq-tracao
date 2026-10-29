@@ -116,7 +116,7 @@ export default function FlexaoResultado({
 
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <HeroValue label="Força máxima" value={fmt(kpis.forca_max_kN, 2)} unit="kN" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmtKgf(kpis.forca_max_N)} kgf`} cor="text-rupture" />
+          <HeroValue label="Força máxima" value={fmtKgf(kpis.forca_max_N)} unit="kgf" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmt(kpis.forca_max_kN, 2)} kN`} cor="text-rupture" />
           <HeroValue label="Resistência à flexão σfM" value={fmt(kpis.tensao_flexao_max_MPa, 1)} unit="MPa" cor="text-sky-300" />
           <HeroValue label="Módulo de flexão Ef" value={fmt(kpis.modulo_flexao_GPa, 2)} unit="GPa"
             sub={kpis.r2_elastico != null ? `R² = ${kpis.r2_elastico.toFixed(4)}` : undefined} cor="text-emerald-300" />

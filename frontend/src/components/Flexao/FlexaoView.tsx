@@ -433,13 +433,13 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
 
       {/* Valores em tempo real */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtBig(forcaShown, 1)} unit="N"
-          alt={forcaShown != null ? `${fmtKgf(forcaShown)} kgf` : undefined}
+        <BigValue icon={<Zap size={18} />} label="Força atual" value={fmtKgf(forcaShown)} unit="kgf"
+          alt={forcaShown != null ? `${fmtBig(forcaShown, 1)} N` : undefined}
           color={forcaShown != null ? "text-sky-300" : "text-muted"} />
         <BigValue icon={<MoveHorizontal size={18} />} label="Deflexão atual" value={fmtBig(deslocShown, 2)} unit="mm"
           color={deslocShown != null ? "text-violet-300" : "text-muted"} />
-        <BigValue icon={<Gauge size={18} />} label="Força máxima" value={maxForca > 0 ? maxForca.toFixed(1) : "—"} unit="N"
-          alt={maxForca > 0 ? `${fmtKgf(maxForca)} kgf` : undefined}
+        <BigValue icon={<Gauge size={18} />} label="Força máxima" value={maxForca > 0 ? fmtKgf(maxForca) : "—"} unit="kgf"
+          alt={maxForca > 0 ? `${maxForca.toFixed(1)} N` : undefined}
           color="text-amber-300" />
       </div>
 
