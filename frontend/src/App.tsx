@@ -14,6 +14,7 @@ type View = "dashboard" | "comparison" | "config" | "control" | "flexao" | "clie
 export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareFlexaoIds, setCompareFlexaoIds] = useState<number[]>([]);
   const [view, setView] = useState<View>("dashboard");
   // Máquina sem flexão: a tela de flexão cai no controle de tração
   const flexaoOn = useConfig().data?.flexao_habilitada !== false;
@@ -31,6 +32,12 @@ export default function App() {
     );
   }
 
+  function handleToggleCompareFlexao(id: number) {
+    setCompareFlexaoIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-slate-200">
       <Sidebar
@@ -38,6 +45,9 @@ export default function App() {
         compareIds={compareIds}
         onSelect={handleSelectEnsaio}
         onToggleCompare={handleToggleCompare}
+        compareFlexaoIds={compareFlexaoIds}
+        onToggleCompareFlexao={handleToggleCompareFlexao}
+        onSetCompareFlexao={(ids) => { setCompareFlexaoIds(ids); setView("comparison"); }}
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
         onViewControl={() => setView("control")}
@@ -55,7 +65,8 @@ export default function App() {
           <Dashboard ensaioId={selectedId} />
         )}
         {view === "comparison" && (
-          <ComparisonView ids={compareIds} onRemove={handleToggleCompare} />
+          <ComparisonView ids={compareIds} onRemove={handleToggleCompare}
+            flexaoIds={flexaoOn ? compareFlexaoIds : []} onRemoveFlexao={handleToggleCompareFlexao} />
         )}
         {view === "config" && (
           <ConfigPanel onClose={() => setView("dashboard")} />

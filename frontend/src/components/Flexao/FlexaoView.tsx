@@ -39,6 +39,7 @@ import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao
 import type { AjusteElastico, FlexaoFrame, Norma } from "../../types";
 import { BigValue, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
 import FlexaoResultado from "./FlexaoResultado";
+import { confirmarExclusao } from "../Sidebar/Sidebar";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-flexao";
@@ -225,7 +226,12 @@ function EnsaiosTab({ initialId }: { initialId?: number | null }) {
       ensaios={ensaios}
       selected={selected}
       onSelect={setSelected}
-      onDelete={(id) => { delMut.mutate(id); if (selected === id) setSelected(null); }}
+      onDelete={(id) => {
+        const e = ensaios.find((x) => x.id === id);
+        if (!confirmarExclusao(e?.filename ?? `#${id}`)) return;
+        delMut.mutate(id);
+        if (selected === id) setSelected(null);
+      }}
     />
   );
 }

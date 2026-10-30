@@ -37,6 +37,9 @@ interface Props {
   compareIds: number[];
   onSelect: (id: number) => void;
   onToggleCompare: (id: number) => void;
+  compareFlexaoIds: number[];
+  onToggleCompareFlexao: (id: number) => void;
+  onSetCompareFlexao: (ids: number[]) => void;
   onViewConfig: () => void;
   onViewComparison: () => void;
   onViewControl: () => void;
@@ -54,6 +57,9 @@ export default function Sidebar({
   compareIds,
   onSelect,
   onToggleCompare,
+  compareFlexaoIds,
+  onToggleCompareFlexao,
+  onSetCompareFlexao,
   onViewConfig,
   onViewComparison,
   onViewControl,
@@ -95,6 +101,7 @@ export default function Sidebar({
   });
   const resultados = (busca?.resultados ?? []).filter((r) => flexaoOn || r.modo !== "flexao");
   const testesTracao = resultados.filter((r) => r.tipo === "teste" && r.modo === "tracao");
+  const testesFlexao = resultados.filter((r) => r.tipo === "teste" && r.modo === "flexao");
 
   function abrirResultado(r: ResultadoBusca) {
     if (r.tipo === "cliente") onOpenCliente(r.id);
@@ -189,7 +196,7 @@ export default function Sidebar({
           )}
         >
           <GitCompare size={13} />
-          Comparar {compareIds.length > 0 && `(${compareIds.length})`}
+          Comparar {compareIds.length + compareFlexaoIds.length > 0 && `(${compareIds.length + compareFlexaoIds.length})`}
         </button>
         <button
           onClick={() => reimportMut.mutate()}
@@ -214,6 +221,15 @@ export default function Sidebar({
             <p className="text-[10px] text-muted uppercase tracking-wider">
               {isFetching ? "Buscando…" : `${busca?.total ?? 0} resultado(s)`}
             </p>
+            {testesFlexao.length > 1 && (
+              <button
+                onClick={() => onSetCompareFlexao(testesFlexao.map((r) => r.id))}
+                className="text-[10px] text-accent hover:underline"
+                title="Compara os testes de flexão encontrados e mostra média e desvio padrão"
+              >
+                Comparar {testesFlexao.length} flexões
+              </button>
+            )}
             {testesTracao.length > 1 && (
               <button
                 onClick={() => onSetCompare(testesTracao.map((r) => r.id))}
@@ -265,14 +281,16 @@ export default function Sidebar({
             inCompare={compareIds.includes(item.e.id)}
             onSelect={() => onSelect(item.e.id)}
             onToggleCompare={() => onToggleCompare(item.e.id)}
-            onDelete={() => deleteMut.mutate(item.e.id)}
+            onDelete={() => confirmarExclusao(item.e.filename) && deleteMut.mutate(item.e.id)}
           />
         ) : (
           <FlexaoItem
             key={`f-${item.e.id}`}
             ensaio={item.e}
             onSelect={() => onOpenFlexao(item.e.id)}
-            onDelete={() => deleteFlexaoMut.mutate(item.e.id)}
+            inCompare={compareFlexaoIds.includes(item.e.id)}
+            onToggleCompare={() => onToggleCompareFlexao(item.e.id)}
+            onDelete={() => confirmarExclusao(item.e.filename) && deleteFlexaoMut.mutate(item.e.id)}
           />
         ))}
       </div>
@@ -416,9 +434,9 @@ function EnsaioItem({
 }
 
 function FlexaoItem({
-  ensaio, onSelect, onDelete,
+  ensaio, inCompare, onSelect, onToggleCompare, onDelete,
 }: {
-  ensaio: EnsaioFlexaoSummary; onSelect: () => void; onDelete: () => void;
+  ensaio: EnsaioFlexaoSummary; inCompare: boolean; onSelect: () => void; onToggleCompare: () => void; onDelete: () => void;
 }) {
   return (
     <div className="group mx-2 mb-1 rounded-lg border border-transparent hover:border-border hover:bg-border/30 transition-all cursor-pointer">
@@ -436,7 +454,16 @@ function FlexaoItem({
           </div>
         </div>
       </div>
-      <div className="flex justify-end border-t border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex border-t border-border/50 divide-x divide-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
+          className={clsx(
+            "flex-1 py-1.5 text-xs transition-colors",
+            inCompare ? "text-accent bg-accent/10" : "text-muted hover:text-accent"
+          )}
+        >
+          {inCompare ? "✓ Comparar" : "+ Comparar"}
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="px-3 py-1.5 text-xs text-muted hover:text-red-400 transition-colors"
@@ -446,6 +473,11 @@ function FlexaoItem({
       </div>
     </div>
   );
+}
+
+/** Ensaio apagado não volta: sempre pede confirmação antes. */
+export function confirmarExclusao(nome: string): boolean {
+  return window.confirm(`Excluir o ensaio "${nome.replace(".csv", "")}"? Ele será apagado do banco e não pode ser recuperado.`);
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

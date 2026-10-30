@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { X } from "lucide-react";
+import { clsx } from "clsx";
 import { useQueries } from "@tanstack/react-query";
 import {
   CartesianGrid,
@@ -11,8 +13,8 @@ import {
   YAxis,
   ReferenceLine,
 } from "recharts";
-import { getCurvas, getEnsaio, getKPIs } from "../../api/client";
-import type { KPIs } from "../../types";
+import { getCurvas, getCurvasFlexao, getEnsaio, getEnsaioFlexao, getKPIs, getKPIsFlexao } from "../../api/client";
+import type { KPIs, KPIsFlexao, TipoEnsaio } from "../../types";
 
 const PALETTE = [
   "#00d4ff", "#ff6b35", "#a78bfa", "#34d399",
@@ -34,7 +36,9 @@ function estatisticas(vals: (number | null | undefined)[]) {
 
 
 // Colunas da tabela comparativa: [título, valor do KPI, casas decimais]
-const COLUNAS: [string, (k: KPIs) => number | null | undefined, number][] = [
+type Coluna<K> = [string, (k: K) => number | null | undefined, number];
+
+const COLUNAS_TRACAO: Coluna<KPIs>[] = [
   ["Fmax (N)", (k) => k.forca_max_N, 0],
   // Mesmos valores do relatório: prefere Fmax/A e d/L₀ quando houver A e L₀
   ["σmax (MPa)", (k) => k.tensao_max_calc_MPa ?? k.tensao_max_MPa, 2],
@@ -48,52 +52,101 @@ const COLUNAS: [string, (k: KPIs) => number | null | undefined, number][] = [
   ["t Fmax (s)", (k) => k.tempo_ruptura_s, 1],
 ];
 
+const COLUNAS_FLEXAO: Coluna<KPIsFlexao>[] = [
+  ["Fmax (N)", (k) => k.forca_max_N, 0],
+  ["σfM (MPa)", (k) => k.tensao_flexao_max_MPa, 2],
+  ["Ef (MPa)", (k) => k.modulo_flexao_MPa, 1],
+  ["Ef cordal (MPa)", (k) => k.modulo_cordal_MPa, 1],
+  ["R²", (k) => k.r2_elastico, 4],
+  ["εf máx. (%)", (k) => k.deform_flexao_max_pct, 2],
+  ["δ pico (mm)", (k) => k.deflexao_pico_mm, 2],
+  ["δ máx. (mm)", (k) => k.deflexao_max_mm, 2],
+  ["Energia (J)", (k) => k.energia_J, 2],
+  ["t Fmax (s)", (k) => k.tempo_pico_s, 1],
+];
+
+// O que muda entre tração e flexão: de onde vêm os dados, colunas das curvas e rótulos
+const PERFIL = {
+  tracao: {
+    chave: "", getEnsaio, getCurvas: getCurvas as (id: number) => Promise<any>, getKPIs: getKPIs as (id: number) => Promise<any>,
+    colunas: COLUNAS_TRACAO as Coluna<any>[], xSS: "Deform_Along", ySS: "Tensao_Pa",
+    tituloSS: "Curvas Tensão × Deformação — σ-ε", xLabelSS: "Deformação ε (%)", yLabelSS: "σ (MPa)", eps: "ε",
+    tituloFD: "Força × Deslocamento", d: "d",
+  },
+  flexao: {
+    chave: "flexao", getEnsaio: getEnsaioFlexao, getCurvas: getCurvasFlexao as (id: number) => Promise<any>, getKPIs: getKPIsFlexao as (id: number) => Promise<any>,
+    colunas: COLUNAS_FLEXAO as Coluna<any>[], xSS: "Deform_Flexao", ySS: "Tensao_Flexao",
+    tituloSS: "Curvas Tensão × Deformação de flexão — σf-εf", xLabelSS: "Deformação εf (%)", yLabelSS: "σf (MPa)", eps: "εf",
+    tituloFD: "Força × Deflexão", d: "δ",
+  },
+};
+
 interface Props {
   ids: number[];
+  flexaoIds?: number[];
   onRemove: (id: number) => void;
+  onRemoveFlexao?: (id: number) => void;
 }
 
-function useComparisonData(ids: number[]) {
+function useComparisonData(ids: number[], modo: TipoEnsaio) {
+  const p = PERFIL[modo];
+  // Mesmas chaves de cache das telas de resultado de cada tipo
+  const key = (k: string, id: number) => (p.chave ? [p.chave, k, id] : [k, id]);
   const ensaios = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["ensaio", id],
-      queryFn: () => getEnsaio(id),
-      enabled: id !== null,
-    })),
+    queries: ids.map((id) => ({ queryKey: key("ensaio", id), queryFn: () => p.getEnsaio(id) })),
   });
-
   const curvas = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["curvas", id],
-      queryFn: () => getCurvas(id),
-      enabled: id !== null,
-    })),
+    queries: ids.map((id) => ({ queryKey: key("curvas", id), queryFn: () => p.getCurvas(id) })),
   });
-
   const kpis = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["kpis", id],
-      queryFn: () => getKPIs(id),
-      enabled: id !== null,
-    })),
+    queries: ids.map((id) => ({ queryKey: key("kpis", id), queryFn: () => p.getKPIs(id) })),
   });
-
   return { ensaios, curvas, kpis };
 }
 
-export default function ComparisonView({ ids, onRemove }: Props) {
-  const { ensaios, curvas, kpis } = useComparisonData(ids);
+export default function ComparisonView({ ids, flexaoIds = [], onRemove, onRemoveFlexao }: Props) {
+  const [aba, setAba] = useState<TipoEnsaio>(ids.length === 0 && flexaoIds.length > 0 ? "flexao" : "tracao");
+  const modo: TipoEnsaio = flexaoIds.length === 0 ? "tracao" : ids.length === 0 ? "flexao" : aba;
 
-  if (ids.length === 0) {
+  if (ids.length === 0 && flexaoIds.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8">
         <p className="text-lg font-semibold text-white mb-2">Comparação de Ensaios</p>
         <p className="text-sm text-muted max-w-xs">
           Selecione ensaios na barra lateral clicando em "+ Comparar" para adicioná-los à comparação.
+          Ensaios de tração e de flexão são comparados separadamente.
         </p>
       </div>
     );
   }
+
+  return (
+    <div className="p-6 space-y-6 overflow-auto h-full">
+      <div className="flex items-center gap-4 flex-wrap">
+        <h1 className="text-xl font-semibold text-white">Comparação de Ensaios</h1>
+        {ids.length > 0 && flexaoIds.length > 0 && (
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+            {(["tracao", "flexao"] as const).map((m) => (
+              <button key={m} onClick={() => setAba(m)}
+                className={clsx("px-3 py-1.5 transition-colors",
+                  modo === m ? "bg-accent text-bg font-semibold" : "text-muted hover:text-white")}>
+                {m === "tracao" ? `Tração (${ids.length})` : `Flexão (${flexaoIds.length})`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {modo === "flexao"
+        ? <Comparacao key="flexao" modo="flexao" ids={flexaoIds} onRemove={onRemoveFlexao ?? (() => {})} />
+        : <Comparacao key="tracao" modo="tracao" ids={ids} onRemove={onRemove} />}
+    </div>
+  );
+}
+
+function Comparacao({ ids, modo, onRemove }: { ids: number[]; modo: TipoEnsaio; onRemove: (id: number) => void }) {
+  const p = PERFIL[modo];
+  const COLUNAS = p.colunas;
+  const { ensaios, curvas, kpis } = useComparisonData(ids, modo);
 
   const isLoading = [...ensaios, ...curvas, ...kpis].some((q) => q.isLoading);
 
@@ -107,22 +160,20 @@ export default function ComparisonView({ ids, onRemove }: Props) {
       label: ensaio?.nome || ensaio?.filename || `#${id}`,
       failed: Boolean(ensaios[i]?.isError || curvas[i]?.isError || kpis[i]?.isError),
       // ε vem adimensional; o gráfico (e o relatório) mostram em %
-      stressStrain: curva?.stress_strain.map((p) => ({
-        ...p,
-        Deform_pct: typeof p.Deform_Along === "number" ? p.Deform_Along * 100 : null,
+      stressStrain: curva?.stress_strain.map((pt: Record<string, any>) => ({
+        ...pt,
+        Deform_pct: typeof pt[p.xSS] === "number" ? pt[p.xSS] * 100 : null,
       })) ?? null,
       curva,
       kpi: kpis[i]?.data ?? null,
     };
   });
   const failed = series.filter((s) => s.failed);
-  const kpisOk = series.map((s) => s.kpi).filter((k): k is KPIs => k != null);
+  const kpisOk = series.map((s) => s.kpi).filter((k) => k != null);
   const stats = kpisOk.length > 1 ? COLUNAS.map(([, get]) => estatisticas(kpisOk.map(get))) : null;
 
   return (
-    <div className="p-6 space-y-6 overflow-auto">
-      <h1 className="text-xl font-semibold text-white">Comparação de Ensaios</h1>
-
+    <>
       {/* Legend tags */}
       <div className="flex flex-wrap gap-2">
         {series.map(({ id, color, label }) => (
@@ -158,7 +209,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
       {!isLoading && (
         <div className="rounded-xl border border-border bg-surface p-5">
           <h2 className="text-sm font-semibold text-white mb-1">
-            Curvas Tensão × Deformação — σ-ε
+            {p.tituloSS}
           </h2>
           <p className="text-xs text-muted mb-4">Sobreposição de todos os ensaios selecionados</p>
           <ResponsiveContainer width="100%" height={380}>
@@ -172,7 +223,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
                 tick={{ fill: "#64748b", fontSize: 10 }}
                 stroke="#2a2d3e"
                 label={{
-                  value: "Deformação ε (%)",
+                  value: p.xLabelSS,
                   position: "insideBottom",
                   offset: -12,
                   fill: "#64748b",
@@ -183,7 +234,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
                 tick={{ fill: "#64748b", fontSize: 10 }}
                 stroke="#2a2d3e"
                 label={{
-                  value: "σ (MPa)",
+                  value: p.yLabelSS,
                   angle: -90,
                   position: "insideLeft",
                   fill: "#64748b",
@@ -198,7 +249,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
                   fontFamily: "monospace",
                   fontSize: 11,
                 }}
-                labelFormatter={(v) => `ε = ${Number(v).toFixed(2)} %`}
+                labelFormatter={(v) => `${p.eps} = ${Number(v).toFixed(2)} %`}
               />
               <Legend
                 wrapperStyle={{ fontSize: 11, color: "rgb(var(--slate-400))", paddingTop: 8 }}
@@ -209,7 +260,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
                   <Line
                     key={id}
                     data={stressStrain}
-                    dataKey="Tensao_Pa"
+                    dataKey={p.ySS}
                     name={label}
                     stroke={color}
                     strokeWidth={2}
@@ -229,7 +280,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
       {!isLoading && (
         <div className="rounded-xl border border-border bg-surface p-5">
           <h2 className="text-sm font-semibold text-white mb-4">
-            Força × Deslocamento
+            {p.tituloFD}
           </h2>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart margin={{ top: 5, right: 24, left: 0, bottom: 20 }}>
@@ -241,7 +292,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
                 tickFormatter={(v) => `${Number(v).toFixed(1)}`}
                 tick={{ fill: "#64748b", fontSize: 10 }}
                 stroke="#2a2d3e"
-                label={{ value: "d (mm)", position: "insideBottom", offset: -12, fill: "#64748b", fontSize: 11 }}
+                label={{ value: `${p.d} (mm)`, position: "insideBottom", offset: -12, fill: "#64748b", fontSize: 11 }}
               />
               <YAxis
                 tickFormatter={(v) => (Math.abs(Number(v)) >= 1000 ? `${(Number(v) / 1000).toFixed(1)}k` : Number(v).toFixed(0))}
@@ -251,7 +302,7 @@ export default function ComparisonView({ ids, onRemove }: Props) {
               />
               <Tooltip
                 contentStyle={{ background: "rgb(var(--surface))", border: "1px solid rgb(var(--border))", borderRadius: 8, fontFamily: "monospace", fontSize: 11 }}
-                labelFormatter={(v) => `d = ${Number(v).toFixed(2)} mm`}
+                labelFormatter={(v) => `${p.d} = ${Number(v).toFixed(2)} mm`}
               />
               <Legend wrapperStyle={{ fontSize: 11, color: "rgb(var(--slate-400))", paddingTop: 8 }} />
               {series.map(({ id, color, label, curva }) => {
@@ -331,6 +382,6 @@ export default function ComparisonView({ ids, onRemove }: Props) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
