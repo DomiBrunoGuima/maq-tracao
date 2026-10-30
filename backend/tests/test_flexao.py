@@ -120,3 +120,24 @@ def test_chart_data_structure():
                 "flexural_modulus_time", "stress_time", "peak", "Ef_regressao"):
         assert key in charts
     assert charts["peak"]["Forca_N"] == pytest.approx(df["Forca_N"].max())
+
+
+def test_deflexao_negativa_vira_positiva():
+    """A travessa desce: deflexão negativa não pode dar Ef negativo nem deflexão máx. 0."""
+    from backend.flexao.acquisition import sentido_positivo
+    pos = _synthetic_samples()
+    neg = [{**s, "deslocamento": -s["deslocamento"]} for s in pos]
+    _, df_pos = build_ensaio_flexao_dataframe(pos, B, H, L)
+    _, df_neg = build_ensaio_flexao_dataframe(neg, B, H, L)
+    k_pos = calculate_kpis(df_pos, geom={"largura_mm": B, "espessura_mm": H, "span_mm": L})
+    k_neg = calculate_kpis(df_neg, geom={"largura_mm": B, "espessura_mm": H, "span_mm": L})
+    assert k_neg["modulo_flexao_MPa"] == pytest.approx(k_pos["modulo_flexao_MPa"])
+    assert k_neg["deflexao_max_mm"] == pytest.approx(k_pos["deflexao_max_mm"])
+    assert k_neg["deflexao_max_mm"] > 0
+
+    # Ensaio antigo gravado com deflexão negativa: corrigido na leitura
+    antigo = df_pos.copy()
+    antigo["Deslocamento"] *= -1
+    antigo["Deform_Flexao"] *= -1
+    lido = sentido_positivo(antigo)
+    assert (lido["Deslocamento"] >= 0).all() and antigo["Deslocamento"].min() < 0

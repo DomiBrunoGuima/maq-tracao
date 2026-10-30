@@ -43,7 +43,7 @@ from .database import (
     get_db,
 )
 from .backup import BackupAgendado
-from .flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao
+from .flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao, sentido_positivo
 from .flexao.calculator import calculate_kpis as calculate_kpis_flexao
 from .flexao.calculator import format_chart_data as format_chart_data_flexao
 from .models import (
@@ -616,7 +616,7 @@ def _generate_report_flexao(req: ReportRequest, db: Session) -> HTMLResponse:
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == req.ensaio_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
-    df = pd.read_json(io.StringIO(r.data_json))
+    df = _df_flexao(r)
     kpis = calculate_kpis_flexao(df, geom=_flexao_geom(r))
 
     comparacao_series = None
@@ -626,7 +626,7 @@ def _generate_report_flexao(req: ReportRequest, db: Session) -> HTMLResponse:
             cr = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == cid).first()
             if cr:
                 try:
-                    cdf = pd.read_json(io.StringIO(cr.data_json))
+                    cdf = _df_flexao(cr)
                     comparacao_series.append((cr.nome, cdf, calculate_kpis_flexao(cdf, geom=_flexao_geom(cr))))
                 except Exception as exc:
                     print(f"[relatorio] falha ao carregar ensaio de flexão {cid} para comparativo: {exc}", flush=True)
@@ -700,7 +700,7 @@ def campos_relatorio_flexao(id: int, db: Session = Depends(get_db)):
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
-    df = pd.read_json(io.StringIO(r.data_json))
+    df = _df_flexao(r)
     kpis = calculate_kpis_flexao(df, geom=_flexao_geom(r))
 
     def _n(v, d=2):
@@ -1701,6 +1701,11 @@ def update_ensaio_flexao(id: int, body: EnsaioUpdate, db: Session = Depends(get_
     return get_ensaio_flexao(id, db)
 
 
+def _df_flexao(r: EnsaioFlexaoDB) -> pd.DataFrame:
+    """Curva gravada do ensaio de flexão, com deflexão/força no sentido positivo."""
+    return sentido_positivo(pd.read_json(io.StringIO(r.data_json)))
+
+
 def _flexao_geom(r: EnsaioFlexaoDB) -> dict:
     return {
         "largura_mm": r.largura_mm, "espessura_mm": r.espessura_mm,
@@ -1713,7 +1718,7 @@ def get_kpis_flexao(id: int, db: Session = Depends(get_db)):
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
-    df = pd.read_json(io.StringIO(r.data_json))
+    df = _df_flexao(r)
     return JSONResponse(content=calculate_kpis_flexao(df, geom=_flexao_geom(r)))
 
 
@@ -1722,7 +1727,7 @@ def get_qualidade_flexao(id: int, db: Session = Depends(get_db)):
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
-    df = pd.read_json(io.StringIO(r.data_json))
+    df = _df_flexao(r)
     itens = avaliar_qualidade_flexao(df, calculate_kpis_flexao(df, geom=_flexao_geom(r)))
     return {"status": resumo_status(itens), "itens": itens}
 
@@ -1732,7 +1737,7 @@ def get_curvas_flexao(id: int, db: Session = Depends(get_db)):
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
-    df = pd.read_json(io.StringIO(r.data_json))
+    df = _df_flexao(r)
     return JSONResponse(content=format_chart_data_flexao(df))
 
 

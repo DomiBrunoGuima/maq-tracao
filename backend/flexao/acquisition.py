@@ -31,6 +31,30 @@ class FlexaoMetadata:
     filename: str
 
 
+def sentido_positivo(df: pd.DataFrame) -> pd.DataFrame:
+    """A travessa desce na flexão e o CLP entrega deflexão (às vezes força)
+    negativa. Os cálculos e gráficos usam o módulo: inverte o sinal da série
+    quando ela é predominantemente negativa. Usado na leitura de ensaios já
+    gravados, sem alterar o que está no banco."""
+    df = df.copy()
+    invertido = False
+    pares = (("Deslocamento", "Deform_Flexao"), ("Forca_N", "Tensao_Flexao"))
+    for bruto, derivado in pares:
+        if bruto not in df.columns:
+            continue
+        v = pd.to_numeric(df[bruto], errors="coerce")
+        if len(v.dropna()) and abs(v.min()) > abs(v.max()):
+            for col in (bruto, derivado):
+                if col in df.columns:
+                    df[col] = -pd.to_numeric(df[col], errors="coerce")
+            if "Modulo_Flexao" in df.columns:
+                df["Modulo_Flexao"] = -pd.to_numeric(df["Modulo_Flexao"], errors="coerce")
+            invertido = True
+    if invertido and "fase" in df.columns:
+        df["fase"] = detect_stages(df)   # estágios gravados foram detectados na curva invertida
+    return df
+
+
 def build_ensaio_flexao_dataframe(
     samples: list[dict],
     largura_mm: float,
@@ -91,6 +115,7 @@ def build_ensaio_flexao_dataframe(
         if col not in df.columns:
             df[col] = np.nan
 
+    df = sentido_positivo(df)
     df["fase"] = detect_stages(df)
 
     metadata = FlexaoMetadata(
