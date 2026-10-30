@@ -61,3 +61,21 @@ def test_energia_em_joules():
     df = _df()
     # triângulo até 3000 N em 6 mm + descida até 2220 N em 9.9 mm ≈ 9 J + 10 J
     assert 15 < calculate_kpis(df)["energia_J"] < 25
+
+
+def test_grafico_flexao_com_deflexao_negativa_nao_fica_em_branco():
+    """A travessa desce na flexão: deflexão negativa não pode cair fora do eixo."""
+    import matplotlib.pyplot as plt
+    from backend.report import _eixos_a_partir_de_zero
+
+    fig, ax = plt.subplots()
+    ax.plot([0, -1, -2], [0, 5, 10])
+    _eixos_a_partir_de_zero(ax)
+    assert ax.get_xlim()[0] <= -2 and ax.get_ylim()[0] <= 0
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1, 2], [0, 5, 10])
+    _eixos_a_partir_de_zero(ax)
+    assert ax.get_xlim()[0] == 0 and ax.get_ylim()[0] == 0
+    plt.close(fig)

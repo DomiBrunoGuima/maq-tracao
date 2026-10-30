@@ -26,6 +26,20 @@ _EIXOS = {
 }
 
 
+def _eixos_a_partir_de_zero(ax) -> None:
+    """Começa os eixos em 0 só quando os dados são positivos. Na flexão a travessa
+    desce e a deflexão (e a força) podem vir negativas: cortar em 0 deixava o
+    gráfico em branco."""
+    xs, ys = [], []
+    for line in ax.get_lines():
+        xs.extend(v for v in line.get_xdata() if v == v)
+        ys.extend(v for v in line.get_ydata() if v == v)
+    if xs and min(xs) >= 0:
+        ax.set_xlim(left=0)
+    if ys and min(ys) >= 0:
+        ax.set_ylim(bottom=0)
+
+
 def _chart_stress_strain_b64(df: pd.DataFrame, modo: str = "tracao") -> str:
     try:
         eixos = _EIXOS[modo]
@@ -42,8 +56,7 @@ def _chart_stress_strain_b64(df: pd.DataFrame, modo: str = "tracao") -> str:
 
         ax.set_xlabel(eixos["x_label"], fontsize=10)
         ax.set_ylabel(eixos["y_label"], fontsize=10)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
+        _eixos_a_partir_de_zero(ax)
         ax.grid(True, alpha=0.25, linestyle="--", color="gray")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -77,8 +90,7 @@ def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]], modo: str =
             ax.scatter([x[fmax_pos]], [y[fmax_pos]], color=color, s=50, zorder=5)
         ax.set_xlabel(eixos["x_label"], fontsize=10)
         ax.set_ylabel(eixos["y_label"], fontsize=10)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
+        _eixos_a_partir_de_zero(ax)
         ax.grid(True, alpha=0.25, linestyle="--", color="gray")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -105,8 +117,7 @@ def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]], modo: str =
                     color=color, linewidth=1.6, label=label)
         ax.set_xlabel(_EIXOS[modo]["d_label"], fontsize=10)
         ax.set_ylabel("Força (N)", fontsize=10)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
+        _eixos_a_partir_de_zero(ax)
         ax.grid(True, alpha=0.25, linestyle="--")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -129,8 +140,7 @@ def _chart_force_displacement_b64(df: pd.DataFrame, modo: str = "tracao") -> str
                 color="#2e6da4", linewidth=1.6)
         ax.set_xlabel(_EIXOS[modo]["d_label"], fontsize=10)
         ax.set_ylabel("Força (N)", fontsize=10)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
+        _eixos_a_partir_de_zero(ax)
         ax.grid(True, alpha=0.25, linestyle="--")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
