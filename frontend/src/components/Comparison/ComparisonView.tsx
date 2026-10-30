@@ -86,6 +86,7 @@ interface Props {
   flexaoIds?: number[];
   onRemove: (id: number) => void;
   onRemoveFlexao?: (id: number) => void;
+  modoInicial?: TipoEnsaio;
 }
 
 function useComparisonData(ids: number[], modo: TipoEnsaio) {
@@ -104,8 +105,8 @@ function useComparisonData(ids: number[], modo: TipoEnsaio) {
   return { ensaios, curvas, kpis };
 }
 
-export default function ComparisonView({ ids, flexaoIds = [], onRemove, onRemoveFlexao }: Props) {
-  const [aba, setAba] = useState<TipoEnsaio>(ids.length === 0 && flexaoIds.length > 0 ? "flexao" : "tracao");
+export default function ComparisonView({ ids, flexaoIds = [], onRemove, onRemoveFlexao, modoInicial = "tracao" }: Props) {
+  const [aba, setAba] = useState<TipoEnsaio>(modoInicial);
   const modo: TipoEnsaio = flexaoIds.length === 0 ? "tracao" : ids.length === 0 ? "flexao" : aba;
 
   if (ids.length === 0 && flexaoIds.length === 0) {

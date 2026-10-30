@@ -6,6 +6,7 @@ import {
   createCliente,
   deleteCliente,
   getEnsaiosDoCliente,
+  getEnsaiosFlexaoDoCliente,
   relatorioUrl,
   updateCliente,
 } from "../../api/client";
@@ -38,11 +39,14 @@ function Campo({ label, value, onChange, className = "", placeholder }: {
 }
 
 export default function ClientesView({
-  initialId, onOpenEnsaio, onCompare,
+  initialId, onOpenEnsaio, onCompare, onOpenFlexao, onCompareFlexao, flexaoOn = true,
 }: {
   initialId?: number | null;
   onOpenEnsaio: (id: number) => void;
   onCompare: (ids: number[]) => void;
+  onOpenFlexao: (id: number) => void;
+  onCompareFlexao: (ids: number[]) => void;
+  flexaoOn?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: clientes, isLoading } = useClientes();
@@ -62,6 +66,11 @@ export default function ClientesView({
     queryKey: ["ensaios", "cliente", selId],
     queryFn: () => getEnsaiosDoCliente(selId!),
     enabled: selId != null,
+  });
+  const { data: flexoes } = useQuery({
+    queryKey: ["flexao", "ensaios", "cliente", selId],
+    queryFn: () => getEnsaiosFlexaoDoCliente(selId!),
+    enabled: selId != null && flexaoOn,
   });
   const { data: relatorios } = useRelatorios(selId != null ? { cliente_id: selId } : { cliente_id: -1 });
 
@@ -226,6 +235,45 @@ export default function ClientesView({
                     </table>
                   )}
                 </div>
+
+                {flexaoOn && (flexoes?.length ?? 0) > 0 && (
+                  <div className="bg-surface border border-border rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-semibold text-white">Testes de flexão do cliente</p>
+                      {(flexoes?.length ?? 0) > 1 && (
+                        <button onClick={() => onCompareFlexao(flexoes!.map((e) => e.id))}
+                          className="flex items-center gap-1.5 text-xs text-accent hover:underline">
+                          <GitCompare size={13} /> Comparar todos (média e desvio padrão)
+                        </button>
+                      )}
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-muted border-b border-border">
+                          <th className="py-1.5 font-medium">Ensaio</th>
+                          <th className="py-1.5 font-medium">Amostra</th>
+                          <th className="py-1.5 font-medium">Norma</th>
+                          <th className="py-1.5 font-medium">Data</th>
+                          <th className="py-1.5 font-medium text-right">Fmáx (kN)</th>
+                          <th className="py-1.5 font-medium text-right">σfM (MPa)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {flexoes!.map((e) => (
+                          <tr key={e.id} onClick={() => onOpenFlexao(e.id)}
+                            className="border-t border-border/50 hover:bg-border/20 cursor-pointer">
+                            <td className="py-1.5 text-white">{e.filename.replace(".csv", "")}</td>
+                            <td className="py-1.5 text-slate-300">{e.amostra || "—"}</td>
+                            <td className="py-1.5 text-slate-300">{e.norma || "—"}</td>
+                            <td className="py-1.5 text-slate-300">{e.data_ensaio}</td>
+                            <td className="py-1.5 text-right font-mono text-slate-300">{((e.forca_max_N ?? 0) / 1000).toFixed(2)}</td>
+                            <td className="py-1.5 text-right font-mono text-slate-300">{(e.tensao_flexao_max_MPa ?? 0).toFixed(1)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 <div className="bg-surface border border-border rounded-xl p-5">
                   <p className="text-sm font-semibold text-white mb-3">Relatórios do cliente</p>

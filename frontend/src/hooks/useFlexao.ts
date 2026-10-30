@@ -40,3 +40,26 @@ export function useQualidadeFlexao(id: number | null) {
     enabled: id !== null,
   });
 }
+
+export function useEnsaioFlexao(id: number | null) {
+  return useQuery({
+    queryKey: ["flexao", "ensaio", id],
+    queryFn: () => api.getEnsaioFlexao(id!),
+    enabled: id !== null,
+  });
+}
+
+export function useUpdateEnsaioFlexao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof api.updateEnsaioFlexao>[1] }) =>
+      api.updateEnsaioFlexao(id, body),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ["flexao", "ensaios"] });
+      qc.invalidateQueries({ queryKey: ["flexao", "ensaio", id] });
+      qc.invalidateQueries({ queryKey: ["flexao", "kpis", id] });
+      qc.invalidateQueries({ queryKey: ["busca"] });
+      qc.invalidateQueries({ queryKey: ["clientes"] });
+    },
+  });
+}

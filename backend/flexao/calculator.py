@@ -273,21 +273,16 @@ def format_chart_data(df: pd.DataFrame) -> dict:
             coeffs = np.polyfit(eps_el[valid], sig_el[valid], 1)
             Ef_regressao = float(coeffs[0])
 
+    # Cada ponto leva todas as grandezas, para a inspeção do ponto em qualquer gráfico
+    base = ["elapsed_seconds", "Forca_N", "Deslocamento", "Tensao_Flexao", "Deform_Flexao", "fase"]
     return {
-        "stress_strain": safe_records(
-            df_plot, ["Deform_Flexao", "Tensao_Flexao", "fase", "elapsed_seconds"]
-        ),
-        "force_displacement": safe_records(
-            df_plot, ["Deslocamento", "Forca_N", "fase", "elapsed_seconds"]
-        ),
-        "force_time": safe_records(df_plot, ["elapsed_seconds", "Forca_N", "fase"]),
+        "stress_strain": safe_records(df_plot, base),
+        "force_displacement": safe_records(df_plot, base),
+        "force_time": safe_records(df_plot, base),
         "flexural_modulus_time": safe_records(
-            elastic_df if len(elastic_df) > 0 else df_plot,
-            ["elapsed_seconds", "Modulo_Flexao", "fase"],
+            elastic_df if len(elastic_df) > 0 else df_plot, [*base, "Modulo_Flexao"],
         ),
-        "stress_time": safe_records(
-            df_plot, ["elapsed_seconds", "Tensao_Flexao", "fase"]
-        ),
+        "stress_time": safe_records(df_plot, base),
         "peak": {
             "elapsed_seconds": float(peak_row["elapsed_seconds"]),
             "Forca_N": float(peak_row["Forca_N"]),

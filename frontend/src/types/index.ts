@@ -176,6 +176,11 @@ export interface EnsaioFlexaoSummary {
   tensao_flexao_max_MPa: number;
   modulo_flexao_MPa: number;
   created_at: string;
+  cliente_id: number | null;
+  cliente_nome: string;
+  amostra: string;
+  norma: string;
+  operador: string;
 }
 
 export interface EnsaioFlexaoDetail extends EnsaioFlexaoSummary {
@@ -187,7 +192,7 @@ export interface EnsaioFlexaoDetail extends EnsaioFlexaoSummary {
   largura_mm: number;
   espessura_mm: number;
   span_mm: number;
-  norma: string;
+  observacoes: string;
 }
 
 export interface KPIsFlexao {

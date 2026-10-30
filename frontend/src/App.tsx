@@ -15,6 +15,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareFlexaoIds, setCompareFlexaoIds] = useState<number[]>([]);
+  // Aba aberta na Comparação quando há tração e flexão selecionadas
+  const [compareModo, setCompareModo] = useState<"tracao" | "flexao">("tracao");
   const [view, setView] = useState<View>("dashboard");
   // Máquina sem flexão: a tela de flexão cai no controle de tração
   const flexaoOn = useConfig().data?.flexao_habilitada !== false;
@@ -47,7 +49,7 @@ export default function App() {
         onToggleCompare={handleToggleCompare}
         compareFlexaoIds={compareFlexaoIds}
         onToggleCompareFlexao={handleToggleCompareFlexao}
-        onSetCompareFlexao={(ids) => { setCompareFlexaoIds(ids); setView("comparison"); }}
+        onSetCompareFlexao={(ids) => { setCompareFlexaoIds(ids); setCompareModo("flexao"); setView("comparison"); }}
         onViewConfig={() => setView("config")}
         onViewComparison={() => setView("comparison")}
         onViewControl={() => setView("control")}
@@ -56,7 +58,7 @@ export default function App() {
         onViewRelatorios={() => setView("relatorios")}
         onOpenCliente={(id) => { setClienteId(id); setView("clientes"); }}
         onOpenFlexao={(id) => { setFlexaoId(id); setView("flexao"); }}
-        onSetCompare={(ids) => { setCompareIds(ids); setView("comparison"); }}
+        onSetCompare={(ids) => { setCompareIds(ids); setCompareModo("tracao"); setView("comparison"); }}
         currentView={view}
       />
 
@@ -65,7 +67,7 @@ export default function App() {
           <Dashboard ensaioId={selectedId} />
         )}
         {view === "comparison" && (
-          <ComparisonView ids={compareIds} onRemove={handleToggleCompare}
+          <ComparisonView key={compareModo} modoInicial={compareModo} ids={compareIds} onRemove={handleToggleCompare}
             flexaoIds={flexaoOn ? compareFlexaoIds : []} onRemoveFlexao={handleToggleCompareFlexao} />
         )}
         {view === "config" && (
@@ -82,7 +84,10 @@ export default function App() {
             key={clienteId ?? "lista"}
             initialId={clienteId}
             onOpenEnsaio={handleSelectEnsaio}
-            onCompare={(ids) => { setCompareIds(ids); setView("comparison"); }}
+            onCompare={(ids) => { setCompareIds(ids); setCompareModo("tracao"); setView("comparison"); }}
+            onOpenFlexao={(id) => { setFlexaoId(id); setView("flexao"); }}
+            onCompareFlexao={(ids) => { setCompareFlexaoIds(ids); setCompareModo("flexao"); setView("comparison"); }}
+            flexaoOn={flexaoOn}
           />
         )}
         {view === "relatorios" && (

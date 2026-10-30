@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { FileText, Layers, Trash2 } from "lucide-react";
+import { ClipboardList, FileText, Layers, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 import { ReferenceArea, ReferenceLine } from "recharts";
-import type { AjusteElastico, EnsaioFlexaoSummary, FlexaoChartData, KPIsFlexao } from "../../types";
-import { useCurvasFlexao, useKPIsFlexao, useQualidadeFlexao } from "../../hooks/useFlexao";
+import type { AjusteElastico, DataPoint, EnsaioFlexaoSummary, FlexaoChartData, KPIsFlexao } from "../../types";
+import PointInspectorFlexao from "../Charts/PointInspectorFlexao";
+import { useCurvasFlexao, useEnsaioFlexao, useKPIsFlexao, useQualidadeFlexao } from "../../hooks/useFlexao";
+import DadosTesteModal from "../Dashboard/DadosTesteModal";
 import SimpleLineChart from "../Charts/SimpleLineChart";
 import KPICard from "../Dashboard/KPICard";
 import QualidadePanel from "../Dashboard/QualidadePanel";
@@ -68,8 +70,9 @@ function extras(key: ChartKey, c: FlexaoChartData, mostrarFases: boolean): React
   return out;
 }
 
-function renderChart(key: ChartKey, c: FlexaoChartData, height: number, thumbnail = false, mostrarFases = false) {
-  const p = { height, thumbnail, extras: thumbnail ? [] : extras(key, c, mostrarFases) };
+function renderChart(key: ChartKey, c: FlexaoChartData, height: number, thumbnail = false, mostrarFases = false,
+                     onPointClick?: (pt: DataPoint) => void) {
+  const p = { height, thumbnail, onPointClick, extras: thumbnail ? [] : extras(key, c, mostrarFases) };
   switch (key) {
     case "ss": return <SimpleLineChart data={c.stress_strain} xKey="Deform_Flexao" yKey="Tensao_Flexao" yUnit="MPa" xLabel="εf" yLabel="σf (MPa)" color="#38bdf8" xDecimals={4} {...p} />;
     case "fd": return <SimpleLineChart data={c.force_displacement} xKey="Deslocamento" yKey="Forca_N" xUnit="mm" yUnit="N" xLabel="δ (mm)" yLabel="F (N)" color="#a78bfa" {...p} />;
@@ -95,6 +98,9 @@ export default function FlexaoResultado({
   const [ativo, setAtivo] = useState<ChartKey>("ss");
   const [mostrarFases, setMostrarFases] = useState(true);
   const [showReport, setShowReport] = useState(false);
+  const [editarDados, setEditarDados] = useState(false);
+  const [ponto, setPonto] = useState<DataPoint | null>(null);
+  const { data: detalhe } = useEnsaioFlexao(selected);
   const ensaio = ensaios.find((e) => e.id === selected);
 
   return (
@@ -107,11 +113,23 @@ export default function FlexaoResultado({
             <option key={e.id} value={e.id}>{e.filename.replace(".csv", "")} · {e.data_ensaio}</option>
           ))}
         </select>
-        {ensaio && <span className="text-xs text-muted">{ensaio.num_amostras} amostras</span>}
+        {ensaio && (
+          <span className="text-xs text-muted truncate">
+            {ensaio.num_amostras} amostras
+            {ensaio.cliente_nome ? ` · ${ensaio.cliente_nome}` : ""}
+            {ensaio.amostra ? ` · ${ensaio.amostra}` : ""}
+          </span>
+        )}
         {selected != null && (
           <>
+            <button onClick={() => setEditarDados(true)} disabled={!detalhe}
+              className="ml-auto flex-shrink-0 flex items-center gap-2 px-3 py-1.5 border border-border hover:border-accent
+                         text-muted hover:text-white rounded-lg text-xs font-medium transition-colors">
+              <ClipboardList size={13} />
+              Dados do teste
+            </button>
             <button onClick={() => setShowReport(true)}
-              className="ml-auto flex-shrink-0 flex items-center gap-2 px-4 py-1.5 bg-accent/10
+              className="flex-shrink-0 flex items-center gap-2 px-4 py-1.5 bg-accent/10
                          hover:bg-accent/20 text-accent rounded-lg text-xs font-medium transition-colors">
               <FileText size={13} />
               Gerar Relatório
@@ -124,6 +142,10 @@ export default function FlexaoResultado({
         )}
       </div>
 
+      {ponto && kpis && <PointInspectorFlexao point={ponto} kpis={kpis} onClose={() => setPonto(null)} />}
+      {editarDados && detalhe && (
+        <DadosTesteModal ensaio={detalhe} tipo="flexao" onClose={() => setEditarDados(false)} />
+      )}
       {showReport && selected != null && (
         <ReportGenerator ensaioId={selected} tipo="flexao" onClose={() => setShowReport(false)} />
       )}
@@ -165,7 +187,7 @@ export default function FlexaoResultado({
                   <Layers size={10} /> Estágios
                 </button>
               </div>
-              <div style={{ height: 420 }}>{renderChart(ativo, curvas, 420, false, mostrarFases)}</div>
+              <div style={{ height: 420 }}>{renderChart(ativo, curvas, 420, false, mostrarFases, setPonto)}</div>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {CHARTS.filter((c) => c.key !== ativo).map((c) => (

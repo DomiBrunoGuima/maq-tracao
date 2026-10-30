@@ -206,3 +206,27 @@ def test_relatorio_flexao(client):
     finally:
         db.close()
     assert rels[rid]["ensaio_id"] == client.get("/api/relatorios").json()[0]["ensaio_id"] == fid
+
+
+def test_dados_do_teste_flexao(client):
+    fid = _novo_ensaio_flexao(client)
+    db = client.Session()
+    try:
+        from backend.database import EnsaioFlexaoDB
+        antes = db.query(EnsaioFlexaoDB).get(fid).data_json
+    finally:
+        db.close()
+    cid = client.post("/api/clientes", json={"nome": "Plásticos Ltda"}).json()["id"]
+
+    r = client.patch(f"/api/flexao/ensaios/{fid}", json={"cliente_id": cid, "amostra": "PP barra", "operador": "Ana"})
+    assert r.status_code == 200, r.text
+    assert r.json()["cliente_nome"] == "Plásticos Ltda" and r.json()["amostra"] == "PP barra"
+    assert [e["id"] for e in client.get("/api/flexao/ensaios", params={"cliente_id": cid}).json()] == [fid]
+    assert client.get("/api/clientes").json()[0]["num_ensaios"] == 1
+
+    # Só o cadastro muda: a curva gravada continua igual
+    db = client.Session()
+    try:
+        assert db.query(EnsaioFlexaoDB).get(fid).data_json == antes
+    finally:
+        db.close()

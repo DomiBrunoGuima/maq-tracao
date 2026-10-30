@@ -809,7 +809,8 @@ def _cliente_out(c: ClienteDB, db) -> Cliente:
     return Cliente(
         id=c.id, created_at=c.created_at,
         **{k: getattr(c, k) or "" for k in ClienteIn.model_fields},
-        num_ensaios=db.query(EnsaioDB).filter(EnsaioDB.cliente_id == c.id).count(),
+        num_ensaios=db.query(EnsaioDB).filter(EnsaioDB.cliente_id == c.id).count()
+        + db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.cliente_id == c.id).count(),
         num_relatorios=db.query(RelatorioDB).filter(RelatorioDB.cliente_id == c.id).count(),
     )
 
@@ -1642,18 +1643,26 @@ def _flexao_role_to_name() -> dict[str, str]:
     return {r["role"]: r["name"] for r in _flexao_registers() if r.get("role") and r.get("name")}
 
 
+def _flexao_summary_fields(r: EnsaioFlexaoDB, clientes: dict[int, str]) -> dict:
+    return dict(
+        id=r.id, nome=r.nome, filename=r.filename,
+        data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
+        forca_max_N=r.forca_max_N, tensao_flexao_max_MPa=r.tensao_flexao_max_MPa,
+        modulo_flexao_MPa=r.modulo_flexao_MPa, created_at=r.created_at,
+        cliente_id=r.cliente_id,
+        cliente_nome=clientes.get(r.cliente_id, "") if r.cliente_id else "",
+        amostra=r.amostra or "", norma=r.norma or "", operador=r.operador or "",
+    )
+
+
 @app.get("/api/flexao/ensaios", response_model=list[EnsaioFlexaoSummary])
-def list_ensaios_flexao(db: Session = Depends(get_db)):
-    rows = db.query(EnsaioFlexaoDB).order_by(EnsaioFlexaoDB.created_at.desc()).all()
-    return [
-        EnsaioFlexaoSummary(
-            id=r.id, nome=r.nome, filename=r.filename,
-            data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
-            forca_max_N=r.forca_max_N, tensao_flexao_max_MPa=r.tensao_flexao_max_MPa,
-            modulo_flexao_MPa=r.modulo_flexao_MPa, created_at=r.created_at,
-        )
-        for r in rows
-    ]
+def list_ensaios_flexao(cliente_id: int | None = None, db: Session = Depends(get_db)):
+    q = db.query(EnsaioFlexaoDB).options(defer(EnsaioFlexaoDB.data_json))
+    if cliente_id is not None:
+        q = q.filter(EnsaioFlexaoDB.cliente_id == cliente_id)
+    clientes = _clientes_por_id(db)
+    return [EnsaioFlexaoSummary(**_flexao_summary_fields(r, clientes))
+            for r in q.order_by(EnsaioFlexaoDB.created_at.desc()).all()]
 
 
 @app.get("/api/flexao/ensaios/{id}", response_model=EnsaioFlexaoDetail)
@@ -1662,16 +1671,34 @@ def get_ensaio_flexao(id: int, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
     return EnsaioFlexaoDetail(
-        id=r.id, nome=r.nome, filename=r.filename,
-        data_ensaio=r.data_ensaio, num_amostras=r.num_amostras,
-        forca_max_N=r.forca_max_N, tensao_flexao_max_MPa=r.tensao_flexao_max_MPa,
-        modulo_flexao_MPa=r.modulo_flexao_MPa, created_at=r.created_at,
+        **_flexao_summary_fields(r, _clientes_por_id(db)),
         metadata_version=r.metadata_version,
         metadata_equipment_id=r.metadata_equipment_id, metadata_code=r.metadata_code,
         deflexao_max_mm=r.deflexao_max_mm, tempo_ensaio_s=r.tempo_ensaio_s,
         largura_mm=r.largura_mm or 0.0, espessura_mm=r.espessura_mm or 0.0,
-        span_mm=r.span_mm or 0.0, norma=r.norma or "",
+        span_mm=r.span_mm or 0.0, observacoes=r.observacoes or "",
     )
+
+
+@app.patch("/api/flexao/ensaios/{id}", response_model=EnsaioFlexaoDetail)
+def update_ensaio_flexao(id: int, body: EnsaioUpdate, db: Session = Depends(get_db)):
+    """Edita só o cadastro (nome, cliente, amostra, norma, operador, observações);
+    a curva e os resultados gravados não mudam."""
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    if body.cliente_id is not None:
+        if not db.query(ClienteDB).filter(ClienteDB.id == body.cliente_id).first():
+            raise HTTPException(status_code=422, detail="Cliente não encontrado")
+        r.cliente_id = body.cliente_id
+    if body.limpar_cliente:
+        r.cliente_id = None
+    for campo in ("nome", "amostra", "norma", "operador", "observacoes"):
+        v = getattr(body, campo)
+        if v is not None:
+            setattr(r, campo, v.strip() if campo != "observacoes" else v)
+    db.commit()
+    return get_ensaio_flexao(id, db)
 
 
 def _flexao_geom(r: EnsaioFlexaoDB) -> dict:

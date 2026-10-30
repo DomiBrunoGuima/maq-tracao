@@ -101,6 +101,11 @@ class EnsaioFlexaoSummary(BaseModel):
     tensao_flexao_max_MPa: float
     modulo_flexao_MPa: float
     created_at: datetime
+    cliente_id: Optional[int] = None
+    cliente_nome: str = ""
+    amostra: str = ""
+    norma: str = ""
+    operador: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -114,7 +119,7 @@ class EnsaioFlexaoDetail(EnsaioFlexaoSummary):
     largura_mm: float
     espessura_mm: float
     span_mm: float
-    norma: str
+    observacoes: str = ""
 
 
 class KPIsFlexao(BaseModel):

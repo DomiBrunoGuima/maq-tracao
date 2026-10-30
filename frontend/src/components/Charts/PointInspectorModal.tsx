@@ -16,7 +16,7 @@ function fmt(v: number, d = 4): string {
 
 // ── sub-components ────────────────────────────────────────────
 
-function Badge({ children, color }: { children: React.ReactNode; color: "blue" | "green" | "amber" }) {
+export function Badge({ children, color }: { children: React.ReactNode; color: "blue" | "green" | "amber" }) {
   const cls = {
     blue:  "bg-blue-500/10  text-blue-400  border-blue-500/20",
     green: "bg-green-500/10 text-green-400 border-green-500/20",
@@ -29,7 +29,7 @@ function Badge({ children, color }: { children: React.ReactNode; color: "blue" |
   );
 }
 
-function RawRow({ label, value, unit, source }: {
+export function RawRow({ label, value, unit, source }: {
   label: string; value: string | null; unit?: string; source: React.ReactNode;
 }) {
   return (
@@ -44,7 +44,7 @@ function RawRow({ label, value, unit, source }: {
   );
 }
 
-function CalcBlock({ title, steps, result, unit, ok }: {
+export function CalcBlock({ title, steps, result, unit, ok }: {
   title: string;
   steps: { label: string; value: string }[];
   result: string;

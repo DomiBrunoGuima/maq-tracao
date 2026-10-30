@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ClipboardList, Save, X } from "lucide-react";
 import { useUpdateEnsaio } from "../../hooks/useEnsaios";
-import type { EnsaioDetail } from "../../types";
+import { useUpdateEnsaioFlexao } from "../../hooks/useFlexao";
+import type { TipoEnsaio } from "../../types";
 import CadastroTeste, { type CadastroForm } from "../Common/CadastroTeste";
 
 const SETUP_LABELS: Record<string, [string, string]> = {
@@ -13,9 +14,25 @@ const SETUP_LABELS: Record<string, [string, string]> = {
   sentido: ["Sentido", ""],
 };
 
-/** Edita cliente, amostra, norma, operador e observações de um ensaio já gravado. */
-export default function DadosTesteModal({ ensaio, onClose }: { ensaio: EnsaioDetail; onClose: () => void }) {
-  const mut = useUpdateEnsaio();
+interface EnsaioCadastro {
+  id: number;
+  nome: string;
+  observacoes?: string;
+  cliente_id: number | null;
+  amostra?: string;
+  norma?: string;
+  operador?: string;
+  setup?: Record<string, unknown>;
+}
+
+/** Edita cliente, amostra, norma, operador e observações de um ensaio já gravado
+ * (tração ou flexão). A curva e os resultados gravados não são alterados. */
+export default function DadosTesteModal({ ensaio, tipo = "tracao", onClose }: {
+  ensaio: EnsaioCadastro; tipo?: TipoEnsaio; onClose: () => void;
+}) {
+  const mutTracao = useUpdateEnsaio();
+  const mutFlexao = useUpdateEnsaioFlexao();
+  const mut = tipo === "flexao" ? mutFlexao : mutTracao;
   const [nome, setNome] = useState(ensaio.nome);
   const [obs, setObs] = useState(ensaio.observacoes ?? "");
   const [cad, setCad] = useState<CadastroForm>({
@@ -51,7 +68,7 @@ export default function DadosTesteModal({ ensaio, onClose }: { ensaio: EnsaioDet
             <input value={nome} onChange={(e) => setNome(e.target.value)}
               className="bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
           </label>
-          <CadastroTeste value={cad} onChange={setCad} tipo="tracao" />
+          <CadastroTeste value={cad} onChange={setCad} tipo={tipo} />
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted">Observações</span>
             <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={3}
