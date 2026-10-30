@@ -54,9 +54,12 @@ export interface Cliente extends ClienteIn {
   num_relatorios: number;
 }
 
+export type TipoEnsaio = "tracao" | "flexao";
+
 export interface RelatorioSummary {
   id: number;
   ensaio_id: number | null;
+  tipo: TipoEnsaio;
   cliente_id: number | null;
   numero: string;
   titulo: string;
@@ -568,6 +571,7 @@ export interface Assinatura {
 
 export interface ReportRequest {
   ensaio_id: number;
+  tipo?: TipoEnsaio;
   cliente_id?: number | null;
   include_empresa: boolean;
   include_cliente: boolean;

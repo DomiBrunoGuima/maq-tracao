@@ -67,6 +67,7 @@ class Cliente(ClienteIn):
 class RelatorioSummary(BaseModel):
     id: int
     ensaio_id: Optional[int] = None
+    tipo: str = "tracao"
     cliente_id: Optional[int] = None
     numero: str = ""
     titulo: str = ""
@@ -339,6 +340,7 @@ class Assinatura(BaseModel):
 
 class ReportRequest(BaseModel):
     ensaio_id: int
+    tipo: str = "tracao"               # "tracao" ou "flexao"
     cliente_id: Optional[int] = None   # cliente cadastrado (para salvar/buscar o relatório)
     # Flags de seção
     include_empresa: bool = True

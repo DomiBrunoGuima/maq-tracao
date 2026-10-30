@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Trash2 } from "lucide-react";
+import { FileText, Layers, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 import { ReferenceArea, ReferenceLine } from "recharts";
 import type { AjusteElastico, EnsaioFlexaoSummary, FlexaoChartData, KPIsFlexao } from "../../types";
@@ -9,6 +9,7 @@ import KPICard from "../Dashboard/KPICard";
 import QualidadePanel from "../Dashboard/QualidadePanel";
 import { FASE_CORES, HeroValue, MiniStat, SectionLabel } from "../Dashboard/Dashboard";
 import { fmtKgf } from "../Common/Status";
+import ReportGenerator from "../Reports/ReportGenerator";
 
 // Mesmo layout do resultado da tração (Dashboard): valores em destaque, gráfico
 // principal com miniaturas e, à direita, qualidade, trecho elástico, estágios e resultados.
@@ -93,6 +94,7 @@ export default function FlexaoResultado({
   const { data: qualidade } = useQualidadeFlexao(selected);
   const [ativo, setAtivo] = useState<ChartKey>("ss");
   const [mostrarFases, setMostrarFases] = useState(true);
+  const [showReport, setShowReport] = useState(false);
   const ensaio = ensaios.find((e) => e.id === selected);
 
   return (
@@ -107,12 +109,24 @@ export default function FlexaoResultado({
         </select>
         {ensaio && <span className="text-xs text-muted">{ensaio.num_amostras} amostras</span>}
         {selected != null && (
-          <button onClick={() => onDelete(selected)} title="Excluir ensaio"
-            className="ml-auto text-muted hover:text-red-400 transition-colors p-1.5">
-            <Trash2 size={14} />
-          </button>
+          <>
+            <button onClick={() => setShowReport(true)}
+              className="ml-auto flex-shrink-0 flex items-center gap-2 px-4 py-1.5 bg-accent/10
+                         hover:bg-accent/20 text-accent rounded-lg text-xs font-medium transition-colors">
+              <FileText size={13} />
+              Gerar Relatório
+            </button>
+            <button onClick={() => onDelete(selected)} title="Excluir ensaio"
+              className="text-muted hover:text-red-400 transition-colors p-1.5">
+              <Trash2 size={14} />
+            </button>
+          </>
         )}
       </div>
+
+      {showReport && selected != null && (
+        <ReportGenerator ensaioId={selected} tipo="flexao" onClose={() => setShowReport(false)} />
+      )}
 
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

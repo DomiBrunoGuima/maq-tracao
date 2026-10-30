@@ -75,7 +75,8 @@ export default function App() {
           />
         )}
         {view === "relatorios" && (
-          <RelatoriosView onOpenEnsaio={handleSelectEnsaio} />
+          <RelatoriosView onOpenEnsaio={handleSelectEnsaio}
+            onOpenFlexao={(id) => { setFlexaoId(id); setView("flexao"); }} />
         )}
       </main>
     </div>

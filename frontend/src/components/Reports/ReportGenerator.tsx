@@ -3,13 +3,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2, Sparkles } from "lucide-react";
 import { generateReport, getCamposRelatorio } from "../../api/client";
 import { useClientes, useEnsaios } from "../../hooks/useEnsaios";
+import { useEnsaiosFlexao } from "../../hooks/useFlexao";
 import type {
   ReportRequest, DadosEmpresa, DadosCliente, DadosAmostra,
-  CondicoesEnsaio, Assinatura,
+  CondicoesEnsaio, Assinatura, TipoEnsaio,
 } from "../../types";
 
 interface Props {
   ensaioId: number;
+  tipo?: TipoEnsaio;
   onClose: () => void;
 }
 
@@ -156,11 +158,18 @@ function SectionCard({ title, enabled, onToggle, children }: {
 
 // ── main component ────────────────────────────────────────────
 
-export default function ReportGenerator({ ensaioId, onClose }: Props) {
+export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: Props) {
+  const flexao = tipo === "flexao";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: ensaios } = useEnsaios();
+  const { data: ensaiosTracao } = useEnsaios();
+  const { data: ensaiosFlexao } = useEnsaiosFlexao();
+  // Comparativo só entre ensaios do mesmo tipo
+  const ensaios = (flexao ? ensaiosFlexao : ensaiosTracao)?.map(e => ({
+    id: e.id, nome: e.nome, filename: e.filename,
+    tensao: "tensao_flexao_max_MPa" in e ? e.tensao_flexao_max_MPa : e.tensao_max_MPa,
+  }));
   const { data: clientes } = useClientes();
   const qc = useQueryClient();
   const [clienteId, setClienteId] = useState<number | null>(null);
@@ -187,7 +196,9 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
   const [cliente, setClienteState] = useState<DadosCliente>(EMPTY_CLIENTE);
   const [amostra, setAmostraState] = useState<DadosAmostra>(EMPTY_AMOSTRA);
   const [objetivos, setObjetivos] = useState("");
-  const [condicoes, setCondicoesState] = useState<CondicoesEnsaio>(EMPTY_CONDICOES);
+  const [condicoes, setCondicoesState] = useState<CondicoesEnsaio>(
+    flexao ? { ...EMPTY_CONDICOES, norma_referencia: "ISO 178:2019" } : EMPTY_CONDICOES,
+  );
   const [localData, setLocalData] = useState("");
   const [assinaturas, setAssinaturas] = useState<Assinatura[]>([
     { nome: "", cargo: "" },
@@ -199,7 +210,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
   // último relatório (empresa, assinaturas, equipamento). Só preenche o que veio.
   useEffect(() => {
     let cancel = false;
-    getCamposRelatorio(ensaioId).then((c) => {
+    getCamposRelatorio(ensaioId, tipo).then((c) => {
       if (cancel) return;
       const cheios = <T extends object>(o: Partial<T>) =>
         Object.fromEntries(Object.entries(o).filter(([, v]) => v !== "" && v != null)) as Partial<T>;
@@ -218,7 +229,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
       setAutoPreenchido(true);
     }).catch(() => { /* sem preenchimento automático */ });
     return () => { cancel = true; };
-  }, [ensaioId]);
+  }, [ensaioId, tipo]);
 
   function escolherCliente(id: number | null) {
     setClienteId(id);
@@ -268,6 +279,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
     try {
       const req: ReportRequest = {
         ensaio_id: ensaioId,
+        tipo,
         cliente_id: clienteId,
         ...flags,
         comparacao_ids: flags.include_comparativo ? comparacaoIds : [],
@@ -298,7 +310,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
         <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="text-accent" size={18} />
-            <h2 className="font-semibold text-white">Gerar Relatório</h2>
+            <h2 className="font-semibold text-white">Gerar Relatório{flexao ? " de Flexão" : ""}</h2>
             {autoPreenchido && (
               <span className="flex items-center gap-1 text-[10px] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
                 <Sparkles size={10} /> campos preenchidos a partir do ensaio
@@ -369,7 +381,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted">Descrição do objetivo do ensaio</span>
               <textarea value={objetivos} onChange={e => setObjetivos(e.target.value)} rows={3}
-                placeholder="Realizar os ensaios de tração para caracterizar a amostra..."
+                placeholder={`Realizar os ensaios de ${flexao ? "flexão" : "tração"} para caracterizar a amostra...`}
                 className="bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white
                            focus:outline-none focus:border-accent transition-colors resize-none" />
             </label>
@@ -396,8 +408,10 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                   units={["N", "kN"]}
                   placeholder="ex: 5"
                 />
-                <FieldWithSuffix label="Comprimento Inicial L₀" value={condicoes.comprimento_inicial_mm}
-                  onChange={v => setCondicoes("comprimento_inicial_mm", v)} placeholder="ex: 50" suffix="mm" />
+                {!flexao && (
+                  <FieldWithSuffix label="Comprimento Inicial L₀" value={condicoes.comprimento_inicial_mm}
+                    onChange={v => setCondicoes("comprimento_inicial_mm", v)} placeholder="ex: 50" suffix="mm" />
+                )}
                 <FieldWithUnitSelect
                   label="Velocidade do Ensaio"
                   value={condicoes.velocidade_ensaio}
@@ -408,9 +422,9 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                   placeholder="ex: 5,00"
                 />
                 <Field label="Tipo de Corpo de Prova" value={condicoes.tipo_corpo_prova}
-                  onChange={v => setCondicoes("tipo_corpo_prova", v)} placeholder="ex: Tipo 1A" />
-                <FieldWithSuffix label="Distância entre Garras" value={condicoes.distancia_garras_mm}
-                  onChange={v => setCondicoes("distancia_garras_mm", v)} placeholder="ex: 115" suffix="mm" />
+                  onChange={v => setCondicoes("tipo_corpo_prova", v)} placeholder={flexao ? "ex: Barra 80 × 10 × 4" : "ex: Tipo 1A"} />
+                <FieldWithSuffix label={flexao ? "Distância entre Apoios (L)" : "Distância entre Garras"} value={condicoes.distancia_garras_mm}
+                  onChange={v => setCondicoes("distancia_garras_mm", v)} placeholder={flexao ? "ex: 64" : "ex: 115"} suffix="mm" />
                 <Field label="Extensômetro" value={condicoes.extensometro}
                   onChange={v => setCondicoes("extensometro", v)} placeholder="ex: Até a ruptura" />
                 <FieldWithSuffix label="Largura dos CPs" value={condicoes.largura_cp_mm}
@@ -452,8 +466,8 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
               <div className="space-y-2">
                 {(
                   [
-                    ["include_stress_strain", "Gráfico Tensão × Deformação"],
-                    ["include_graficos_adicionais", "Gráfico Força × Deslocamento"],
+                    ["include_stress_strain", flexao ? "Gráfico Tensão × Deformação de flexão (σf × εf)" : "Gráfico Tensão × Deformação"],
+                    ["include_graficos_adicionais", flexao ? "Gráfico Força × Deflexão" : "Gráfico Força × Deslocamento"],
                     ["include_raw_data", "Tabela de dados brutos"],
                   ] as [keyof typeof flags, string][]
                 ).map(([k, label]) => (
@@ -479,7 +493,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                 {flags.include_comparativo && (
                   <div className="ml-6">
                     <p className="text-xs text-muted mb-2">
-                      Selecione os ensaios para comparar com o atual. As curvas σ×ε e F×d serão sobrepostas no relatório.
+                      Selecione os ensaios {flexao ? "de flexão " : ""}para comparar com o atual. As curvas σ×ε e {flexao ? "F×δ" : "F×d"} serão sobrepostas no relatório.
                     </p>
                     {outrosEnsaios.length === 0 ? (
                       <p className="text-xs text-muted/50 italic">Nenhum outro ensaio disponível.</p>
@@ -499,7 +513,7 @@ export default function ReportGenerator({ ensaioId, onClose }: Props) {
                               {e.nome || e.filename.replace(".csv", "")}
                             </span>
                             <span className="text-xs text-muted/60 ml-auto shrink-0">
-                              {e.tensao_max_MPa != null ? `${e.tensao_max_MPa.toFixed(0)} MPa` : "—"}
+                              {e.tensao != null ? `${e.tensao.toFixed(0)} MPa` : "—"}
                             </span>
                           </label>
                         ))}

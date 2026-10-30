@@ -158,3 +158,51 @@ def test_migra_banco_antigo(tmp_path):
         cols = {r[1] for r in conn.execute(text("PRAGMA table_info(ensaios)"))}
         assert {"cliente_id", "amostra", "norma", "setup_json"} <= cols
         assert conn.execute(text("SELECT amostra FROM ensaios")).scalar() == ""
+
+
+def _novo_ensaio_flexao(client, filename="FLX_1.csv") -> int:
+    from backend.flexao.acquisition import build_ensaio_flexao_dataframe, persist_ensaio_flexao
+    samples = [{"t_ms": i * 100, "forca": 50.0 * i if i < 38 else 5.0, "deslocamento": i * 0.5}
+               for i in range(40)]
+    geom = {"largura_mm": 10.0, "espessura_mm": 4.0, "span_mm": 64.0, "norma": "ISO 178"}
+    db = client.Session()
+    try:
+        meta, df = build_ensaio_flexao_dataframe(samples, 10.0, 4.0, 64.0, filename=filename)
+        return persist_ensaio_flexao(db, meta, df, filename=filename, geom=geom).id
+    finally:
+        db.close()
+
+
+def test_relatorio_flexao(client):
+    fid = _novo_ensaio_flexao(client)
+    outro = _novo_ensaio_flexao(client, "FLX_2.csv")
+    eid = _novo_ensaio(client)
+
+    campos = client.get(f"/api/flexao/ensaios/{fid}/campos-relatorio").json()
+    assert campos["condicoes"]["distancia_garras_mm"] == "64,00"
+    assert campos["condicoes"]["largura_cp_mm"] == "10,00"
+
+    r = client.post("/api/relatorio", json={
+        "ensaio_id": fid, "tipo": "flexao", "include_graficos_adicionais": True,
+        "include_comparativo": True, "comparacao_ids": [outro], "include_raw_data": True,
+    })
+    assert r.status_code == 200, r.text
+    html = r.text
+    assert "Relatório de Ensaio de Flexão" in html
+    assert "Resistência à Flexão (σfM)" in html
+    assert "Tração" not in html
+    rid = int(r.headers["X-Relatorio-Id"])
+
+    rels = {x["id"]: x for x in client.get("/api/relatorios").json()}
+    assert rels[rid]["tipo"] == "flexao" and rels[rid]["ensaio_id"] == fid
+    assert [x["id"] for x in client.get("/api/relatorios", params={"tipo": "tracao"}).json()] == []
+
+    # Reimportar o ensaio de tração de mesmo id não mexe no relatório da flexão
+    assert eid == fid
+    db = client.Session()
+    try:
+        main._cadastro_de(db, db.query(EnsaioDB).get(eid))
+        db.commit()
+    finally:
+        db.close()
+    assert rels[rid]["ensaio_id"] == client.get("/api/relatorios").json()[0]["ensaio_id"] == fid

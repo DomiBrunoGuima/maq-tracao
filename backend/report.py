@@ -17,12 +17,22 @@ from .calculator import calculate_kpis
 # Chart generation
 # ──────────────────────────────────────────────
 
-def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
+# Colunas e rótulos dos gráficos por tipo de ensaio (deformação adimensional, tensão em MPa)
+_EIXOS = {
+    "tracao": {"x": "Deform_Along", "y": "Tensao_Pa", "x_label": "Deformação (%)",
+               "y_label": "Tensão (MPa)", "d_label": "Deslocamento (mm)"},
+    "flexao": {"x": "Deform_Flexao", "y": "Tensao_Flexao", "x_label": "Deformação de flexão εf (%)",
+               "y_label": "Tensão de flexão σf (MPa)", "d_label": "Deflexão (mm)"},
+}
+
+
+def _chart_stress_strain_b64(df: pd.DataFrame, modo: str = "tracao") -> str:
     try:
+        eixos = _EIXOS[modo]
         fig, ax = plt.subplots(figsize=(8, 4.8))
 
-        x = df["Deform_Along"].values * 100   # dimensionless → %
-        y = df["Tensao_Pa"].values             # já em MPa
+        x = df[eixos["x"]].values * 100   # dimensionless → %
+        y = df[eixos["y"]].values         # já em MPa
 
         ax.plot(x, y, color="#1e3a5f", linewidth=1.8, label="Tensão")
 
@@ -30,8 +40,8 @@ def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
         ax.scatter([x[fmax_pos]], [y[fmax_pos]], color="#c0392b", s=60, zorder=5,
                    label=f"Força máxima  {y[fmax_pos]:.1f} MPa / {x[fmax_pos]:.2f}%")
 
-        ax.set_xlabel("Deformação (%)", fontsize=10)
-        ax.set_ylabel("Tensão (MPa)", fontsize=10)
+        ax.set_xlabel(eixos["x_label"], fontsize=10)
+        ax.set_ylabel(eixos["y_label"], fontsize=10)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
         ax.grid(True, alpha=0.25, linestyle="--", color="gray")
@@ -52,20 +62,21 @@ def _chart_stress_strain_b64(df: pd.DataFrame) -> str:
         return ""
 
 
-def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
+def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]], modo: str = "tracao") -> str:
     """Gráfico σ×ε com múltiplas curvas sobrepostas."""
     try:
+        eixos = _EIXOS[modo]
         palette = ["#1e3a5f", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#2980b9"]
         fig, ax = plt.subplots(figsize=(8, 4.8))
         for idx, (label, df) in enumerate(series):
             color = palette[idx % len(palette)]
-            x = df["Deform_Along"].values * 100
-            y = df["Tensao_Pa"].values
+            x = df[eixos["x"]].values * 100
+            y = df[eixos["y"]].values
             ax.plot(x, y, color=color, linewidth=1.8, label=label)
             fmax_pos = int(df["Forca_N"].fillna(float("-inf")).values.argmax())
             ax.scatter([x[fmax_pos]], [y[fmax_pos]], color=color, s=50, zorder=5)
-        ax.set_xlabel("Deformação (%)", fontsize=10)
-        ax.set_ylabel("Tensão (MPa)", fontsize=10)
+        ax.set_xlabel(eixos["x_label"], fontsize=10)
+        ax.set_ylabel(eixos["y_label"], fontsize=10)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
         ax.grid(True, alpha=0.25, linestyle="--", color="gray")
@@ -83,7 +94,7 @@ def _chart_comparison_ss_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
         return ""
 
 
-def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
+def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]], modo: str = "tracao") -> str:
     """Gráfico F×d com múltiplas curvas sobrepostas."""
     try:
         palette = ["#2e6da4", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#1e3a5f"]
@@ -92,7 +103,7 @@ def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
             color = palette[idx % len(palette)]
             ax.plot(df["Deslocamento"].values, df["Forca_N"].values,
                     color=color, linewidth=1.6, label=label)
-        ax.set_xlabel("Deslocamento (mm)", fontsize=10)
+        ax.set_xlabel(_EIXOS[modo]["d_label"], fontsize=10)
         ax.set_ylabel("Força (N)", fontsize=10)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
@@ -111,12 +122,12 @@ def _chart_comparison_fd_b64(series: list[tuple[str, pd.DataFrame]]) -> str:
         return ""
 
 
-def _chart_force_displacement_b64(df: pd.DataFrame) -> str:
+def _chart_force_displacement_b64(df: pd.DataFrame, modo: str = "tracao") -> str:
     try:
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(df["Deslocamento"].values, df["Forca_N"].values,
                 color="#2e6da4", linewidth=1.6)
-        ax.set_xlabel("Deslocamento (mm)", fontsize=10)
+        ax.set_xlabel(_EIXOS[modo]["d_label"], fontsize=10)
         ax.set_ylabel("Força (N)", fontsize=10)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
@@ -225,12 +236,78 @@ p { margin: 6px 0; }
 """
 
 
+def _linhas_resultado_tracao(kpis: dict, tensao_max, alongamento, area, l0) -> list[tuple[str, str, str]]:
+    rows = []
+    if area:
+        rows.append(("Área da Seção Transversal (A)", _num(area, ".4f"), "mm²"))
+    if l0:
+        rows.append(("Comprimento Inicial (L₀)", _num(l0, ".2f"), "mm"))
+    rows += [
+        ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_GPa"), ".3f"), "GPa"),
+        ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_MPa"), ".1f"), "MPa"),
+    ]
+    if kpis.get("tensao_escoamento_MPa") is not None:
+        rows.append(("Tensão de Escoamento (est.)", _num(kpis["tensao_escoamento_MPa"]), "MPa"))
+    rows += [
+        ("Tensão Máxima (σmax = Fmax/A)" if kpis.get("tensao_max_calc_MPa") is not None else "Tensão Máxima (σmax)",
+         _num(tensao_max), "MPa"),
+        ("Força Máxima (Fmax)", _num(kpis.get("forca_max_N"), ".1f"), "N"),
+        ("Força Máxima (Fmax)", _num(kpis.get("forca_max_kN"), ".4f"), "kN"),
+        ("Alongamento (A% = d/L₀×100)" if kpis.get("alonga_calc_pct") is not None else "Alongamento (δ)",
+         _num(alongamento), "%"),
+        ("Deslocamento Máximo", _num(kpis.get("deslocamento_max_mm")), "mm"),
+        ("Tempo até a Força Máxima", _num(kpis.get("tempo_ruptura_s"), ".1f"), "s"),
+        ("Rigidez (k)", _num(kpis.get("rigidez_N_mm")), "N/mm"),
+        ("Energia Absorvida até a Ruptura", _num(kpis.get("energia_J")), "J"),
+        ("Taxa de Carregamento Média", _num(kpis.get("taxa_carregamento_N_s")), "N/s"),
+    ]
+    return rows
+
+
+def _linhas_resultado_flexao(kpis: dict) -> list[tuple[str, str, str]]:
+    rows = []
+    for chave, rotulo in (("largura_mm", "Largura do Corpo de Prova (b)"),
+                          ("espessura_mm", "Espessura do Corpo de Prova (h)"),
+                          ("span_mm", "Distância entre Apoios (L)")):
+        if kpis.get(chave):
+            rows.append((rotulo, _num(kpis[chave]), "mm"))
+    rows += [
+        ("Módulo de Flexão (Ef)", _num(kpis.get("modulo_flexao_GPa"), ".3f"), "GPa"),
+        ("Módulo de Flexão (Ef)", _num(kpis.get("modulo_flexao_MPa"), ".1f"), "MPa"),
+    ]
+    if kpis.get("modulo_cordal_MPa") is not None:
+        rows.append(("Módulo de Flexão Cordal", _num(kpis["modulo_cordal_MPa"], ".1f"), "MPa"))
+    if kpis.get("r2_elastico") is not None:
+        rows.append(("R² do Trecho Elástico", _num(kpis["r2_elastico"], ".4f"), "—"))
+    rows += [
+        ("Resistência à Flexão (σfM)", _num(kpis.get("tensao_flexao_max_MPa")), "MPa"),
+        ("Força Máxima (Fmax)", _num(kpis.get("forca_max_N"), ".1f"), "N"),
+        ("Força Máxima (Fmax)", _num(kpis.get("forca_max_kN"), ".4f"), "kN"),
+        ("Deflexão na Força Máxima", _num(kpis.get("deflexao_pico_mm")), "mm"),
+        ("Deflexão Máxima", _num(kpis.get("deflexao_max_mm")), "mm"),
+        ("Deformação de Flexão Máxima (εf)", _num(kpis.get("deform_flexao_max_pct")), "%"),
+        ("Tempo até a Força Máxima", _num(kpis.get("tempo_pico_s"), ".1f"), "s"),
+        ("Tempo de Ensaio", _num(kpis.get("tempo_ensaio_s"), ".1f"), "s"),
+        ("Rigidez (k)", _num(kpis.get("rigidez_N_mm")), "N/mm"),
+        ("Energia Absorvida", _num(kpis.get("energia_J")), "J"),
+        ("Taxa de Carregamento Média", _num(kpis.get("taxa_carregamento_N_s")), "N/s"),
+        ("Ruptura", "detectada" if kpis.get("ruptura_detectada") else "não detectada", "—"),
+    ]
+    return rows
+
+
 # ──────────────────────────────────────────────
 # Main function
 # ──────────────────────────────────────────────
 
 def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
-                         comparacao_series: list[tuple[str, pd.DataFrame]] | None = None) -> str:
+                         comparacao_series: list[tuple] | None = None,
+                         modo: str = "tracao") -> str:
+    """Relatório HTML de um ensaio. ``modo`` é "tracao" ou "flexao". Cada item de
+    ``comparacao_series`` é (nome, df) ou (nome, df, kpis) com os KPIs já calculados."""
+    flexao = modo == "flexao"
+    tipo_ensaio = "Flexão" if flexao else "Tração"
+    titulo_rel = f"Relatório de Ensaio de {tipo_ensaio}"
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     body_parts: list[str] = []
     sec_num = 0
@@ -245,7 +322,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             f'style="max-height:55px;max-width:130px;object-fit:contain"/>'
         )
 
-    empresa_nome = req.empresa.nome if req.include_empresa and req.empresa.nome else "Relatório de Ensaio de Tração"
+    empresa_nome = req.empresa.nome if req.include_empresa and req.empresa.nome else titulo_rel
     numero_rel = req.empresa.numero_relatorio if req.include_empresa else ""
 
     empresa_endereco = ""
@@ -273,7 +350,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#1e3a5f">Relatório de Ensaio de Tração</div>
+          <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#1e3a5f">{_esc(titulo_rel)}</div>
           {numero_html}
           {emitido_html}
         </div>
@@ -310,7 +387,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     toc_items = []
     if req.include_amostra:  toc_items.append("IDENTIFICAÇÃO DA(S) AMOSTRA(S)")
     if req.include_objetivos: toc_items.append("OBJETIVOS")
-    if req.include_condicoes: toc_items.append("CONDIÇÕES DO ENSAIO DE TRAÇÃO")
+    if req.include_condicoes: toc_items.append(f"CONDIÇÕES DO ENSAIO DE {tipo_ensaio.upper()}")
     if req.include_resultados: toc_items.append("RESULTADOS")
     if req.include_conclusao: toc_items.append("CONCLUSÃO")
     if toc_items:
@@ -365,13 +442,13 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     # ── SEÇÃO 3: CONDIÇÕES DO ENSAIO ──────────
     if req.include_condicoes:
         sec_num += 1
-        body_parts.append(_section_header(sec_num, "Condições do Ensaio de Tração"))
+        body_parts.append(_section_header(sec_num, f"Condições do Ensaio de {tipo_ensaio}"))
         c = req.condicoes
         tab_num += 1
         body_parts.append(
             f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentadas as condições do ensaio.</p>'
             f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-            f'Tabela {tab_num} – Condições do ensaio de Tração.</p>'
+            f'Tabela {tab_num} – Condições do ensaio de {tipo_ensaio}.</p>'
         )
         rows = []
         if c.temp_laboratorio or c.umidade_laboratorio:
@@ -383,7 +460,13 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             te_display = te if not te.replace(",", ".").replace("-", "").strip().replace(".", "", 1).isdigit() else f"{te} °C"
             rows.append(_td2("Temperatura do Ensaio:", te_display,
                              "Número de Corpos de Prova:", c.num_corpos_prova or "—"))
-        if c.celula_carga or c.comprimento_inicial_mm:
+        if flexao:
+            # Na flexão não há L₀ nem garras: o comprimento relevante é o vão entre apoios
+            if c.celula_carga or c.distancia_garras_mm:
+                carga_display = f"{c.celula_carga} {c.celula_carga_unidade}".strip() if c.celula_carga else "—"
+                rows.append(_td2("Célula de Carga:", carga_display,
+                                 "Distância entre Apoios (L):", f"{c.distancia_garras_mm} mm" if c.distancia_garras_mm else "—"))
+        elif c.celula_carga or c.comprimento_inicial_mm:
             carga_display = f"{c.celula_carga} {c.celula_carga_unidade}".strip() if c.celula_carga else "—"
             rows.append(_td2("Célula de Carga:", carga_display,
                              "Comprimento Inicial (L₀):", f"{c.comprimento_inicial_mm} mm" if c.comprimento_inicial_mm else "—"))
@@ -391,7 +474,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             vel_display = f"{c.velocidade_ensaio} {c.velocidade_ensaio_unidade}".strip() if c.velocidade_ensaio else "—"
             rows.append(_td2("Velocidade do Ensaio:", vel_display,
                              "Corpo de Prova:", c.tipo_corpo_prova or "—"))
-        if c.distancia_garras_mm or c.extensometro:
+        if flexao:
+            if c.extensometro:
+                rows.append(_td("Extensômetro:", c.extensometro, "22%"))
+        elif c.distancia_garras_mm or c.extensometro:
             rows.append(_td2("Distância entre Garras:", f"{c.distancia_garras_mm} mm" if c.distancia_garras_mm else "—",
                              "Extensômetro:", c.extensometro or "—"))
         if c.largura_cp_mm or c.espessura_cp_mm:
@@ -413,9 +499,12 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         if c.equipamentos:
             rows.append(f'<tr><td style="font-weight:bold;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px">Equipamento(s):</td>'
                         f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(c.equipamentos)}</td></tr>')
-        if c.norma_referencia:
+        norma_ref = c.norma_referencia
+        if flexao and norma_ref == "ISO 527-1:2019":   # padrão do pedido é o da tração
+            norma_ref = kpis.get("norma") or norma_ref
+        if norma_ref:
             rows.append(f'<tr><td style="font-weight:bold;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px">Norma de Referência:</td>'
-                        f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(c.norma_referencia)}</td></tr>')
+                        f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(norma_ref)}</td></tr>')
         body_parts.append(f'<table style="width:100%;margin-bottom:16px">{"".join(rows)}</table>')
 
     # Valores "oficiais" usados tanto em Resultados quanto na Conclusão:
@@ -430,13 +519,23 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     l0 = kpis.get("comprimento_inicial_mm")
     unidades_cruas = (area is not None and abs(float(area) - 1.0) < 1e-9
                       and l0 is not None and abs(float(l0) - 1.0) < 1e-9)
+    if flexao:
+        # σf/εf só existem com largura, espessura e vão gravados no ensaio
+        unidades_cruas = not all(kpis.get(k) for k in ("largura_mm", "espessura_mm", "span_mm"))
 
     # ── SEÇÃO 4: RESULTADOS ───────────────────
     if req.include_resultados:
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Resultados"))
 
-        if unidades_cruas:
+        if unidades_cruas and flexao:
+            body_parts.append(
+                '<p style="color:#b45309;background:#fff7ed;border:1px solid #fed7aa;'
+                'padding:8px 12px;margin-bottom:12px">Atenção: este ensaio foi gravado sem '
+                'largura, espessura ou distância entre apoios. Tensão e deformação de flexão '
+                'não puderam ser calculadas e não devem ser usadas como resultado.</p>'
+            )
+        elif unidades_cruas:
             body_parts.append(
                 '<p style="color:#b45309;background:#fff7ed;border:1px solid #fed7aa;'
                 'padding:8px 12px;margin-bottom:12px">Atenção: este ensaio foi gravado sem '
@@ -446,7 +545,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             )
 
         if req.include_stress_strain:
-            chart_b64 = _chart_stress_strain_b64(df)
+            chart_b64 = _chart_stress_strain_b64(df, modo)
             if chart_b64:
                 fig_num += 1
                 body_parts.append(
@@ -454,31 +553,32 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 )
                 body_parts.append(_figure(
                     f"data:image/png;base64,{chart_b64}",
-                    f"Figura {fig_num} – Curva Tensão × Deformação — {ensaio.nome}."
+                    f"Figura {fig_num} – Curva Tensão × Deformação{' de Flexão' if flexao else ''} — {ensaio.nome}."
                 ))
             else:
                 body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico σ×ε: falha na geração — ver terminal do backend]</p>')
 
         if req.include_graficos_adicionais:
-            chart2 = _chart_force_displacement_b64(df)
+            chart2 = _chart_force_displacement_b64(df, modo)
             if chart2:
                 fig_num += 1
                 body_parts.append(_figure(
                     f"data:image/png;base64,{chart2}",
-                    f"Figura {fig_num} – Curva Força × Deslocamento — {ensaio.nome}."
+                    f"Figura {fig_num} – Curva Força × {'Deflexão' if flexao else 'Deslocamento'} — {ensaio.nome}."
                 ))
             else:
                 body_parts.append('<p style="color:#c00;font-style:italic">[Gráfico F×d: falha na geração]</p>')
 
         if req.include_comparativo and comparacao_series:
-            all_series = [(ensaio.nome, df)] + comparacao_series
+            all_series = [(ensaio.nome, df, kpis)] + list(comparacao_series)
+            curvas = [(s[0], s[1]) for s in all_series]
             cmp_figs: list[tuple[str, str]] = []
-            cmp_ss = _chart_comparison_ss_b64(all_series)
+            cmp_ss = _chart_comparison_ss_b64(curvas, modo)
             if cmp_ss:
                 cmp_figs.append((cmp_ss, f"Comparativo Tensão × Deformação ({len(all_series)} ensaios)."))
-            cmp_fd = _chart_comparison_fd_b64(all_series)
+            cmp_fd = _chart_comparison_fd_b64(curvas, modo)
             if cmp_fd:
-                cmp_figs.append((cmp_fd, f"Comparativo Força × Deslocamento ({len(all_series)} ensaios)."))
+                cmp_figs.append((cmp_fd, f"Comparativo Força × {'Deflexão' if flexao else 'Deslocamento'} ({len(all_series)} ensaios)."))
 
             if cmp_figs:
                 first = fig_num + 1
@@ -496,11 +596,17 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
 
             # Tabela comparativa com os principais resultados de cada ensaio
             cmp_rows = []
-            for nome, cdf in all_series:
+            for serie in all_series:
+                nome, cdf = serie[0], serie[1]
                 try:
-                    ck = kpis if cdf is df else calculate_kpis(cdf)
+                    ck = serie[2] if len(serie) > 2 else calculate_kpis(cdf)
                 except Exception as exc:
                     print(f"[report] KPIs do comparativo falharam para {nome}: {exc}", flush=True)
+                    continue
+                if flexao:
+                    cmp_rows.append((nome, _num(ck.get("forca_max_N"), ".1f"), _num(ck.get("tensao_flexao_max_MPa")),
+                                     _num(ck.get("modulo_flexao_MPa"), ".1f"), _num(ck.get("deflexao_max_mm")),
+                                     _num(ck.get("energia_J"))))
                     continue
                 ct = ck.get("tensao_max_calc_MPa")
                 if ct is None:
@@ -518,9 +624,12 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                     f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin:8px 0 4px">'
                     f'Tabela {tab_num} – Comparativo dos resultados.</p>'
                     f'<table style="width:90%;margin:0 auto 20px"><thead><tr>'
-                    f'<th {th}>Ensaio</th><th {th}>Fmax (N)</th><th {th}>σmax (MPa)</th>'
-                    f'<th {th}>E (MPa)</th><th {th}>Alongamento (%)</th><th {th}>Energia (J)</th>'
-                    f'</tr></thead><tbody>'
+                    + (f'<th {th}>Ensaio</th><th {th}>Fmax (N)</th><th {th}>σfM (MPa)</th>'
+                       f'<th {th}>Ef (MPa)</th><th {th}>Deflexão máx. (mm)</th><th {th}>Energia (J)</th>'
+                       if flexao else
+                       f'<th {th}>Ensaio</th><th {th}>Fmax (N)</th><th {th}>σmax (MPa)</th>'
+                       f'<th {th}>E (MPa)</th><th {th}>Alongamento (%)</th><th {th}>Energia (J)</th>')
+                    + '</tr></thead><tbody>'
                     + "".join(
                         f'<tr><td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
                         + "".join(f'<td {td}>{v}</td>' for v in r[1:]) + '</tr>'
@@ -533,32 +642,12 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         body_parts.append(
             f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentados os resultados do ensaio.</p>'
             f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-            f'Tabela {tab_num} – Resultados do ensaio de Tração.</p>'
+            f'Tabela {tab_num} – Resultados do ensaio de {tipo_ensaio}.</p>'
         )
-        kpi_rows = []
-        if area:
-            kpi_rows.append(("Área da Seção Transversal (A)", _num(area, ".4f"), "mm²"))
-        if l0:
-            kpi_rows.append(("Comprimento Inicial (L₀)", _num(l0, ".2f"), "mm"))
-        kpi_rows += [
-            ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_GPa"), ".3f"), "GPa"),
-            ("Módulo de Elasticidade (E)", _num(kpis.get("modulo_elasticidade_MPa"), ".1f"), "MPa"),
-        ]
-        if kpis.get("tensao_escoamento_MPa") is not None:
-            kpi_rows.append(("Tensão de Escoamento (est.)", _num(kpis["tensao_escoamento_MPa"]), "MPa"))
-        kpi_rows += [
-            ("Tensão Máxima (σmax = Fmax/A)" if kpis.get("tensao_max_calc_MPa") is not None else "Tensão Máxima (σmax)",
-             _num(tensao_max), "MPa"),
-            ("Força Máxima (Fmax)", _num(kpis.get("forca_max_N"), ".1f"), "N"),
-            ("Força Máxima (Fmax)", _num(kpis.get("forca_max_kN"), ".4f"), "kN"),
-            ("Alongamento (A% = d/L₀×100)" if kpis.get("alonga_calc_pct") is not None else "Alongamento (δ)",
-             _num(alongamento), "%"),
-            ("Deslocamento Máximo", _num(kpis.get("deslocamento_max_mm")), "mm"),
-            ("Tempo até a Força Máxima", _num(kpis.get("tempo_ruptura_s"), ".1f"), "s"),
-            ("Rigidez (k)", _num(kpis.get("rigidez_N_mm")), "N/mm"),
-            ("Energia Absorvida até a Ruptura", _num(kpis.get("energia_J")), "J"),
-            ("Taxa de Carregamento Média", _num(kpis.get("taxa_carregamento_N_s")), "N/s"),
-        ]
+        if flexao:
+            kpi_rows = _linhas_resultado_flexao(kpis)
+        else:
+            kpi_rows = _linhas_resultado_tracao(kpis, tensao_max, alongamento, area, l0)
         kpi_html = "".join(
             f'<tr>'
             f'<td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
@@ -579,14 +668,17 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         )
 
         if req.include_raw_data:
+            col_tensao = _EIXOS[modo]["y"]
+            col_deform = _EIXOS[modo]["x"]
+            sub = "f" if flexao else ""
             rows_html = ""
             for _, row in df.iterrows():
                 rows_html += (
                     f"<tr>"
                     f"<td style='border:1px solid #ddd;padding:3px 6px'>{_esc(row.get('TIME',''))}</td>"
                     f"<td style='border:1px solid #ddd;padding:3px 6px'>{_esc(row.get('DATA',''))}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Tensao_Pa'))}</td>"
-                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num((row.get('Deform_Along') or 0) * 100, '.3f')}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get(col_tensao))}</td>"
+                    f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num((row.get(col_deform) or 0) * 100, '.3f')}</td>"
                     f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Forca_N'))}</td>"
                     f"<td style='border:1px solid #ddd;padding:3px 6px;text-align:right'>{_num(row.get('Deslocamento'))}</td>"
                     f"</tr>\n"
@@ -597,10 +689,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 f'<thead><tr>'
                 f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">Hora</th>'
                 f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">Data</th>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">σ (MPa)</th>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">ε (%)</th>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">σ{sub} (MPa)</th>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">ε{sub} (%)</th>'
                 f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">F (N)</th>'
-                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">d (mm)</th>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:4px 6px;border:1px solid #999">{"δ" if flexao else "d"} (mm)</th>'
                 f'</tr></thead>'
                 f'<tbody>{rows_html}</tbody>'
                 f'</table>'
@@ -611,6 +703,26 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Conclusão"))
         tab_num += 1
+        if flexao:
+            resumo = [
+                ("Módulo de Flexão", _num(kpis.get("modulo_flexao_GPa"), ".3f"), "GPa"),
+                ("Resistência à Flexão", _num(kpis.get("tensao_flexao_max_MPa")), "MPa"),
+                ("Deflexão na Força Máxima", _num(kpis.get("deflexao_pico_mm")), "mm"),
+                ("Energia Absorvida", _num(kpis.get("energia_J")), "J"),
+            ]
+        else:
+            resumo = [
+                ("Módulo de Elasticidade", _num(kpis.get("modulo_elasticidade_GPa"), ".3f"), "GPa"),
+                ("Tensão Máxima", _num(tensao_max), "MPa"),
+                ("Alongamento", _num(alongamento), "%"),
+                ("Energia Absorvida", _num(kpis.get("energia_J")), "J"),
+            ]
+        resumo_html = "".join(
+            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">{_esc(r[0])}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{r[1]}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px">{r[2]}</td></tr>'
+            for r in resumo
+        )
         body_parts.append(
             f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
             f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
@@ -621,19 +733,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Valor</th>'
             f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Unidade</th>'
             f'</tr></thead>'
-            f'<tbody>'
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Módulo de Elasticidade</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(kpis.get("modulo_elasticidade_GPa"), ".3f")}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px">GPa</td></tr>'
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Tensão Máxima</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(tensao_max)}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px">MPa</td></tr>'
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Alongamento</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(alongamento)}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px">%</td></tr>'
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Energia Absorvida</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{_num(kpis.get("energia_J"))}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px">J</td></tr>'
+            f'<tbody>{resumo_html}'
             f'</tbody></table>'
         )
 

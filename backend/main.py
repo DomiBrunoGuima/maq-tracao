@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, defer
 
 from . import acesso
@@ -536,6 +537,11 @@ def reimport_ensaio(id: int, db: Session = Depends(get_db)):
     return {"id": new_r.id, "nome": new_r.nome, "num_amostras": new_r.num_amostras}
 
 
+def _rel_tracao():
+    """Filtro dos relatórios de tração (bancos antigos não têm o tipo preenchido)."""
+    return or_(RelatorioDB.tipo.is_(None), RelatorioDB.tipo != "flexao")
+
+
 _CAMPOS_CADASTRO = ("nome", "cliente_id", "amostra", "norma", "operador", "observacoes", "setup_json")
 
 
@@ -543,7 +549,8 @@ def _cadastro_de(db, r: EnsaioDB) -> dict:
     """Cadastro do teste que precisa sobreviver a uma reimportação do CSV. Os
     relatórios do ensaio ficam marcados com o id negativo até a reimportação
     (o SQLite pode reaproveitar ids apagados)."""
-    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == r.id).update({RelatorioDB.ensaio_id: -r.id})
+    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == r.id, _rel_tracao()).update(
+        {RelatorioDB.ensaio_id: -r.id}, synchronize_session=False)
     return {"id": r.id, **{c: getattr(r, c) for c in _CAMPOS_CADASTRO}}
 
 
@@ -552,8 +559,8 @@ def _restaurar_cadastro(db, new_r: EnsaioDB, cadastro: dict) -> None:
         if cadastro.get(c) not in (None, ""):
             setattr(new_r, c, cadastro[c])
     # Relatórios salvos continuam apontando para o ensaio reimportado
-    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == -cadastro["id"]).update(
-        {RelatorioDB.ensaio_id: new_r.id})
+    db.query(RelatorioDB).filter(RelatorioDB.ensaio_id == -cadastro["id"], _rel_tracao()).update(
+        {RelatorioDB.ensaio_id: new_r.id}, synchronize_session=False)
     db.commit()
 
 
@@ -580,6 +587,8 @@ def reimport_all(db: Session = Depends(get_db)):
 
 @app.post("/api/relatorio")
 def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
+    if req.tipo == "flexao":
+        return _generate_report_flexao(req, db)
     r = db.query(EnsaioDB).filter(EnsaioDB.id == req.ensaio_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
@@ -600,8 +609,34 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
                     print(f"[relatorio] falha ao carregar ensaio {cid} para comparativo: {exc}", flush=True)
 
     html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series)
+    return _salvar_relatorio(db, req, r, html, "tracao")
 
-    # Guarda o relatório gerado para abrir/buscar depois
+
+def _generate_report_flexao(req: ReportRequest, db: Session) -> HTMLResponse:
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == req.ensaio_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    kpis = calculate_kpis_flexao(df, geom=_flexao_geom(r))
+
+    comparacao_series = None
+    if req.include_comparativo and req.comparacao_ids:
+        comparacao_series = []
+        for cid in req.comparacao_ids:
+            cr = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == cid).first()
+            if cr:
+                try:
+                    cdf = pd.read_json(io.StringIO(cr.data_json))
+                    comparacao_series.append((cr.nome, cdf, calculate_kpis_flexao(cdf, geom=_flexao_geom(cr))))
+                except Exception as exc:
+                    print(f"[relatorio] falha ao carregar ensaio de flexão {cid} para comparativo: {exc}", flush=True)
+
+    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series, modo="flexao")
+    return _salvar_relatorio(db, req, r, html, "flexao")
+
+
+def _salvar_relatorio(db: Session, req: ReportRequest, r, html: str, tipo: str) -> HTMLResponse:
+    """Guarda o relatório gerado para abrir/buscar depois."""
     cliente_id = req.cliente_id or r.cliente_id
     cliente_nome = req.cliente.nome.strip()
     if not cliente_nome and cliente_id:
@@ -613,6 +648,7 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     req_dump.get("amostra", {}).pop("imagem_data_url", None)
     rel = RelatorioDB(
         ensaio_id=r.id,
+        tipo=tipo,
         cliente_id=cliente_id,
         numero=req.empresa.numero_relatorio.strip(),
         titulo=r.nome,
@@ -655,6 +691,35 @@ def campos_relatorio(id: int, db: Session = Depends(get_db)):
         if norma.get("distancia_garras_mm"):
             condicoes["distancia_garras_mm"] = _n(norma["distancia_garras_mm"], 0)
 
+    return _campos_comuns_relatorio(db, r, condicoes)
+
+
+@app.get("/api/flexao/ensaios/{id}/campos-relatorio")
+def campos_relatorio_flexao(id: int, db: Session = Depends(get_db)):
+    """Mesmo preenchimento automático do relatório de tração, com a geometria da flexão."""
+    r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    df = pd.read_json(io.StringIO(r.data_json))
+    kpis = calculate_kpis_flexao(df, geom=_flexao_geom(r))
+
+    def _n(v, d=2):
+        return "" if not v else f"{float(v):.{d}f}".replace(".", ",")
+
+    condicoes = {
+        "data_realizacao": r.data_ensaio or "",
+        "norma_referencia": kpis.get("norma") or r.norma or "",
+        "num_corpos_prova": "1",
+        "largura_cp_mm": _n(r.largura_mm),
+        "espessura_cp_mm": _n(r.espessura_mm),
+        "distancia_garras_mm": _n(r.span_mm),
+        "tipo_corpo_prova": "Barra retangular (flexão 3 pontos)",
+    }
+    return _campos_comuns_relatorio(db, r, condicoes)
+
+
+def _campos_comuns_relatorio(db: Session, r, condicoes: dict) -> dict:
+    """Cliente do ensaio e dados que se repetem entre relatórios (empresa, assinaturas)."""
     cliente = None
     if r.cliente_id:
         c = db.query(ClienteDB).filter(ClienteDB.id == r.cliente_id).first()
@@ -694,20 +759,24 @@ def campos_relatorio(id: int, db: Session = Depends(get_db)):
 
 def _relatorio_summary(rel: RelatorioDB) -> RelatorioSummary:
     return RelatorioSummary(
-        id=rel.id, ensaio_id=rel.ensaio_id, cliente_id=rel.cliente_id,
+        id=rel.id, ensaio_id=rel.ensaio_id, tipo=rel.tipo or "tracao", cliente_id=rel.cliente_id,
         numero=rel.numero or "", titulo=rel.titulo or "",
         cliente_nome=rel.cliente_nome or "", created_at=rel.created_at,
     )
 
 
 @app.get("/api/relatorios", response_model=list[RelatorioSummary])
-def list_relatorios(cliente_id: int | None = None, ensaio_id: int | None = None,
+def list_relatorios(cliente_id: int | None = None, ensaio_id: int | None = None, tipo: str | None = None,
                     db: Session = Depends(get_db)):
     q = db.query(RelatorioDB).options(defer(RelatorioDB.html), defer(RelatorioDB.request_json))
     if cliente_id is not None:
         q = q.filter(RelatorioDB.cliente_id == cliente_id)
     if ensaio_id is not None:
         q = q.filter(RelatorioDB.ensaio_id == ensaio_id)
+    if tipo == "flexao":
+        q = q.filter(RelatorioDB.tipo == "flexao")
+    elif tipo == "tracao":
+        q = q.filter(_rel_tracao())
     return [_relatorio_summary(x) for x in q.order_by(RelatorioDB.created_at.desc()).all()]
 
 
@@ -874,7 +943,7 @@ def busca(q: str = "", tipo: str = "todos", cliente_id: int | None = None,
                 "tipo": "relatorio", "id": rel.id, "titulo": titulo,
                 "subtitulo": " · ".join(x for x in (rel.cliente_nome, rel.titulo) if x),
                 "data": rel.created_at.isoformat() if rel.created_at else None,
-                "ensaio_id": rel.ensaio_id, "cliente_id": rel.cliente_id,
+                "ensaio_id": rel.ensaio_id, "tipo_ensaio": rel.tipo or "tracao", "cliente_id": rel.cliente_id,
             })
 
     res.sort(key=lambda x: (-x["score"], x["data"] and -_ts(x["data"]) or 0))

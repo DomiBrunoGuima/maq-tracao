@@ -104,6 +104,7 @@ class RelatorioDB(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     ensaio_id    = Column(Integer, index=True)
+    tipo         = Column(String, default="tracao")   # "tracao" ou "flexao": tabela do ensaio_id
     cliente_id   = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
     numero       = Column(String, default="")
     titulo       = Column(String, default="")

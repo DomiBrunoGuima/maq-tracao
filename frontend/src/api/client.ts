@@ -12,6 +12,7 @@ import type {
   RelatorioSummary,
   ResultadoBusca,
   TipoBusca,
+  TipoEnsaio,
   ChartData,
   ControlSetpointsRequest,
   ControlStartRequest,
@@ -80,8 +81,8 @@ export const updateEnsaio = (id: number, body: EnsaioUpdate): Promise<EnsaioDeta
 export const getQualidade = (id: number): Promise<Qualidade> =>
   api.get(`/ensaios/${id}/qualidade`).then((r) => r.data);
 
-export const getCamposRelatorio = (id: number): Promise<CamposRelatorio> =>
-  api.get(`/ensaios/${id}/campos-relatorio`).then((r) => r.data);
+export const getCamposRelatorio = (id: number, tipo: TipoEnsaio = "tracao"): Promise<CamposRelatorio> =>
+  api.get(`${tipo === "flexao" ? "/flexao" : ""}/ensaios/${id}/campos-relatorio`).then((r) => r.data);
 
 // ── Cadastro: clientes, relatórios salvos, busca e normas ─────────────────
 
@@ -201,7 +202,7 @@ export const generateReport = async (req: ReportRequest): Promise<void> => {
   // usuário) e o relatório não aparece. Baixar via <a download> é confiável.
   const a = document.createElement("a");
   a.href = url;
-  a.download = `relatorio_ensaio_${req.ensaio_id}.html`;
+  a.download = `relatorio_${req.tipo === "flexao" ? "flexao" : "ensaio"}_${req.ensaio_id}.html`;
   document.body.appendChild(a);
   a.click();
   a.remove();

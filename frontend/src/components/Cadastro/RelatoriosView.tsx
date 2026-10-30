@@ -9,7 +9,10 @@ function semAcento(t: string) {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-export default function RelatoriosView({ onOpenEnsaio }: { onOpenEnsaio: (id: number) => void }) {
+export default function RelatoriosView({ onOpenEnsaio, onOpenFlexao }: {
+  onOpenEnsaio: (id: number) => void;
+  onOpenFlexao: (id: number) => void;
+}) {
   const qc = useQueryClient();
   const { data: relatorios, isLoading } = useRelatorios();
   const [filtro, setFiltro] = useState("");
@@ -68,8 +71,9 @@ export default function RelatoriosView({ onOpenEnsaio }: { onOpenEnsaio: (id: nu
                   <td className="px-4 py-2 text-slate-300">{r.cliente_nome || "—"}</td>
                   <td className="px-4 py-2">
                     {r.ensaio_id != null && r.ensaio_id > 0 ? (
-                      <button onClick={() => onOpenEnsaio(r.ensaio_id!)} className="text-accent hover:underline text-left">
-                        {r.titulo || `Ensaio #${r.ensaio_id}`}
+                      <button onClick={() => (r.tipo === "flexao" ? onOpenFlexao : onOpenEnsaio)(r.ensaio_id!)}
+                        className="text-accent hover:underline text-left">
+                        {r.titulo || `Ensaio #${r.ensaio_id}`}{r.tipo === "flexao" ? " · flexão" : ""}
                       </button>
                     ) : (
                       <span className="text-muted">{r.titulo || "—"}</span>
