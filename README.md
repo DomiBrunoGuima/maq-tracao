@@ -2,6 +2,8 @@
 
 Software desktop para análise automática de arquivos CSV gerados pela IHM da máquina de tração (formato `HISTORY V1.0`).
 
+Manual completo do sistema (operação, configuração, backup, solução de problemas e referência técnica): [docs/MANUAL.md](docs/MANUAL.md).
+
 ## Stack
 
 | Camada | Tecnologia |
