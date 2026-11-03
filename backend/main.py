@@ -73,6 +73,7 @@ from .modbus_client import (
     resolve_register,
 )
 from .simulator import SIM, SimController, SimReader, sim_capture
+from .sobrecarga import MonitorSobrecarga
 from .normas import listar_normas
 from .parser import parse_csv
 from .qualidade import avaliar_qualidade, avaliar_qualidade_flexao, resumo_status
@@ -126,6 +127,9 @@ _CONFIG_DEFAULTS: dict = {
     "backup_dir": "",
     "backup_intervalo_h": 24.0,
     "backup_manter": 30,
+    # Proteção de sobrecarga: ao atingir o limite (kgf) envia o pulso de parada
+    "sobrecarga_ativa": False,
+    "sobrecarga_limite_kgf": 0.0,
 }
 
 
@@ -151,6 +155,8 @@ _config: dict = _load_config()
 _watcher = DirectoryWatcher(callback=lambda p: _load_csv(p))
 
 _backup = BackupAgendado(lambda: _config, Path(engine.url.database).resolve(), _CONFIG_FILE)
+
+_sobrecarga = MonitorSobrecarga(lambda: _config)
 
 
 # ---------------------------------------------------------------------------
@@ -1197,6 +1203,7 @@ def control_start(req: ControlStartRequest):
         raise HTTPException(status_code=422, detail="Sentido inválido — use 'cima' ou 'baixo'.")
     if req.limite_forca is not None and req.limite_forca <= 0:
         raise HTTPException(status_code=422, detail="Limite de força deve ser maior que zero.")
+    _exigir_sem_sobrecarga()
 
     ctrl = _make_controller()
     if ctrl.resolve("iniciar") is None:
@@ -1281,6 +1288,43 @@ def _pulse_command(make_controller, role: str, label: str) -> dict:
         raise HTTPException(status_code=502, detail=f"Falha ao {label}: {exc}")
     finally:
         ctrl.close()
+
+
+def _parada_sobrecarga(make_controller):
+    """Função que manda o pulso de parada por sobrecarga: usa o registrador com role
+    'parada_sobrecarga' se existir; senão o mesmo 'parar' do botão Parar."""
+    def enviar() -> None:
+        ctrl = make_controller()
+        role = "parada_sobrecarga" if ctrl.resolve("parada_sobrecarga") is not None else "parar"
+        if ctrl.resolve(role) is None:
+            raise RuntimeError("registrador 'parar' não configurado")
+        if not ctrl.connect():
+            ip, port, _ = _clp_conn()
+            raise RuntimeError(f"CLP inacessível em {ip}:{port}")
+        try:
+            ctrl.pulse(role, int(_config.get("control_pulse_ms", 300)))
+            for sentido in ("sentido_cima", "sentido_baixo"):
+                if ctrl.resolve(sentido) is not None:
+                    ctrl.write_named(sentido, 0)
+        finally:
+            ctrl.close()
+    return enviar
+
+
+def _exigir_sem_sobrecarga() -> None:
+    if _sobrecarga.estado()["ativo"]:
+        raise HTTPException(status_code=409, detail="Alarme de sobrecarga ativo: confira a máquina e clique em "
+                            "'Reconhecer' antes de iniciar um novo ensaio.")
+
+
+@app.get("/api/sobrecarga")
+def sobrecarga_estado():
+    return _sobrecarga.estado()
+
+
+@app.post("/api/sobrecarga/reconhecer")
+def sobrecarga_reconhecer():
+    return _sobrecarga.reconhecer()
 
 
 @app.post("/api/control/zerar-deslocamento")
@@ -1373,6 +1417,7 @@ def control_status():
         return data.get(name) if name else None
     integro = _val("material_integro_bit")
     ruptura = _val("ruptura_bit")
+    _sobrecarga.verificar(_val("forca_atual"), _parada_sobrecarga(_make_controller), "tracao")
     return ControlStatus(
         online=True,
         forca_atual=_val("forca_atual"),
@@ -1380,6 +1425,7 @@ def control_status():
         material_integro=bool(integro) if integro is not None else None,
         ruptura=bool(ruptura) if ruptura is not None else None,
         ativo=None,
+        sobrecarga=_sobrecarga.estado(),
         **_extras(data, rn),
     )
 
@@ -1420,6 +1466,7 @@ async def control_stream(request: Request):
 
     reader = _make_reader(ip, port, timeout, regs)
     loop   = asyncio.get_event_loop()
+    parada = _parada_sobrecarga(_make_controller)
     area = float(_config.get("area_seccao_mm2", 0) or 0)
     l0   = float(_config.get("comprimento_inicial_mm", 0) or 0)
 
@@ -1475,6 +1522,13 @@ async def control_stream(request: Request):
 
                 if forca is not None:
                     samples.append({"t_ms": elapsed_ms, "forca": forca, "deslocamento": desl or 0.0})
+
+                # Sobrecarga → pulso de parada, grava o que foi coletado e encerra
+                if await loop.run_in_executor(None, _sobrecarga.verificar, forca, parada, "tracao"):
+                    saved = True
+                    saved_id = await loop.run_in_executor(None, _persist, samples)
+                    yield f"data: {json.dumps({'sobrecarga': _sobrecarga.estado(), 'saved_ensaio_id': saved_id})}\n\n"
+                    break
 
                 # Borda de subida na ruptura → grava e encerra
                 if ruptura and not last_ruptura:
@@ -1759,6 +1813,7 @@ def flexao_control_start(req: FlexaoControlStartRequest):
         raise HTTPException(status_code=400, detail="IP do CLP não configurado — preencha em Configurações → Controle (CLP).")
     if req.limite_forca is not None and req.limite_forca <= 0:
         raise HTTPException(status_code=422, detail="Limite de força deve ser maior que zero.")
+    _exigir_sem_sobrecarga()
 
     ctrl = _flexao_make_controller()
     if ctrl.resolve("iniciar") is None:
@@ -1848,6 +1903,7 @@ def flexao_control_status():
         name = rn.get(role)
         return data.get(name) if name else None
     fim = _val("fim_ensaio_bit")
+    _sobrecarga.verificar(_val("forca_atual"), _parada_sobrecarga(_flexao_make_controller), "flexao")
     return ControlStatus(
         online=True,
         forca_atual=_val("forca_atual"),
@@ -1855,6 +1911,7 @@ def flexao_control_status():
         material_integro=(not bool(fim)) if fim is not None else None,
         ruptura=bool(fim) if fim is not None else None,
         ativo=None,
+        sobrecarga=_sobrecarga.estado(),
     )
 
 
@@ -1877,6 +1934,7 @@ async def flexao_control_stream(request: Request):
 
     reader = _make_reader(ip, port, timeout, regs)
     loop   = asyncio.get_event_loop()
+    parada = _parada_sobrecarga(_flexao_make_controller)
     geom = {
         "largura_mm":   float(_config.get("flexao_largura_mm", 0) or 0),
         "espessura_mm": float(_config.get("flexao_espessura_mm", 0) or 0),
@@ -1935,6 +1993,12 @@ async def flexao_control_stream(request: Request):
 
                 if forca is not None:
                     samples.append({"t_ms": elapsed_ms, "forca": forca, "deslocamento": desl or 0.0})
+
+                if await loop.run_in_executor(None, _sobrecarga.verificar, forca, parada, "flexao"):
+                    saved = True
+                    saved_id = await loop.run_in_executor(None, _persist, samples)
+                    yield f"data: {json.dumps({'sobrecarga': _sobrecarga.estado(), 'saved_ensaio_id': saved_id})}\n\n"
+                    break
 
                 if fim and not last_fim:
                     saved = True

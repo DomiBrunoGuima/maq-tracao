@@ -37,7 +37,7 @@ import {
 import { useConfig } from "../../hooks/useConfig";
 import { useCurvasFlexao, useDeleteEnsaioFlexao, useEnsaiosFlexao, useKPIsFlexao } from "../../hooks/useFlexao";
 import type { AjusteElastico, FlexaoFrame, Norma } from "../../types";
-import { BigValue, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
+import { BigValue, SobrecargaAlerta, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
 import FlexaoResultado from "./FlexaoResultado";
 import { confirmarExclusao } from "../Sidebar/Sidebar";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
@@ -311,8 +311,9 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
           if (msg.error !== "reconnecting") setStatus("parado");
           return;
         }
-        if (msg.fim_ensaio || msg.saved_ensaio_id != null) {
+        if (msg.sobrecarga || msg.fim_ensaio || msg.saved_ensaio_id != null) {
           if (msg.saved_ensaio_id != null) setSavedId(msg.saved_ensaio_id);
+          if (msg.sobrecarga) qc.setQueryData(["sobrecarga"], msg.sobrecarga);
           setStatus("finalizado");
           setRunning(false);
           qc.invalidateQueries({ queryKey: ["flexao", "ensaios"] });
@@ -435,6 +436,7 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
         </div>
       </div>
 
+      <SobrecargaAlerta />
       <StatusEnsaioBar status={status} />
 
       {/* Valores em tempo real */}

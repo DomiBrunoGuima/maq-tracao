@@ -30,6 +30,7 @@ import type {
   RegisterProbeRequest,
   RegisterProbeResult,
   ReportRequest,
+  SobrecargaEstado,
 } from "../types";
 
 const api = axios.create({ baseURL: "/api" });
@@ -159,6 +160,12 @@ export const zerarDeslocamento = (): Promise<{ status: string }> =>
 
 export const zerarCelula = (): Promise<{ status: string }> =>
   api.post("/control/zerar-celula").then((r) => r.data);
+
+export const getSobrecarga = (): Promise<SobrecargaEstado> =>
+  api.get("/sobrecarga").then((r) => r.data);
+
+export const reconhecerSobrecarga = (): Promise<SobrecargaEstado> =>
+  api.post("/sobrecarga/reconhecer").then((r) => r.data);
 
 // ── Flexão (módulo separado) ───────────────────────────────────────────────
 

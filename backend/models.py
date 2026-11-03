@@ -240,6 +240,9 @@ class ConfigModel(BaseModel):
     backup_dir: str = ""
     backup_intervalo_h: float = 24.0
     backup_manter: int = 30
+    # ── Proteção de sobrecarga da célula de carga ──────────────────────────
+    sobrecarga_ativa: bool = False
+    sobrecarga_limite_kgf: float = 0.0   # 0 = desligado; força em módulo ≥ limite → pulso de parada
 
 
 class ControlStartRequest(BaseModel):
@@ -290,6 +293,8 @@ class ControlStatus(BaseModel):
     emergencia: Optional[bool] = None
     limite_superior: Optional[bool] = None
     limite_inferior: Optional[bool] = None
+    # Estado do alarme de sobrecarga (backend/sobrecarga.py)
+    sobrecarga: Optional[dict] = None
 
 
 class DadosEmpresa(BaseModel):

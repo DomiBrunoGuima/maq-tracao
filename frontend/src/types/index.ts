@@ -288,6 +288,7 @@ export interface FlexaoFrame {
   t_ms: number;
   error?: string;
   saved_ensaio_id?: number | null;
+  sobrecarga?: SobrecargaEstado;
 }
 
 export interface RupturePoint {
@@ -439,6 +440,23 @@ export interface AppConfig {
   backup_dir: string;
   backup_intervalo_h: number;
   backup_manter: number;
+  sobrecarga_ativa?: boolean;
+  sobrecarga_limite_kgf?: number;
+}
+
+/** Alarme de sobrecarga da célula de carga (backend/sobrecarga.py). */
+export interface SobrecargaEstado {
+  ativo: boolean;
+  forca_kgf: number | null;
+  forca_max_kgf: number | null;
+  limite_kgf: number | null;
+  quando: string | null;
+  origem: "tracao" | "flexao" | null;
+  pulso_enviado: boolean;
+  pulsos: number;
+  erro: string | null;
+  /** Limite configurado agora (null = proteção desligada). */
+  limite_config_kgf: number | null;
 }
 
 export interface BackupStatus {
@@ -474,6 +492,7 @@ export interface RealtimeFrame {
   emergencia?: boolean | null;
   limite_superior?: boolean | null;
   limite_inferior?: boolean | null;
+  sobrecarga?: SobrecargaEstado;
 }
 
 export interface ControlStartRequest {
@@ -509,6 +528,7 @@ export interface ControlStatus {
   emergencia?: boolean | null;
   limite_superior?: boolean | null;
   limite_inferior?: boolean | null;
+  sobrecarga?: SobrecargaEstado | null;
 }
 
 export interface ModbusFetchResult {

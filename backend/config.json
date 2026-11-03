@@ -519,6 +519,8 @@
   "backup_dir": "",
   "backup_intervalo_h": 24.0,
   "backup_manter": 30,
+  "sobrecarga_ativa": false,
+  "sobrecarga_limite_kgf": 0.0,
   "simulator_enabled": false,
   "proximo_ensaio": {
     "cliente_id": 1,

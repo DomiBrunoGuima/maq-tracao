@@ -52,6 +52,8 @@ type FormState = {
   backup_dir: string;
   backup_intervalo_h: number;
   backup_manter: number;
+  sobrecarga_ativa: boolean;
+  sobrecarga_limite_kgf: number;
 };
 
 export type { FormState };
@@ -95,6 +97,8 @@ const DEFAULT_FORM: FormState = {
   backup_dir: "",
   backup_intervalo_h: 24,
   backup_manter: 30,
+  sobrecarga_ativa: false,
+  sobrecarga_limite_kgf: 0,
 };
 
 // ── primitives ────────────────────────────────────────────────
@@ -414,6 +418,54 @@ function makeRegHandlers(
   };
 }
 
+function ProtecaoSobrecarga({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  const lim = Number(form.sobrecarga_limite_kgf) || 0;
+  const temRegistroProprio = form.control_registers.some((r) => r.role === "parada_sobrecarga");
+  const ligada = form.sobrecarga_ativa && lim > 0;
+  return (
+    <div className={clsx("mb-5 rounded-xl border px-4 py-4 space-y-4",
+      ligada ? "border-red-500/40 bg-red-500/5" : "border-border bg-bg")}>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-white font-medium">Proteção de sobrecarga</p>
+          <p className="text-xs text-muted/70 mt-0.5">
+            Se a força atingir o limite da célula de carga, o software mostra o alarme e envia o pulso de parada.
+          </p>
+        </div>
+        <button
+          onClick={() => setForm((f) => ({ ...f, sobrecarga_ativa: !f.sobrecarga_ativa }))}
+          aria-label="Ativar proteção de sobrecarga"
+          className={clsx(
+            "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+            "transition-colors duration-200 focus:outline-none",
+            form.sobrecarga_ativa ? "bg-red-500" : "bg-border"
+          )}
+        >
+          <span className={clsx(
+            "inline-block h-4 w-4 transform rounded-full bg-[#fff] shadow transition duration-200",
+            form.sobrecarga_ativa ? "translate-x-4" : "translate-x-0"
+          )} />
+        </button>
+      </div>
+      <Field label="Limite da célula de carga (kgf)"
+        hint={lim > 0
+          ? `= ${(lim * 9.80665).toFixed(1)} N. Vale para tração e flexão (tração ou compressão). O alarme fica na tela até clicar em Reconhecer.`
+          : "Informe o limite em kgf (0 desliga a proteção)."}>
+        <input type="number" min={0} step="0.1" value={form.sobrecarga_limite_kgf}
+          onChange={(e) => setForm((f) => ({ ...f, sobrecarga_limite_kgf: Number(e.target.value) }))}
+          className={smallInputCls + " w-48"} />
+      </Field>
+      <p className="text-xs text-muted/70 leading-relaxed">
+        Pulso de parada: {temRegistroProprio
+          ? <>registrador com role <span className="font-mono text-slate-300">parada_sobrecarga</span>.</>
+          : <>o mesmo bit do botão Parar (role <span className="font-mono text-slate-300">parar</span>). Para usar um bit
+            separado, adicione um registrador coil com role <span className="font-mono text-slate-300">parada_sobrecarga</span>.</>}
+        {" "}A verificação roda enquanto a tela de Controle ou de Flexão estiver aberta.
+      </p>
+    </div>
+  );
+}
+
 function ControleSection({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
   const h = makeRegHandlers("control_registers", setForm, { writable: true, role: "" });
   return (
@@ -424,7 +476,7 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         Roles esperados: <span className="text-slate-300 font-mono">iniciar, parar, sentido_cima, sentido_baixo,
         zerar_deslocamento, zerar_celula (tara), deslocamento_programado, velocidade, limite_forca, forca_atual,
         deslocamento_atual, forca_maxima, tensao_maxima, deslocamento_maximo, emergencia, limite_superior,
-        limite_inferior, material_integro_bit, ruptura_bit</span>.
+        limite_inferior, material_integro_bit, ruptura_bit, parada_sobrecarga</span>.
       </SectionDesc>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
@@ -468,6 +520,8 @@ function ControleSection({ form, setForm }: { form: FormState; setForm: React.Di
         </select>
       </Field>
       </div>
+
+      <ProtecaoSobrecarga form={form} setForm={setForm} />
 
       <div className="grid grid-cols-2 gap-4 mb-2">
         <Field label="Área da seção padrão (mm²)" hint="Usada para derivar tensão σ = F/A.">

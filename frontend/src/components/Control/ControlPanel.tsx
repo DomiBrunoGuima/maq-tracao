@@ -28,7 +28,7 @@ import { clsx } from "clsx";
 import { getControlStatus, startTest, stopTest, zerarCelula, zerarDeslocamento } from "../../api/client";
 import { useConfig } from "../../hooks/useConfig";
 import type { ControlStatus, Norma, RealtimeFrame, RealtimePoint } from "../../types";
-import { BigValue, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
+import { BigValue, SobrecargaAlerta, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-tracao";
@@ -236,6 +236,16 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
           if (msg.error !== "reconnecting") setStatus("parado");
           return;
         }
+        if (msg.sobrecarga) {
+          // Sobrecarga: o backend já mandou o pulso de parada e gravou o que foi coletado
+          if (msg.saved_ensaio_id != null) setSavedId(msg.saved_ensaio_id);
+          qc.setQueryData(["sobrecarga"], msg.sobrecarga);
+          setStatus("finalizado");
+          setRunning(false);
+          qc.invalidateQueries({ queryKey: ["ensaios"] });
+          stopStream();
+          return;
+        }
         if (msg.ruptura || msg.saved_ensaio_id != null) {
           if (msg.saved_ensaio_id != null) setSavedId(msg.saved_ensaio_id);
           // Mostra a ruptura por alguns segundos e depois o ensaio como finalizado
@@ -395,6 +405,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
       </div>
 
       {/* Setup + ações */}
+      <SobrecargaAlerta />
       <StatusEnsaioBar status={status} />
 
       {/* Valores em tempo real */}

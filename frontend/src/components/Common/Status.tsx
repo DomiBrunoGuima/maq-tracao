@@ -1,6 +1,50 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { getConexaoCLP } from "../../api/client";
+import { AlertOctagon } from "lucide-react";
+import { getConexaoCLP, getSobrecarga, reconhecerSobrecarga } from "../../api/client";
+
+// ── Alarme de sobrecarga da célula de carga ─────────────────────────────────
+
+/** Faixa vermelha que aparece quando a força atinge o limite da célula de carga
+ *  (Configurações → Controle (CLP) → Proteção de sobrecarga). Fica na tela até o
+ *  operador clicar em Reconhecer. */
+export function SobrecargaAlerta() {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["sobrecarga"],
+    queryFn: getSobrecarga,
+    refetchInterval: 1000,
+    retry: false,
+  });
+  if (!data?.ativo) return null;
+  const hora = data.quando ? new Date(data.quando).toLocaleTimeString("pt-BR") : "";
+  async function reconhecer() {
+    try {
+      qc.setQueryData(["sobrecarga"], await reconhecerSobrecarga());
+    } catch { /* tenta de novo no próximo clique */ }
+  }
+  return (
+    <div role="alert" className="rounded-xl border-2 border-red-500 bg-red-500/15 px-5 py-4 flex flex-wrap items-center gap-4">
+      <AlertOctagon size={34} className="text-red-400 flex-shrink-0" />
+      <div className="flex-1 min-w-[16rem]">
+        <p className="text-lg font-bold text-red-300 tracking-wide">SOBRECARGA NA CÉLULA DE CARGA</p>
+        <p className="text-sm text-red-200 mt-0.5">
+          Força de {fmtBig(data.forca_max_kgf, 1)} kgf atingiu o limite de {fmtBig(data.limite_kgf, 1)} kgf
+          {hora && ` às ${hora}`}{data.origem === "flexao" ? " (flexão)" : ""}.
+        </p>
+        <p className={clsx("text-xs mt-1 font-semibold", data.pulso_enviado ? "text-red-200/80" : "text-amber-300")}>
+          {data.pulso_enviado
+            ? `Pulso de parada enviado à máquina${data.pulsos > 1 ? ` (${data.pulsos}×)` : ""}. Confira a máquina e o corpo de prova antes de continuar.`
+            : `FALHA ao enviar o pulso de parada${data.erro ? `: ${data.erro}` : ""}. Pare a máquina pela IHM ou pela emergência!`}
+        </p>
+      </div>
+      <button onClick={reconhecer}
+        className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold">
+        Reconhecer
+      </button>
+    </div>
+  );
+}
 
 // ── Indicador de conexão do CLP ─────────────────────────────────────────────
 
