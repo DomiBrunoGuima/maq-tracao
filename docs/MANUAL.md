@@ -248,12 +248,48 @@ flexão somem e o programa recusa iniciar esse ensaio.
 
 ## 6. Alerta de sobrecarga e parada automática
 
-<!-- SOBRECARGA: seção completada quando o recurso entrar na master. -->
+O sistema vigia a força da célula de carga. Se ela atingir o limite
+configurado, mostra um alarme e envia sozinho o pulso de parada para a máquina.
 
-O sistema vigia a força durante o ensaio e, se ela atingir o limite da célula
-de carga definido nas Configurações, mostra um alerta de sobrecarga e envia
-sozinho o pulso de parada para a máquina. Detalhes da configuração e do
-funcionamento serão acrescentados aqui assim que o recurso for liberado.
+### 6.1 Configurando (técnico)
+
+Em **Configurações → Controle (CLP)**, caixa **Proteção de sobrecarga**:
+
+1. Ligue o interruptor.
+2. Preencha **Limite da célula de carga (kgf)**. A dica ao lado mostra o valor
+   equivalente em N. Com 0 a proteção fica desligada.
+3. Clique em **Salvar e Aplicar**.
+
+O limite é comparado com o valor absoluto da força. Por isso vale para tração e
+compressão, e também para a flexão. Use um valor abaixo da capacidade nominal da
+célula.
+
+O pulso vai para o registrador com role `parada_sobrecarga`, se houver um em
+Registradores de controle. Se não houver, vai para o role `parar` (o mesmo do
+botão Parar; IHM coil 4002 → M7). Os sentidos `sentido_cima` e `sentido_baixo`
+também são zerados.
+
+### 6.2 Quando dispara (operador)
+
+- Aparece uma faixa vermelha no topo das telas de Controle e de Flexão:
+  **SOBRECARGA NA CÉLULA DE CARGA**, com a força máxima, o limite, a hora e
+  "Pulso de parada enviado à máquina".
+- Se o pulso falhar, a faixa fica amarela: **FALHA ao enviar o pulso de
+  parada**. Pare a máquina pela IHM ou pela emergência imediatamente.
+- O ensaio em curso para, e o que foi coletado é gravado (se tiver pelo menos
+  10 leituras).
+- Enquanto a força continuar acima do limite, o pulso se repete a cada 2 s.
+- O alarme continua até alguém clicar em **Reconhecer**. Enquanto ele estiver
+  ativo, **Iniciar ensaio** é recusado.
+
+Antes de reconhecer, confira a máquina, o corpo de prova e a célula de carga.
+
+### 6.3 Limitação importante
+
+A verificação só roda com a tela de **Controle** ou de **Flexão** aberta: a
+cada 1 s com a máquina parada e a cada ~100 ms durante o ensaio. Ela é uma
+proteção adicional e **não substitui** a proteção no próprio CLP, o fim de
+curso nem o botão de emergência.
 
 O limite de força da tela do ensaio ([3.1](#31-preparando)) é diferente: ele é
 enviado ao CLP como parâmetro do ensaio. O limite de sobrecarga protege a
@@ -517,6 +553,7 @@ Faça sempre um backup antes de atualizar o programa.
 | R² baixo ou "trecho elástico não identificado" | Folga nas garras ou acomodação longa. Aperte bem o corpo de prova e faça a Tara. |
 | Simulador ligado sem querer | O indicador mostra "simulador". Desligue em Configurações → Geral. |
 | Porta 8000 ocupada | Mude `"server_port"` no `config.json` e o endereço do atalho. |
+| Faixa de sobrecarga / "Alarme de sobrecarga ativo" ao iniciar | Confira a máquina e a célula, depois clique em Reconhecer. Se dispara sem carga, faça a Tara e confira o limite e a unidade da força. |
 | Backup falha | A pasta existe e é gravável? Salve a pasta nova antes de testar. |
 
 Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
@@ -572,6 +609,7 @@ Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
 | `watch_directory`, `auto_load`, `refresh_interval_s` | | Pasta monitorada de CSV. |
 | `ihm_registers`, `realtime_*_name` | | Leitura de parâmetros da IHM e modo de aquisição antigo por CSV. |
 | `ftp_port`, `ftp_user`, `ftp_password`, `ftp_remote_dir`, `ftp_remote_filename` | | Baixar o CSV do histórico pela FTP da IHM. |
+| `sobrecarga_ativa`, `sobrecarga_limite_kgf` | false, 0 | Proteção de sobrecarga ([6](#6-alerta-de-sobrecarga-e-parada-automática)). |
 | `backup_ativo`, `backup_dir`, `backup_intervalo_h`, `backup_manter` | false, vazio, 24, 30 | Backup. |
 | `simulator_enabled` | `false` | Modo simulador. |
 | `server_host`, `server_port` | 127.0.0.1, 8000 | Só na versão do cliente. |
@@ -591,6 +629,7 @@ Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
 | `forca_maxima`, `tensao_maxima`, `deslocamento_maximo` | registrador, leitura | Valores calculados pelo CLP, mostrados na tela. |
 | `material_integro_bit`, `ruptura_bit` | coil, leitura | Estado do material; a borda de subida da ruptura grava o ensaio. |
 | `fim_ensaio_bit` | coil, leitura | Fim do ensaio de flexão. |
+| `parada_sobrecarga` | coil, escrita | Opcional: pulso de parada por sobrecarga (sem ele, usa `parar`). |
 | `emergencia`, `limite_superior`, `limite_inferior` | coil/input, leitura | Indicadores na tela. |
 
 ### 14.4 Mapa de registradores IHM → CLP
@@ -692,6 +731,7 @@ O servidor responde em `http://localhost:8000`. Principais rotas:
 | GET/POST/PUT/DELETE | `/api/clientes` | Clientes. |
 | GET | `/api/busca?q=` | Busca. |
 | GET | `/api/normas?tipo=` | Normas. |
+| GET/POST | `/api/sobrecarga` · `/api/sobrecarga/reconhecer` | Estado do alarme de sobrecarga e reconhecimento. |
 | GET/POST | `/api/backup` · `/api/backup/agora` | Estado do backup e backup imediato. |
 | POST | `/api/config/login` · `/logout` · `/senha` | Senha das Configurações (devolve o token do cabeçalho `X-Config-Token`). |
 | GET/PUT | `/api/config` | Ler e salvar configurações (PUT exige token). |
