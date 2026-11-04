@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Manual completo</title>
+<style>
+@page { size: 960pt 540pt; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #fff; }
+body { font-family: "Inter", sans-serif; color: #1b2433; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.page { width: 960pt; height: 540pt; position: relative; overflow: hidden; page-break-after: always; padding: 43pt 54pt 0 54pt; background: #fff; }
+.eyebrow { font-weight: 600; font-size: 9.8pt; letter-spacing: .2em; color: #0aa5c2; text-transform: uppercase; }
+h1 { font-family: "Inter Display", "Inter", sans-serif; font-weight: 700; font-size: 27pt; color: #1b2433; letter-spacing: -.01em; margin-top: 5pt; line-height: 1.12; }
+.lead { font-size: 13.5pt; color: #5b6678; line-height: 1.55; margin-top: 9pt; max-width: 690pt; letter-spacing: .01em; }
+.foot { position: absolute; left: 54pt; right: 54pt; bottom: 18pt; display: flex; justify-content: space-between; align-items: center; font-size: 9pt; color: #98a2b3; }
+.foot span.l { display: flex; align-items: center; gap: 6pt; }
+.foot img { width: 13.5pt; height: 13.5pt; }
+b, strong { font-weight: 600; color: #1b2433; }
+code, .mono { font-family: "DejaVu Sans Mono", monospace; font-size: .86em; background: #eef2f7; padding: 0 2.5pt; border-radius: 2pt; color: #1b2433; }
+
+/* grid + cards */
+.grid { display: grid; gap: 10pt; margin-top: 18pt; }
+.g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
+.card { background: #fff; border: 1pt solid #e3e7ee; border-radius: 6pt; padding: 11pt 13pt 12pt; }
+.card h3 { font-size: 12pt; font-weight: 600; color: #1b2433; margin-bottom: 4pt; }
+.card p, .card li { font-size: 10.2pt; color: #5b6678; line-height: 1.5; letter-spacing: .01em; }
+.card ul { padding-left: 12pt; }
+.card .ic { width: 22pt; height: 22pt; border-radius: 5pt; background: #e6f6fa; color: #0aa5c2; display: flex; align-items: center; justify-content: center; margin-bottom: 8pt; font-size: 11pt; font-weight: 700; }
+
+/* steps */
+.cols { display: flex; gap: 26pt; margin-top: 18pt; }
+.cols > .left { flex: 1 1 0; min-width: 0; }
+.cols > .right { flex: 0 0 auto; }
+ol.steps { list-style: none; counter-reset: s; }
+ol.steps li { counter-increment: s; position: relative; padding-left: 26pt; margin-bottom: 11pt; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 16pt; height: 16pt; border-radius: 50%; background: #0f1b2d; color: #fff; font-size: 9.5pt; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+ol.steps li.y::before { background: #f5b400; color: #0f1b2d; }
+ol.steps .t { font-size: 12pt; font-weight: 600; color: #1b2433; line-height: 1.3; }
+ol.steps .d { font-size: 10.9pt; color: #5b6678; line-height: 1.55; margin-top: 2pt; letter-spacing: .01em; }
+
+/* callouts */
+.note { border-left: 3pt solid; border-radius: 4pt; padding: 9pt 12pt; font-size: 10.9pt; line-height: 1.5; color: #1b2433; margin-top: 10pt; letter-spacing: .01em; }
+.note.y { background: #fff8e1; border-color: #f5b400; }
+.note.g { background: #e9f8ef; border-color: #16a34a; }
+.note.b { background: #e6f6fa; border-color: #0aa5c2; }
+.note.r { background: #fdeeee; border-color: #e5484d; }
+
+/* screenshots */
+.shot { display: block; border-radius: 6pt; box-shadow: 0 4pt 16pt rgba(15,27,45,.28); }
+
+/* tables */
+table.t { width: 100%; border-collapse: collapse; margin-top: 14pt; }
+table.t th { text-align: left; font-size: 8.8pt; font-weight: 600; color: #5b6678; text-transform: uppercase; letter-spacing: .08em; padding: 5pt 8pt; border-bottom: 1.2pt solid #d5dbe4; }
+table.t td { font-size: 10.2pt; color: #1b2433; padding: 5.5pt 8pt; border-bottom: 1pt solid #e3e7ee; vertical-align: top; line-height: 1.42; }
+table.t td:first-child { font-weight: 600; color: #0f1b2d; white-space: nowrap; }
+table.t.sm td { font-size: 9.2pt; padding: 4pt 7pt; }
+table.t.sm th { font-size: 8pt; padding: 4pt 7pt; }
+table.t.wrap td:first-child { white-space: normal; }
+
+/* dark */
+.page.dark { background: #0f1b2d; }
+.dark .eyebrow { color: #f5b400; }
+.dark h1 { color: #fff; font-size: 36pt; margin-top: 8pt; }
+.dark .foot { color: #6f7d95; }
+.idx { display: grid; grid-template-columns: 1fr 1fr; column-gap: 34pt; margin-top: 20pt; }
+.idx h4 { font-size: 9.8pt; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: #6f7d95; margin-bottom: 4pt; }
+.idx .row { display: flex; gap: 16pt; padding: 5.2pt 0; border-bottom: 1pt solid #24364f; font-size: 12.5pt; color: #fff; }
+.idx .row .n { color: #f5b400; font-weight: 600; width: 16pt; }
+.idx .row.new .x { color: #fff; }
+.tag { display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; color: #0f1b2d; background: #f5b400; border-radius: 3pt; padding: 1pt 4pt; margin-left: 6pt; vertical-align: 1.5pt; }
+.sub { color: #b8c3d6; font-size: 13.5pt; margin-top: 10pt; line-height: 1.55; max-width: 560pt; }
+pre.tree { font-family: "DejaVu Sans Mono", monospace; font-size: 9.4pt; line-height: 1.6; background: #0f1b2d; color: #d6deea; border-radius: 6pt; padding: 12pt 14pt; }
+pre.tree .c { color: #6f7d95; }
+.kv { font-size: 10.2pt; line-height: 1.5; color: #5b6678; }
+</style></head><body>
+
+<!-- ============ 4 · Principais recursos ============ -->
+<section class="page">
+  <div class="eyebrow">Apresentação</div>
+  <h1>Principais recursos</h1>
+  <div class="grid g4" style="margin-top:20pt">
+    <div class="card"><h3>Controle da máquina</h3><p>Sentido, velocidade, curso e limite de força definidos na tela. Status do ensaio em cinco etapas, de Parado a Finalizado.</p></div>
+    <div class="card"><h3>Valores ao vivo</h3><p>Força atual, deslocamento e força máxima em números grandes, legíveis de longe.</p></div>
+    <div class="card"><h3>Normas sugeridas</h3><p>Ao escolher a norma, o sistema sugere corpo de prova, velocidade e dimensões.</p></div>
+    <div class="card" style="border-color:#f3c2c4;background:#fffafa"><h3>Proteção de sobrecarga <span class="tag">NOVO</span></h3><p>Se a força atingir o limite da célula de carga, o sistema dá o alarme e manda parar a máquina.</p></div>
+    <div class="card"><h3>Gravação automática</h3><p>Ao fim do ensaio, os dados são salvos com cliente, amostra, norma e operador.</p></div>
+    <div class="card"><h3>Trecho elástico</h3><p>Regressão linear com R², módulo de elasticidade e Rp0,2, com a reta desenhada no gráfico.</p></div>
+    <div class="card"><h3>Qualidade dos dados</h3><p>Verifica lacunas, curva válida e ruptura, e avisa quando algo merece atenção.</p></div>
+    <div class="card"><h3>Relatório técnico</h3><p>Pré-preenchido com os dados do ensaio, com numeração automática e histórico salvo.</p></div>
+    <div class="card"><h3>Comparação</h3><p>Sobreponha as curvas de vários corpos de prova e veja média e desvio padrão.</p></div>
+    <div class="card"><h3>Clientes e busca</h3><p>Cadastro de clientes com todos os testes e relatórios. Busca por cliente, amostra ou número.</p></div>
+    <div class="card"><h3>Backup automático</h3><p>Cópia periódica dos ensaios para uma pasta do Google Drive, OneDrive ou Dropbox.</p></div>
+    <div class="card"><h3>Instalação protegida</h3><p>Programa compilado, inicia com o Windows e tem as configurações protegidas por senha.</p></div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 5 · Índice ============ -->
+<section class="page dark">
+  <div class="eyebrow">Manual completo</div>
+  <h1>Passo a passo</h1>
+  <div class="idx">
+    <div>
+      <h4>Manual do usuário</h4>
+      <div class="row"><span class="n">01</span><span>Abrindo o sistema</span></div>
+      <div class="row"><span class="n">02</span><span>Conhecendo a tela principal</span></div>
+      <div class="row"><span class="n">03</span><span>Ensaio de tração</span></div>
+      <div class="row"><span class="n">04</span><span>Resultados de tração</span></div>
+      <div class="row"><span class="n">05</span><span>Ensaio de flexão</span></div>
+      <div class="row"><span class="n">06</span><span>Resultados de flexão</span></div>
+      <div class="row"><span class="n">07</span><span>Editando os dados do teste</span></div>
+      <div class="row"><span class="n">08</span><span>Gerando o relatório</span></div>
+      <div class="row"><span class="n">09</span><span>Clientes e relatórios salvos</span></div>
+      <div class="row"><span class="n">10</span><span>Comparando ensaios</span></div>
+      <div class="row"><span class="n">11</span><span>Configurações</span></div>
+      <div class="row"><span class="n">12</span><span>Alerta de sobrecarga<span class="tag">NOVO</span></span></div>
+      <div class="row"><span class="n">13</span><span>Boas práticas e problemas comuns</span></div>
+    </div>
+    <div>
+      <h4>Manual técnico</h4>
+      <div class="row"><span class="n">14</span><span>Instalação e atualização</span></div>
+      <div class="row"><span class="n">15</span><span>Configurações do técnico</span></div>
+      <div class="row"><span class="n">16</span><span>Backup e restauração</span></div>
+      <div class="row"><span class="n">17</span><span>Diagnóstico e solução de problemas</span></div>
+      <div class="row"><span class="n">18</span><span>Referência técnica</span></div>
+    </div>
+  </div>
+  <div class="foot"><span class="l">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 12 · Sobrecarga (1) ============ -->
+<section class="page">
+  <div class="eyebrow">12 · Alerta de sobrecarga</div>
+  <h1>Quando a força passa do limite</h1>
+  <p class="lead" style="font-size:12pt;max-width:none">O sistema vigia a força da célula de carga. Se ela atingir o limite configurado, ele avisa na tela e manda a máquina parar sozinho.</p>
+  <img class="shot" src="img/sobrecarga_banner.png" style="width:852pt;margin-top:14pt">
+  <div class="grid g3" style="margin-top:16pt">
+    <div class="card"><h3>1 · A faixa vermelha aparece</h3><p><b>SOBRECARGA NA CÉLULA DE CARGA</b>, com a força atingida, o limite e a hora. Ela aparece nas telas de Tração e de Flexão.</p></div>
+    <div class="card"><h3>2 · A máquina recebe o pulso de parada</h3><p>É o mesmo comando do botão Parar. O ensaio é interrompido e o que foi medido até ali fica gravado.</p></div>
+    <div class="card"><h3>3 · Novo ensaio fica bloqueado</h3><p><b>Iniciar ensaio</b> não funciona enquanto o alarme não for reconhecido.</p></div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 12 · Sobrecarga (2) ============ -->
+<section class="page">
+  <div class="eyebrow">12 · Alerta de sobrecarga</div>
+  <h1>O que fazer depois do alarme</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Confira se a máquina parou</div><div class="d">Se ela ainda estiver se movendo, use <b>Parar</b> na IHM ou o botão de emergência.</div></li>
+        <li><div class="t">Inspecione o corpo de prova e as garras</div><div class="d">Veja se o corpo de prova não travou e se a célula de carga e o cabo estão bem.</div></li>
+        <li><div class="t">Clique em Reconhecer</div><div class="d">Fica no canto direito da faixa vermelha. Só então a faixa some e um novo ensaio pode ser iniciado.</div></li>
+        <li><div class="t">Recomece com Zerar deslocamento e Tara</div><div class="d">Como num ensaio normal. O ensaio interrompido continua na lista.</div></li>
+      </ol>
+    </div>
+    <div class="right" style="width:400pt">
+      <div class="note y" style="margin-top:0"><b>Faixa amarela: "FALHA ao enviar o pulso de parada".</b> O computador não conseguiu falar com a máquina. Pare a máquina na hora pela IHM ou pela emergência.</div>
+      <div class="note r"><b>Mantenha a tela de Tração ou de Flexão aberta durante o ensaio.</b> O alarme só funciona com uma delas aberta. Ele é uma proteção a mais e não substitui a emergência nem os fins de curso da máquina.</div>
+      <div class="note b">Se a força continuar acima do limite, o sistema repete o pulso de parada a cada 2 segundos. O limite é definido pelo técnico (seção 15).</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 13 · Boas práticas ============ -->
+<section class="page">
+  <div class="eyebrow">13 · Boas práticas</div>
+  <h1>Boas práticas</h1>
+  <div class="grid g2" style="margin-top:16pt">
+    <div class="card"><h3>Antes de cada ensaio</h3><p>Confira o indicador verde, meça o corpo de prova, faça <b>Zerar deslocamento</b> e <b>Tara</b> sem carga.</p></div>
+    <div class="card"><h3>Identifique bem as amostras</h3><p>Use um padrão como "Lote 23 · CP 1", "CP 2"… A busca e a comparação ficam muito mais fáceis.</p></div>
+    <div class="card"><h3>Não desligue no meio do ensaio</h3><p>Espere o status <b>Finalizado</b> e a mensagem "Ensaio gravado" antes de fechar a janela ou desligar o computador.</p></div>
+    <div class="card"><h3>Confira a qualidade dos dados</h3><p>Antes de emitir o relatório, veja se o selo está verde e se o R² do trecho elástico está próximo de 1.</p></div>
+    <div class="card"><h3>Fechar a janela não desliga o sistema</h3><p>O sistema continua rodando em segundo plano. Basta abrir o atalho de novo.</p></div>
+    <div class="card"><h3>Backup</h3><p>O sistema copia os dados periodicamente para uma pasta sincronizada (Google Drive, OneDrive). Peça para a Automatic ativar.</p></div>
+    <div class="card"><h3>Nunca ignore o alarme de sobrecarga</h3><p>Antes de clicar em <b>Reconhecer</b>, descubra por que a força subiu tanto: corpo de prova errado, garra travada ou limite mal configurado.</p></div>
+    <div class="card"><h3>Ensaio de verdade, simulador desligado</h3><p>Se o indicador mostrar <b>simulador</b>, os valores são de teste. Peça ao técnico para desligar o modo simulador.</p></div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 13 · Problemas comuns ============ -->
+<section class="page">
+  <div class="eyebrow">13 · Problemas comuns</div>
+  <h1>Problemas comuns</h1>
+  <table class="t">
+    <tr><td>A tela abre em branco</td><td>O sistema ainda está iniciando, o que é comum logo depois de ligar o computador. Aguarde alguns segundos e aperte <b>F5</b>.</td></tr>
+    <tr><td>Indicador vermelho<br>(CLP desconectado)</td><td>Verifique se a IHM está ligada e se o cabo de rede está conectado no computador e na máquina, com as luzes da porta acesas. Se continuar, fale com a Automatic.</td></tr>
+    <tr><td>Força sempre zerada</td><td>Confira a célula de carga e o cabo dela na máquina. Faça a <b>Tara</b> sem carga antes de iniciar.</td></tr>
+    <tr><td>Deslocamento não começa em zero</td><td>Clique em <b>Zerar deslocamento</b> antes de iniciar.</td></tr>
+    <tr><td>Ensaio não aparece na lista</td><td>Ele só é gravado quando o status chega a <b>Finalizado</b> ou quando o ensaio é parado. Se o computador foi desligado no meio, repita o ensaio.</td></tr>
+    <tr><td>Resultado com valores estranhos</td><td>Confira a área da seção, o L₀ (ou b, h e L na flexão) em <b>Dados do teste</b>. Esses números entram direto no cálculo.</td></tr>
+    <tr><td>Faixa vermelha de sobrecarga</td><td>Siga a seção 12. Se o alarme aparece sem carga nenhuma, faça a <b>Tara</b> e peça ao técnico para conferir o limite.</td></tr>
+    <tr><td>"Alarme de sobrecarga ativo"<br>ao iniciar</td><td>O alarme anterior ainda não foi reconhecido. Abra a tela de Tração ou Flexão e clique em <b>Reconhecer</b>.</td></tr>
+  </table>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ Divisória técnico ============ -->
+<section class="page dark">
+  <div class="eyebrow" style="margin-top:120pt">Manual técnico</div>
+  <h1 style="font-size:40pt">Instalação, configuração<br>e manutenção</h1>
+  <p class="sub">Para o técnico da Automatic que instala, configura e dá suporte ao sistema. Nada desta parte é necessário no uso do dia a dia.</p>
+  <div class="foot"><span class="l">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 14 · Instalação ============ -->
+<section class="page">
+  <div class="eyebrow">14 · Instalação</div>
+  <h1>Instalando no PC do cliente</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Gere o pacote no seu PC</div><div class="d"><code>git pull</code> na master, confira o <code>backend\config.json</code> (vira o padrão da instalação) e rode <code>instalacao\build_cliente_nuitka.bat</code>. Sai <code>build-cliente\MaqTracao-instalador.zip</code>.</div></li>
+        <li><div class="t">Copie e extraia no PC do cliente</div><div class="d">Por pen drive. Não vão código-fonte, Python nem Node.</div></li>
+        <li><div class="t">Rode instalar.bat como administrador</div><div class="d">Botão direito → Executar como administrador. O navegador abre em <code>localhost:8000</code>.</div></li>
+        <li><div class="t">Confira as Configurações e troque a senha</div><div class="d">IP da IHM, unidade da força, limite de sobrecarga e backup. Senha padrão <code>tracao2026</code>.</div></li>
+        <li><div class="t">Apague o zip e reinicie o PC</div><div class="d">Confirme que a tela abre pelo atalho sem fazer mais nada.</div></li>
+      </ol>
+    </div>
+    <div class="right" style="width:330pt">
+      <pre class="tree">C:\MaqTracao\
+  MaqTracao.exe     <span class="c">programa, sem janela</span>
+  config.json       <span class="c">configurações</span>
+  tracao.db         <span class="c">ensaios, clientes,</span>
+                    <span class="c">relatórios</span>
+  data\             <span class="c">CSVs da IHM</span>
+  logs\servidor.log <span class="c">log do servidor</span></pre>
+      <div class="note b">O build com <b>Nuitka</b> compila em código de máquina e leva de 20 a 60 minutos na primeira vez. O <code>build_cliente.bat</code> (PyInstaller) é mais rápido e mais fácil de reverter.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 14 · Atualizar ============ -->
+<section class="page">
+  <div class="eyebrow">14 · Instalação</div>
+  <h1>Atualizar, desinstalar e proteger</h1>
+  <div class="grid g3">
+    <div class="card"><h3>Atualizar</h3><p>Faça um backup, gere um zip novo e rode <code>instalar.bat</code> de novo. Ele troca só o programa e mantém <code>config.json</code>, <code>tracao.db</code>, <code>data\</code> e <code>logs\</code>. Ensaios gravados nunca são apagados.</p></div>
+    <div class="card"><h3>Desinstalar</h3><p><code>desinstalar.bat</code> como administrador. Remove programa, tarefa agendada e atalho, e mantém os dados.</p></div>
+    <div class="card"><h3>Inicialização</h3><p>A tarefa agendada <b>MaqTracao</b> roda como SYSTEM antes do login e reinicia o programa se ele cair. O atalho abre o Edge em modo aplicativo.</p></div>
+    <div class="card"><h3>Acesso pela rede</h3><p>Por padrão só atende no próprio PC. Para abrir de outro PC: <code>"server_host": "0.0.0.0"</code> no <code>config.json</code> e libere a porta no firewall. <code>"server_port"</code> muda a porta (8000).</p></div>
+    <div class="card"><h3>Conta do operador</h3><p>A pasta <code>C:\MaqTracao</code> só abre para administradores. Isso só protege se o operador usar uma conta <b>padrão</b> do Windows.</p></div>
+    <div class="card"><h3>Até onde vai a proteção</h3><p>Não há código legível no PC. Um administrador experiente ainda pode tentar reverter o programa; a proteção mais forte é o contrato.</p></div>
+  </div>
+  <div class="note y">O passo a passo detalhado do build está em <code>instalacao/README.md</code> no repositório.</div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 15 · Config acesso + geral ============ -->
+<section class="page">
+  <div class="eyebrow">15 · Configurações do técnico</div>
+  <h1>Acesso e aba Geral</h1>
+  <div class="cols">
+    <div class="right"><img class="shot" src="img/cfg_geral.png" style="width:470pt"></div>
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Senha do técnico</div><div class="d">Pedida ao abrir Configurações. Padrão <code>tracao2026</code>; troque em <b>Sobre</b>. Sem ela não dá para salvar nem testar registradores.</div></li>
+        <li><div class="t">Diretório monitorado</div><div class="d">Pasta onde chegam os CSV de histórico da IHM. Importados sozinhos com o monitoramento ligado.</div></li>
+        <li><div class="t">Máquina com flexão</div><div class="d">Desligue em máquinas sem o dispositivo: o botão FLEXÃO some.</div></li>
+        <li><div class="t">Modo simulador</div><div class="d">Simula a máquina para testes e treinamento. <b>Desligue antes de ensaiar.</b></div></li>
+      </ol>
+      <div class="note g" style="margin-top:2pt">Toda alteração vale depois de <b>Salvar e Aplicar</b>, sem reiniciar.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 15 · Controle (CLP) ============ -->
+<section class="page">
+  <div class="eyebrow">15 · Configurações do técnico</div>
+  <h1>Comunicação com a máquina</h1>
+  <div class="cols" style="gap:22pt">
+    <div class="right"><img class="shot" src="img/cfg_controle.png" style="width:330pt"></div>
+    <div class="left">
+      <table class="t sm wrap" style="margin-top:0">
+        <tr><th style="width:120pt">Campo</th><th>O que é</th></tr>
+        <tr><td>IP de conexão</td><td>IP da IHM consultada via Modbus TCP. Padrão 192.168.11.10.</td></tr>
+        <tr><td>Porta / Timeout</td><td>Normalmente 502 e 3 s.</td></tr>
+        <tr><td>Família do CLP</td><td>Converte D/M/X em endereço Modbus. <b>Delta DVP</b> (D600 → 4696), <b>Sem offset</b> (D600 → 600, quando o endereço já é o da tabela da IHM) ou <b>Delta AS</b>.</td></tr>
+        <tr><td>Pulso comando</td><td>Duração dos pulsos de iniciar, parar, sentido, zerar e tara. Padrão 300 ms.</td></tr>
+        <tr><td>Unidade da força</td><td><b>kgf</b>: a força lida é multiplicada por 9,80665 (vira N) e o limite de força é enviado em kgf. <b>N</b>: sem conversão. Os cálculos usam sempre N.</td></tr>
+        <tr><td>Proteção de sobrecarga</td><td>Interruptor e limite da célula de carga em kgf. Detalhes na próxima página.</td></tr>
+        <tr><td>Área / L₀ padrão</td><td>Usados quando o ensaio não informa outros.</td></tr>
+      </table>
+      <div class="note y">Uma alteração errada aqui faz o sistema perder contato com a máquina. Confira o indicador verde depois de salvar.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 15 · Proteção de sobrecarga ============ -->
+<section class="page">
+  <div class="eyebrow">15 · Configurações do técnico</div>
+  <h1>Configurando a proteção de sobrecarga</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Abra Configurações → Controle (CLP)</div><div class="d">A caixa <b>Proteção de sobrecarga</b> fica logo abaixo da unidade da força.</div></li>
+        <li><div class="t">Ligue o interruptor</div><div class="d">Desligado, ou com limite 0, a proteção não age.</div></li>
+        <li><div class="t">Informe o limite da célula de carga em kgf</div><div class="d">Use um valor abaixo da capacidade nominal da célula. A dica mostra o equivalente em N.</div></li>
+        <li><div class="t">Salvar e Aplicar</div><div class="d">Vale na hora, para tração e flexão, em tração ou compressão (o sistema compara o valor absoluto da força).</div></li>
+      </ol>
+    </div>
+    <div class="right" style="width:420pt">
+      <img class="shot" src="img/cfg_sobrecarga.png" style="width:420pt">
+      <div class="note b" style="margin-top:14pt"><b>Para onde vai o pulso.</b> Para o registrador com role <code>parada_sobrecarga</code>, se você criar um. Sem ele, vai para o role <code>parar</code> (IHM coil 4002 → M7, o mesmo do botão Parar). Os sentidos também são zerados.</div>
+      <div class="note y">A verificação roda no computador, a cada 1 s com a máquina parada e a cada ~100 ms no ensaio, só com a tela de Controle ou Flexão aberta. Mantenha a proteção do próprio CLP.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 15 · Registradores ============ -->
+<section class="page">
+  <div class="eyebrow">15 · Configurações do técnico</div>
+  <h1>Registradores de controle</h1>
+  <div class="cols">
+    <div class="right"><img class="shot" src="img/cfg_registradores.png" style="width:385pt"></div>
+    <div class="left">
+      <p class="kv" style="font-size:10.9pt">Uma linha para cada sinal da máquina. O programa só procura o sinal pelo <b>Role</b>; o nome é livre.</p>
+      <table class="t sm wrap">
+        <tr><th style="width:80pt">Coluna</th><th>Conteúdo</th></tr>
+        <tr><td>Disp./End.</td><td>Endereço Modbus (0-based) ou dispositivo Delta (<code>D412</code>, <code>M5</code>, <code>X0</code>), convertido pela família.</td></tr>
+        <tr><td>CLP</td><td>Só anotação do registrador de origem.</td></tr>
+        <tr><td>Role</td><td>Papel do sinal (lista na seção 18).</td></tr>
+        <tr><td>Tipo</td><td><code>coil</code>, <code>input</code>, <code>uint16</code>, <code>decimal</code>, <code>int32</code>, <code>decimal32</code>, <code>float32</code>.</td></tr>
+        <tr><td>Escala</td><td>Multiplica na leitura e divide na escrita.</td></tr>
+        <tr><td>Ordem</td><td>Ordem das palavras de 32 bits. Os D float32 do DVP via IHM usam <code>little</code>.</td></tr>
+      </table>
+      <div class="note b"><b>Flexão:</b> usa os mesmos registradores da tração. Marque <b>Separar</b> só no que for diferente e informe o endereço próprio.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 15 · Diagnóstico de registrador ============ -->
+<section class="page">
+  <div class="eyebrow">15 · Configurações do técnico</div>
+  <h1>Testando um registrador</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Desça até Diagnóstico de registrador</div><div class="d">No fim da aba Controle (CLP). Os botões de atalho preenchem com um registrador já cadastrado.</div></li>
+        <li><div class="t">Informe dispositivo, tipo, ordem e escala</div><div class="d">Ex.: <code>D600</code>, <code>float32</code>, <code>little</code>, escala 1.</div></li>
+        <li><div class="t">Escolha Entrada (leitura) e clique em Testar</div><div class="d">Mostra o valor cru e o interpretado, inclusive como float. Compare com a tela da IHM.</div></li>
+        <li><div class="t">Só depois cadastre o endereço</div><div class="d">Na tabela de registradores, e clique em Salvar e Aplicar.</div></li>
+      </ol>
+      <div class="note r">Cuidado ao usar <b>Saída</b> (escrita) em sinais de comando: com a máquina ligada, escrever em <code>iniciar</code> ou num sentido faz a máquina se mover.</div>
+    </div>
+    <div class="right"><img class="shot" src="img/cfg_diag.png" style="width:400pt"></div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 16 · Backup ============ -->
+<section class="page">
+  <div class="eyebrow">16 · Backup e restauração</div>
+  <h1>Ativando o backup automático</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Instale o app da nuvem no PC</div><div class="d">Google Drive, OneDrive ou Dropbox, já logado na conta do cliente.</div></li>
+        <li><div class="t">Configurações → Backup</div><div class="d">Ligue <b>Fazer backup automaticamente</b> e escolha uma pasta dentro da pasta sincronizada.</div></li>
+        <li><div class="t">Intervalo e quantidade</div><div class="d">Padrão: a cada 24 horas, mantendo os últimos 30. Os mais antigos são apagados.</div></li>
+        <li><div class="t">Salvar e Aplicar, depois Fazer backup agora</div><div class="d">Confirme a mensagem "Backup gravado" e o arquivo na lista.</div></li>
+      </ol>
+      <div class="note g">O zip leva o <code>tracao.db</code> (ensaios, clientes e relatórios) e o <code>config.json</code>. Funciona mesmo sem internet; a nuvem sobe quando a conexão voltar.</div>
+    </div>
+    <div class="right"><img class="shot" src="img/cfg_backup.png" style="width:430pt"></div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 16 · Restaurar ============ -->
+<section class="page">
+  <div class="eyebrow">16 · Backup e restauração</div>
+  <h1>Restaurando um backup</h1>
+  <div class="cols">
+    <div class="left">
+      <ol class="steps">
+        <li><div class="t">Pare o programa</div><div class="d">Agendador de Tarefas → <b>MaqTracao</b> → Finalizar.</div></li>
+        <li><div class="t">Guarde o banco atual</div><div class="d">Copie <code>C:\MaqTracao\tracao.db</code> para outro lugar, por segurança.</div></li>
+        <li><div class="t">Descompacte o backup escolhido</div><div class="d">Arquivos <code>MaqTracao-backup-AAAAMMDD-HHMMSS.zip</code>.</div></li>
+        <li><div class="t">Troque o tracao.db</div><div class="d">Pelo do backup. Troque o <code>config.json</code> só se quiser voltar também as configurações.</div></li>
+        <li><div class="t">Inicie de novo</div><div class="d">Agendador → MaqTracao → Executar, ou reinicie o PC.</div></li>
+      </ol>
+    </div>
+    <div class="right" style="width:380pt">
+      <div class="note y" style="margin-top:0"><b>Antes de atualizar o programa</b>, faça sempre um backup em Configurações → Backup → Fazer backup agora.</div>
+      <div class="note b">Num PC novo: instale o programa (seção 14), pare a tarefa e coloque o <code>tracao.db</code> e o <code>config.json</code> do backup em <code>C:\MaqTracao</code>.</div>
+      <div class="note r">Restaurar substitui todos os ensaios feitos depois daquele backup. Por isso guarde o banco atual no passo 2.</div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 17 · Solução de problemas ============ -->
+<section class="page">
+  <div class="eyebrow">17 · Diagnóstico</div>
+  <h1>Solução de problemas</h1>
+  <table class="t sm" style="margin-top:12pt">
+    <tr><th style="width:190pt">Sintoma</th><th>O que fazer</th></tr>
+    <tr><td>Tela não abre</td><td>Veja <code>C:\MaqTracao\logs\servidor.log</code> (como administrador). Agendador de Tarefas → MaqTracao → Executar.</td></tr>
+    <tr><td>Porta 8000 ocupada</td><td>Mude <code>"server_port"</code> no <code>config.json</code> e o endereço do atalho.</td></tr>
+    <tr><td>Indicador: "IP não configurado"</td><td>Preencha o IP em Configurações → Controle (CLP).</td></tr>
+    <tr><td>Indicador: "sem resposta Modbus"</td><td>Teste <code>ping 192.168.11.10</code>. O PC precisa estar na mesma faixa de rede da IHM (192.168.11.x).</td></tr>
+    <tr><td>"registrador de força sem leitura"</td><td>A IHM responde, mas o endereço de <code>forca_atual</code> está errado. Use o Diagnóstico de registrador.</td></tr>
+    <tr><td>"Registrador 'iniciar' não configurado"</td><td>Falta a linha com esse role em Registradores de controle.</td></tr>
+    <tr><td>Força 9,8 vezes maior ou menor</td><td>Unidade da força no CLP trocada (kgf × N).</td></tr>
+    <tr><td>Valor absurdo (ex.: 1e+38)</td><td>Ordem das palavras (<code>big</code>/<code>little</code>) ou tipo errado.</td></tr>
+    <tr><td>Sobrecarga dispara sem carga</td><td>Tara não feita, limite baixo demais ou unidade da força errada.</td></tr>
+    <tr><td>Sobrecarga com faixa amarela</td><td>O pulso de parada falhou: confira a conexão e o role <code>parar</code> / <code>parada_sobrecarga</code>.</td></tr>
+    <tr><td>Indicador mostra "simulador"</td><td>Desligue o Modo simulador em Configurações → Geral.</td></tr>
+    <tr><td>Backup falha</td><td>A pasta existe e é gravável? Salve a pasta nova antes de testar.</td></tr>
+  </table>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 17 · Ferramentas ============ -->
+<section class="page">
+  <div class="eyebrow">17 · Diagnóstico</div>
+  <h1>Ferramentas de diagnóstico</h1>
+  <p class="lead">Scripts do repositório, para rodar no PC de desenvolvimento ligado à rede da máquina, com o venv ativado.</p>
+  <div class="grid g3">
+    <div class="card"><div class="ic">1</div><h3>varredura_ihm.py</h3><p>Varre a memória Modbus da IHM <b>só lendo</b> e lista o que tem valor.</p><p style="margin-top:6pt"><code>python varredura_ihm.py --hr 40000-40200 --coils 3900-4200 --csv v.csv</code></p><p style="margin-top:6pt">Anote o valor da tela da IHM, rode, mexa na máquina e rode de novo: o endereço que mudou junto é o certo.</p></div>
+    <div class="card"><div class="ic">2</div><h3>modbus_test.py</h3><p>Lê um endereço, uma lista ou uma faixa, decodificando pares de 32 bits e float.</p><p style="margin-top:6pt"><code>python modbus_test.py 40000 40099 --32</code></p><p style="margin-top:6pt">IP pela variável <code>MODBUS_IP</code>.</p></div>
+    <div class="card"><div class="ic">3</div><h3>test_bit.py</h3><p>Monitora um bit ou varre coils e registradores mostrando o que muda.</p><p style="margin-top:6pt"><code>python test_bit.py --scan</code></p><p style="margin-top:6pt">Útil para achar os bits de início, parada e ruptura.</p></div>
+  </div>
+  <div class="note b">O mapa real IHM → CLP fica no Data Exchange do projeto DOPSoft da máquina. Sempre confira lá antes de mudar endereços.</div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · Mapa IHM -> CLP ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>Mapa de registradores IHM → CLP</h1>
+  <div class="cols" style="margin-top:12pt">
+    <div class="left">
+      <table class="t sm" style="margin-top:0">
+        <tr><th>Tabela da IHM (1-based)</th><th>CLP</th><th>Sinais</th></tr>
+        <tr><td>Registers 40000 (10)</td><td>D407…</td><td>velocidade D408, deslocamento programado D412</td></tr>
+        <tr><td>Registers 40010 (10)</td><td>D2012…</td><td>força máxima</td></tr>
+        <tr><td>Registers 40020 (10)</td><td>D2002…</td><td>limite de força D2006</td></tr>
+        <tr><td>Registers 40030 (10)</td><td>D2022…</td><td></td></tr>
+        <tr><td>Registers 40040 (10)</td><td>D600…</td><td>deslocamento atual</td></tr>
+        <tr><td>Registers 40050 (10)</td><td>D92…</td><td></td></tr>
+        <tr><td>Coils 4000 (10)</td><td>M5…</td><td>cima M5, baixo M6, parar M7, iniciar M9</td></tr>
+        <tr><td>Coils 4010 (10)</td><td>M30…</td><td>material íntegro M30, ruptura M31</td></tr>
+        <tr><td>Coils 4020 (10)</td><td>M100…</td><td>zerar deslocamento M100, tara M101</td></tr>
+      </table>
+      <p class="kv" style="margin-top:8pt">No software use o número da tabela − 1 (0-based). Ex.: coil 4002 → endereço 4001.</p>
+    </div>
+    <div class="right" style="width:300pt">
+      <div class="card"><h3>Linhas opcionais</h3><p>Ainda a criar na IHM para os indicadores extras: Registers 40060 → D3004 (tensão máxima), 40070 → D610 (deslocamento máximo), Coils 4030 → X0 tam. 3 (emergência e limites). Sem elas o ensaio funciona igual.</p></div>
+      <div class="card" style="margin-top:10pt"><h3>Conversão Delta DVP</h3><p>D0–D4095 → 0x1000+n · D4096+ → 0x9000+(n−4096)<br>M0–M1535 → 0x0800+n · M1536+ → 0xB000+(n−1536)<br>X → 0x0400+octal · Y → 0x0500+octal<br>D = holding · M e Y = coil · X = entrada</p></div>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · Roles ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>Roles dos registradores</h1>
+  <table class="t sm" style="margin-top:12pt">
+    <tr><th style="width:250pt">Role</th><th style="width:110pt">Tipo</th><th>Uso</th></tr>
+    <tr><td>iniciar · parar</td><td>coil, escrita</td><td>Pulso de início e de parada.</td></tr>
+    <tr><td>sentido_cima · sentido_baixo</td><td>coil, escrita</td><td>Pulso de sentido antes do início.</td></tr>
+    <tr><td>zerar_deslocamento</td><td>coil, escrita</td><td>Zera o deslocamento.</td></tr>
+    <tr><td>zerar_celula</td><td>coil, escrita</td><td>Tara da célula de carga (também para o ensaio).</td></tr>
+    <tr><td>parada_sobrecarga</td><td>coil, escrita</td><td>Opcional: pulso de parada por sobrecarga. Sem ele, usa <code>parar</code>.</td></tr>
+    <tr><td>velocidade · deslocamento_programado · limite_forca</td><td>registrador, escrita</td><td>Parâmetros do ensaio.</td></tr>
+    <tr><td>forca_atual · deslocamento_atual</td><td>registrador, leitura</td><td>Aquisição. <code>forca_atual</code> também prova a conexão e alimenta a sobrecarga.</td></tr>
+    <tr><td>forca_maxima · tensao_maxima · deslocamento_maximo</td><td>registrador, leitura</td><td>Valores calculados pelo CLP, mostrados na tela.</td></tr>
+    <tr><td>material_integro_bit · ruptura_bit</td><td>coil, leitura</td><td>Estado do material. A subida da ruptura grava o ensaio.</td></tr>
+    <tr><td>fim_ensaio_bit</td><td>coil, leitura</td><td>Fim do ensaio de flexão.</td></tr>
+    <tr><td>emergencia · limite_superior · limite_inferior</td><td>coil/input, leitura</td><td>Indicadores na tela.</td></tr>
+  </table>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · Cálculos ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>Como os resultados são calculados</h1>
+  <div class="grid g2">
+    <div class="card"><h3>Tração</h3><ul>
+      <li>σ = F ÷ A (MPa) · ε = ΔL ÷ L₀ · A% = (Lf − L₀) ÷ L₀ × 100</li>
+      <li>Trecho elástico: maior trecho com rigidez acima de 80 % da máxima, encurtado até a reta F × d ter R² ≥ 0,99 (mínimo 5 pontos).</li>
+      <li>E: inclinação da regressão σ × ε nesse trecho.</li>
+      <li>Rp0,2: cruzamento da curva com a reta elástica deslocada de 0,2 %.</li>
+      <li>Ruptura: queda ≥ 25 % de Fmáx em até 2 leituras; ou queda gradual abaixo de 10 % de Fmáx.</li>
+      <li>Energia: ∫ F dd até a ruptura (J).</li>
+    </ul></div>
+    <div class="card"><h3>Flexão a 3 pontos</h3><ul>
+      <li>σf = 3·F·L ÷ (2·b·h²) · εf = 6·s·h ÷ L²</li>
+      <li>Ef pela regressão no trecho elástico e módulo cordal Ef = (σf2 − σf1) ÷ (εf2 − εf1).</li>
+      <li>ISO 178: εf1 = 0,0005 e εf2 = 0,0025. ASTM D790: 0 e 0,0025.</li>
+      <li>Escoamento de flexão: queda do módulo local maior que 10 %.</li>
+      <li>A deflexão vem negativa do CLP (travessa desce) e é invertida.</li>
+    </ul></div>
+  </div>
+  <div class="card" style="margin-top:10pt"><h3>Qualidade dos dados</h3><p>Dados faltantes (vazios ou lacunas maiores que 5× o intervalo normal; erro acima de 10 %) · Dados completos (50 amostras ou mais) · Curva válida (R² ≥ 0,98, força não nula, deslocamento sem recuar em mais de 5 % das leituras) · Ruptura detectada · Alongamento estimado (L₀ informado).</p></div>
+  <div class="note y">Força do CLP em kgf é convertida para N (× 9,80665). Todos os cálculos usam N.</div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · Normas ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>Normas cadastradas</h1>
+  <table class="t sm" style="margin-top:12pt">
+    <tr><th>Norma</th><th>Tipo</th><th>Material</th><th>Corpo de prova</th><th>Velocidade (mm/min)</th><th>L₀ / vão (mm)</th></tr>
+    <tr><td>ISO 527-2</td><td>Tração</td><td>Plásticos</td><td>Tipo 1A (170 × 10 × 4)</td><td>50</td><td>75</td></tr>
+    <tr><td>ASTM D638</td><td>Tração</td><td>Plásticos</td><td>Tipo I (165 × 13 × 3,2)</td><td>5</td><td>50</td></tr>
+    <tr><td>ABNT NBR ISO 6892-1</td><td>Tração</td><td>Metais</td><td>Proporcional (L₀ = 5,65·√S₀)</td><td>por taxa</td><td>—</td></tr>
+    <tr><td>ASTM E8/E8M</td><td>Tração</td><td>Metais</td><td>Chapa 12,5 mm</td><td>por taxa</td><td>50</td></tr>
+    <tr><td>ASTM D3039</td><td>Tração</td><td>Compósitos</td><td>250 × 25 × 2,5</td><td>2</td><td>—</td></tr>
+    <tr><td>ISO 37</td><td>Tração</td><td>Borrachas</td><td>Gravata tipo 1</td><td>500</td><td>25</td></tr>
+    <tr><td>ASTM D412</td><td>Tração</td><td>Borrachas</td><td>Matriz C</td><td>500</td><td>25</td></tr>
+    <tr><td>ISO 178</td><td>Flexão</td><td>Plásticos</td><td>80 × 10 × 4</td><td>2</td><td>64</td></tr>
+    <tr><td>ASTM D790</td><td>Flexão</td><td>Plásticos</td><td>127 × 12,7 × 3,2</td><td>1,4</td><td>51,2</td></tr>
+  </table>
+  <div class="note y">São valores de partida sugeridos pelo sistema. Confira sempre a edição vigente da norma e o material ensaiado.</div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · config.json ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>Chaves do config.json</h1>
+  <div class="cols" style="margin-top:12pt;gap:20pt">
+    <div class="left">
+      <table class="t sm wrap" style="margin-top:0">
+        <tr><th style="width:150pt">Chave</th><th>Descrição</th></tr>
+        <tr><td>ihm_ip · ihm_port · ihm_timeout</td><td>IHM (parâmetros, CSV e FTP).</td></tr>
+        <tr><td>clp_ip · clp_port · clp_timeout</td><td>Conexão de controle; vazio usa os da IHM.</td></tr>
+        <tr><td>plc_family</td><td><code>dvp</code>, <code>direto</code> ou <code>as</code>.</td></tr>
+        <tr><td>forca_clp_kgf</td><td>Força do CLP em kgf (padrão true).</td></tr>
+        <tr><td>control_registers</td><td>Registradores da tração.</td></tr>
+        <tr><td>flexao_registers · flexao_separados</td><td>Registradores próprios da flexão.</td></tr>
+        <tr><td>flexao_habilitada</td><td>Máquina com flexão.</td></tr>
+        <tr><td>control_pulse_ms</td><td>Duração dos pulsos (300).</td></tr>
+        <tr><td>realtime_interval_ms</td><td>Intervalo de leitura no ensaio (100, mín. 50).</td></tr>
+      </table>
+    </div>
+    <div class="left">
+      <table class="t sm wrap" style="margin-top:0">
+        <tr><th style="width:150pt">Chave</th><th>Descrição</th></tr>
+        <tr><td>sobrecarga_ativa · sobrecarga_limite_kgf</td><td>Proteção de sobrecarga (false, 0 = desligada).</td></tr>
+        <tr><td>backup_ativo · backup_dir · backup_intervalo_h · backup_manter</td><td>Backup (false, vazio, 24, 30).</td></tr>
+        <tr><td>watch_directory · auto_load · refresh_interval_s</td><td>Pasta monitorada de CSV.</td></tr>
+        <tr><td>ftp_*</td><td>Download do CSV pela FTP da IHM.</td></tr>
+        <tr><td>simulator_enabled</td><td>Modo simulador.</td></tr>
+        <tr><td>server_host · server_port</td><td>Só na versão do cliente (127.0.0.1, 8000).</td></tr>
+        <tr><td>senha_config</td><td>Hash da senha; apagar volta à senha padrão.</td></tr>
+        <tr><td>proximo_ensaio*</td><td>Cadastro do próximo ensaio (a tela preenche).</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 18 · API ============ -->
+<section class="page">
+  <div class="eyebrow">18 · Referência técnica</div>
+  <h1>API do servidor</h1>
+  <p class="lead" style="font-size:11.5pt;margin-top:6pt">Responde em <code>http://localhost:8000</code>. A documentação interativa (<code>/docs</code>) fica desligada na versão do cliente.</p>
+  <div class="cols" style="margin-top:10pt;gap:20pt">
+    <div class="left">
+      <table class="t sm wrap" style="margin-top:0">
+        <tr><th style="width:150pt">Rota</th><th>Função</th></tr>
+        <tr><td>GET /api/health · /api/clp/conexao</td><td>Servidor no ar · conexão com a IHM.</td></tr>
+        <tr><td>GET /api/ensaios[/{id}]</td><td>Ensaios de tração (<code>?cliente_id=</code>).</td></tr>
+        <tr><td>PATCH /api/ensaios/{id}</td><td>Altera só o cadastro.</td></tr>
+        <tr><td>GET …/{id}/kpis · curvas · qualidade</td><td>Resultados.</td></tr>
+        <tr><td>/api/flexao/ensaios…</td><td>Rotas equivalentes da flexão.</td></tr>
+        <tr><td>POST /api/control/start · stop</td><td>Iniciar e parar (tração).</td></tr>
+        <tr><td>POST …/zerar-deslocamento · zerar-celula</td><td>Zerar e tara.</td></tr>
+        <tr><td>GET /api/control/stream</td><td>Fluxo ao vivo (SSE) que grava o ensaio.</td></tr>
+      </table>
+    </div>
+    <div class="left">
+      <table class="t sm wrap" style="margin-top:0">
+        <tr><th style="width:150pt">Rota</th><th>Função</th></tr>
+        <tr><td>GET /api/sobrecarga</td><td>Estado do alarme de sobrecarga.</td></tr>
+        <tr><td>POST /api/sobrecarga/reconhecer</td><td>Reconhece o alarme.</td></tr>
+        <tr><td>POST /api/relatorio</td><td>Gera e salva o relatório.</td></tr>
+        <tr><td>/api/relatorios · /api/clientes</td><td>Relatórios salvos e clientes.</td></tr>
+        <tr><td>GET /api/busca · /api/normas</td><td>Busca e normas.</td></tr>
+        <tr><td>GET/POST /api/backup[/agora]</td><td>Estado e backup imediato.</td></tr>
+        <tr><td>POST /api/config/login</td><td>Token para o cabeçalho <code>X-Config-Token</code>.</td></tr>
+        <tr><td>PUT /api/config · POST /api/control/probe</td><td>Salvar configurações e testar registrador (exigem token).</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="note y">A API não tem autenticação além da senha das Configurações. Não exponha a porta para fora da rede local.</div>
+  <div class="foot"><span class="l"><img src="img/logo.png">Automatic</span><span class="pn"></span></div>
+</section>
+
+<script>
+const nums = [4, 5].concat(Array.from({length: 40}, (_, i) => 19 + i));
+document.querySelectorAll('.page').forEach((p, i) => { const s = p.querySelector('.pn'); if (s) s.textContent = nums[i]; });
+</script>
+</body></html>

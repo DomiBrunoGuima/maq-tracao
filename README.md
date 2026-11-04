@@ -2,7 +2,7 @@
 
 Software desktop para análise automática de arquivos CSV gerados pela IHM da máquina de tração (formato `HISTORY V1.0`).
 
-Manual completo do sistema (operação, configuração, backup, solução de problemas e referência técnica): [docs/MANUAL.md](docs/MANUAL.md).
+Manual completo do sistema: PDF em slides em [docs/Manual completo - Sistema de Ensaios.pdf](docs/Manual%20completo%20-%20Sistema%20de%20Ensaios.pdf) e texto em [docs/MANUAL.md](docs/MANUAL.md) (operação, configuração, backup, solução de problemas e referência técnica).
 
 ## Stack
 
