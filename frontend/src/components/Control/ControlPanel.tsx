@@ -30,6 +30,7 @@ import { useConfig } from "../../hooks/useConfig";
 import type { ControlStatus, Norma, RealtimeFrame, RealtimePoint } from "../../types";
 import { BigValue, SobrecargaAlerta, StatusEnsaioBar, fmtBig, fmtKgf, type StatusEnsaio } from "../Common/Status";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
+import { useUsuarioOpcional } from "../../hooks/useAuth";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-tracao";
 
@@ -182,7 +183,12 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   // as condições antes de iniciar. Não entra no gráfico — só nos indicadores.
   const [live, setLive] = useState<ControlStatus | null>(null);
   const [status, setStatus] = useState<StatusEnsaio>("parado");
-  const [cadastro, setCadastro] = useState<CadastroForm>(cadastroSalvo);
+  // O operador do teste é o usuário logado (pode ser trocado se outra pessoa executar).
+  const usuarioLogado = useUsuarioOpcional();
+  const [cadastro, setCadastro] = useState<CadastroForm>(() => {
+    const c = cadastroSalvo();
+    return usuarioLogado && !usuarioLogado.mestre ? { ...c, operador: usuarioLogado.nome } : c;
+  });
   const finalizarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Lembra o cadastro entre telas/ensaios (o operador costuma repetir cliente e norma)

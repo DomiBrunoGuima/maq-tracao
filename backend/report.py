@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 from datetime import datetime
+from types import SimpleNamespace
 
 import matplotlib
 matplotlib.use("Agg")
@@ -312,9 +313,14 @@ def _linhas_resultado_flexao(kpis: dict) -> list[tuple[str, str, str]]:
 
 def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                          comparacao_series: list[tuple] | None = None,
-                         modo: str = "tracao") -> str:
+                         modo: str = "tracao", responsavel: dict | None = None) -> str:
     """Relatório HTML de um ensaio. ``modo`` é "tracao" ou "flexao". Cada item de
-    ``comparacao_series`` é (nome, df) ou (nome, df, kpis) com os KPIs já calculados."""
+    ``comparacao_series`` é (nome, df) ou (nome, df, kpis) com os KPIs já calculados.
+    ``responsavel`` traz o usuário logado que emite o relatório (``emissor``: nome,
+    cargo, registro, login, mestre) e quem executou o ensaio (``executor``)."""
+    responsavel = responsavel or {}
+    emissor = responsavel.get("emissor") or {}
+    executor = (responsavel.get("executor") or "").strip()
     flexao = modo == "flexao"
     tipo_ensaio = "Flexão" if flexao else "Tração"
     titulo_rel = f"Relatório de Ensaio de {tipo_ensaio}"
@@ -347,7 +353,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         f'<div style="font-size:9pt;color:#444;margin-top:3px">N°&nbsp;{_esc(numero_rel)}</div>'
         if numero_rel else ""
     )
-    emitido_html = f'<div style="font-size:7.5pt;color:#888;margin-top:6px">Emitido em {now}</div>'
+    emitido_por = f" por {_esc(emissor['nome'])}" if emissor.get("nome") else ""
+    emitido_html = f'<div style="font-size:7.5pt;color:#888;margin-top:6px">Emitido em {now}{emitido_por}</div>'
 
     header_html = f"""
     <div style="border-top:5px solid #1e3a5f;padding-top:16px;margin-bottom:0">
@@ -752,20 +759,57 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             f'<p style="text-align:right;margin:20px 0">{_esc(local_data)}</p>'
         )
 
-        if req.assinaturas:
+        # O usuário logado que emite o relatório assina automaticamente (se ainda
+        # não estiver na lista). O acesso mestre não assina por ninguém.
+        assinaturas = [s for s in req.assinaturas if s.nome]
+        if emissor.get("nome") and not emissor.get("mestre"):
+            nomes = {s.nome.strip().lower() for s in assinaturas}
+            if emissor["nome"].strip().lower() not in nomes:
+                cargo = " · ".join(x for x in (emissor.get("cargo"), emissor.get("registro")) if x)
+                assinaturas.insert(0, SimpleNamespace(nome=emissor["nome"], cargo=cargo))
+        if assinaturas:
             sigs_html = "".join(
                 f'<div style="text-align:center">'
                 f'<div style="border-top:1px solid #333;width:180px;margin:0 auto 6px"></div>'
                 f'<div style="font-weight:bold">{_esc(s.nome)}</div>'
                 f'<div style="font-size:9.5pt">{_esc(s.cargo)}</div>'
                 f'</div>'
-                for s in req.assinaturas if s.nome
+                for s in assinaturas
             )
             if sigs_html:
                 body_parts.append(
                     f'<div style="display:flex;gap:80px;justify-content:center;margin-top:40px">'
                     f'{sigs_html}</div>'
                 )
+
+    # ── RESPONSABILIDADE (usuário logado) ─────
+    if emissor.get("nome") or executor:
+        linhas = []
+        if executor:
+            linhas.append(("Ensaio executado por", executor))
+        if emissor.get("nome"):
+            emi = emissor["nome"]
+            extra = " · ".join(x for x in (emissor.get("cargo"), emissor.get("registro")) if x)
+            if extra:
+                emi += f" — {extra}"
+            linhas.append(("Relatório emitido por", emi))
+            if emissor.get("login"):
+                linhas.append(("Usuário do sistema", emissor["login"]))
+            if emissor.get("email"):
+                linhas.append(("E-mail", emissor["email"]))
+        linhas.append(("Data de emissão", now))
+        rows_html = "".join(
+            f'<tr><td style="padding:3px 10px 3px 0;color:#555;white-space:nowrap;width:1%">{_esc(k)}:</td>'
+            f'<td style="padding:3px 0;font-weight:bold">{_esc(v)}</td></tr>'
+            for k, v in linhas
+        )
+        body_parts.append(
+            f'<div class="responsavel" style="margin-top:28px;border:1px solid #c8d0dc;border-radius:4px;'
+            f'padding:10px 14px;font-size:9pt;page-break-inside:avoid">'
+            f'<div style="font-size:8.5pt;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;'
+            f'color:#1e3a5f;margin-bottom:6px">Responsabilidade</div>'
+            f'<table style="border-collapse:collapse">{rows_html}</table></div>'
+        )
 
     # ── OBSERVAÇÕES FINAIS ────────────────────
     if req.include_observacoes_finais and req.observacoes_finais:

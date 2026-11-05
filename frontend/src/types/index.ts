@@ -12,6 +12,7 @@ export interface EnsaioSummary {
   amostra: string;
   norma: string;
   operador: string;
+  usuario_nome?: string;
 }
 
 export interface EnsaioDetail extends EnsaioSummary {
@@ -64,6 +65,7 @@ export interface RelatorioSummary {
   numero: string;
   titulo: string;
   cliente_nome: string;
+  usuario_nome?: string;
   created_at: string;
 }
 
@@ -181,6 +183,7 @@ export interface EnsaioFlexaoSummary {
   amostra: string;
   norma: string;
   operador: string;
+  usuario_nome?: string;
 }
 
 export interface EnsaioFlexaoDetail extends EnsaioFlexaoSummary {
@@ -624,4 +627,48 @@ export interface ReportRequest {
   standard: string;
   format: string;
   observations: string;
+}
+
+// ── Login e usuários ───────────────────────────────────────────────────────
+
+export interface UsuarioLogado {
+  id: number;
+  login: string;
+  nome: string;
+  cargo: string;
+  registro: string;
+  email: string;
+  mestre: boolean;
+  trocar_senha: boolean;
+}
+
+export interface Usuario {
+  id: number;
+  login: string;
+  nome: string;
+  cargo: string;
+  registro: string;
+  email: string;
+  ativo: boolean;
+  trocar_senha: boolean;
+  created_at: string;
+  ultimo_login: string | null;
+}
+
+export interface UsuarioIn {
+  login: string;
+  nome: string;
+  cargo: string;
+  registro: string;
+  email: string;
+  ativo: boolean;
+}
+
+export interface EventoAuditoria {
+  id: number;
+  data: string;
+  usuario: string;
+  acao: string;
+  detalhe: string;
+  ip: string;
 }

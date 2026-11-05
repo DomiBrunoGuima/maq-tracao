@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useUsuarioOpcional } from "../../hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2, Sparkles } from "lucide-react";
 import { generateReport, getCamposRelatorio } from "../../api/client";
@@ -159,6 +160,7 @@ function SectionCard({ title, enabled, onToggle, children }: {
 // ── main component ────────────────────────────────────────────
 
 export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: Props) {
+  const usuario = useUsuarioOpcional();
   const flexao = tipo === "flexao";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -533,6 +535,13 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
           {/* Conclusão */}
           <SectionCard title="Conclusão / Assinaturas" enabled={flags.include_conclusao} onToggle={() => toggleFlag("include_conclusao")}>
             <div className="space-y-4">
+              {usuario && (
+                <p className="text-xs text-muted bg-accent/5 border border-accent/20 rounded-lg px-3 py-2">
+                  O relatório sai automaticamente com os seus dados como emissor
+                  (<span className="text-slate-300">{[usuario.nome, usuario.cargo, usuario.registro].filter(Boolean).join(" · ")}</span>)
+                  {!usuario.mestre && ", e a sua assinatura entra aqui se não estiver na lista"}.
+                </p>
+              )}
               <Field label="Local e Data" value={localData} onChange={setLocalData}
                 placeholder="ex: São Carlos, 27 de maio de 2026." />
               <div className="space-y-3">

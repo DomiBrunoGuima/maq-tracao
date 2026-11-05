@@ -17,6 +17,7 @@ class EnsaioSummary(BaseModel):
     amostra: str = ""
     norma: str = ""
     operador: str = ""
+    usuario_nome: str = ""   # usuário logado que iniciou o ensaio
 
     model_config = {"from_attributes": True}
 
@@ -72,6 +73,7 @@ class RelatorioSummary(BaseModel):
     numero: str = ""
     titulo: str = ""
     cliente_nome: str = ""
+    usuario_nome: str = ""   # quem gerou
     created_at: datetime
 
 
@@ -106,6 +108,7 @@ class EnsaioFlexaoSummary(BaseModel):
     amostra: str = ""
     norma: str = ""
     operador: str = ""
+    usuario_nome: str = ""   # usuário logado que iniciou o ensaio
 
     model_config = {"from_attributes": True}
 

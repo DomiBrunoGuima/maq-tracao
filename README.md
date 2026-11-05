@@ -89,6 +89,11 @@ O software lê arquivos `.csv` com as seguintes características:
 
 ## Funcionalidades
 
+### Login e usuários
+- Toda a API exige login (cookie de sessão HttpOnly). Acesso mestre fixo (`mestre`, senha entregue em separado; só o hash fica em `backend/usuarios.py`).
+- O mestre cria os operadores e gera as senhas em **Usuários e acessos**, e vê o registro de atividades (auditoria).
+- Ensaios guardam quem os iniciou; relatórios saem com nome, cargo e registro de quem emitiu. Detalhes em `docs/MANUAL.md` (seções 2, 9 e 11.6).
+
 ### Dashboard
 - **7 KPI cards** no topo (Fmax, σmax, E, δ, deslocamento, tempo, energia)
 - **5 gráficos** interativos com marcador de ruptura em laranja tracejado:

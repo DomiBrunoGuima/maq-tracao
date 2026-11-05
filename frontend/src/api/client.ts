@@ -31,9 +31,60 @@ import type {
   RegisterProbeResult,
   ReportRequest,
   SobrecargaEstado,
+  EventoAuditoria,
+  Usuario,
+  UsuarioIn,
+  UsuarioLogado,
 } from "../types";
 
-const api = axios.create({ baseURL: "/api" });
+const api = axios.create({ baseURL: "/api", withCredentials: true });
+
+// Sessão expirada/encerrada em qualquer chamada: a tela de login volta.
+export const EVENTO_SESSAO = "maq:sessao";
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const st = err?.response?.status;
+    const url: string = err?.config?.url ?? "";
+    if ((st === 401 || (st === 403 && /senha provis/i.test(err?.response?.data?.detail ?? "")))
+        && !url.startsWith("/auth/") && !url.startsWith("/config/")) {
+      window.dispatchEvent(new Event(EVENTO_SESSAO));
+    }
+    return Promise.reject(err);
+  },
+);
+
+// ── Login e usuários ───────────────────────────────────────────────────────
+
+export const login = (login: string, senha: string): Promise<UsuarioLogado> =>
+  api.post("/auth/login", { login, senha }).then((r) => r.data);
+
+export const logout = (): Promise<void> =>
+  api.post("/auth/logout").then(() => undefined).catch(() => undefined);
+
+export const getUsuarioLogado = (): Promise<UsuarioLogado> =>
+  api.get("/auth/me").then((r) => r.data);
+
+export const trocarMinhaSenha = (atual: string, nova: string): Promise<void> =>
+  api.post("/auth/senha", { atual, nova }).then(() => undefined);
+
+export const getUsuarios = (): Promise<Usuario[]> =>
+  api.get("/usuarios").then((r) => r.data);
+
+export const criarUsuario = (body: UsuarioIn): Promise<{ usuario: Usuario; senha: string }> =>
+  api.post("/usuarios", body).then((r) => r.data);
+
+export const editarUsuario = (id: number, body: UsuarioIn): Promise<Usuario> =>
+  api.put(`/usuarios/${id}`, body).then((r) => r.data);
+
+export const redefinirSenha = (id: number, trocar_no_login: boolean, senha = ""): Promise<{ usuario: Usuario; senha: string }> =>
+  api.post(`/usuarios/${id}/senha`, { senha, trocar_no_login }).then((r) => r.data);
+
+export const excluirUsuario = (id: number): Promise<void> =>
+  api.delete(`/usuarios/${id}`).then(() => undefined);
+
+export const getAuditoria = (params: { usuario?: string; acao?: string; limite?: number } = {}): Promise<EventoAuditoria[]> =>
+  api.get("/auditoria", { params }).then((r) => r.data);
 
 // Token da senha das Configurações (vale até fechar a tela ou o navegador).
 const TOKEN_KEY = "config_token";
@@ -55,8 +106,9 @@ export const loginConfig = (senha: string): Promise<void> =>
 export const logoutConfig = (): Promise<void> =>
   api.post("/config/logout").catch(() => undefined).then(() => setConfigToken(null));
 
+// O acesso mestre já entra nas Configurações sem a senha do técnico.
 export const sessaoConfig = (): Promise<boolean> =>
-  getConfigToken() ? api.get("/config/sessao").then((r) => !!r.data.ok) : Promise.resolve(false);
+  api.get("/config/sessao").then((r) => !!r.data.ok);
 
 export const trocarSenhaConfig = (atual: string, nova: string): Promise<void> =>
   api.post("/config/senha", { atual, nova }).then(() => undefined);

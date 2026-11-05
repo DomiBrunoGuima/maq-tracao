@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, Boolean, Column, Integer, String, Float, DateTime, Text, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from datetime import datetime
 
@@ -38,6 +38,9 @@ class EnsaioDB(Base):
     observacoes = Column(Text, default="")
     # JSON com o setup usado (velocidade, deslocamento, limite de força, área, L0, sentido)
     setup_json = Column(Text, default="")
+    # Usuário logado que iniciou o ensaio (auditoria). 0 = acesso mestre.
+    usuario_id = Column(Integer, nullable=True, index=True)
+    usuario_nome = Column(String, default="")
 
 
 class EnsaioFlexaoDB(Base):
@@ -68,6 +71,8 @@ class EnsaioFlexaoDB(Base):
     amostra = Column(String, default="")
     operador = Column(String, default="")
     observacoes = Column(Text, default="")
+    usuario_id = Column(Integer, nullable=True, index=True)
+    usuario_nome = Column(String, default="")
 
 
 class ParametrosIHMDB(Base):
@@ -112,6 +117,52 @@ class RelatorioDB(Base):
     request_json = Column(Text, default="")
     html         = Column(Text, default="")
     created_at   = Column(DateTime, default=datetime.utcnow)
+    # Quem gerou o relatório (usuário logado). 0 = acesso mestre.
+    usuario_id   = Column(Integer, nullable=True, index=True)
+    usuario_nome = Column(String, default="")
+
+
+class UsuarioDB(Base):
+    """Usuário da máquina (operador). O acesso mestre não fica aqui: é fixo no código
+    (backend/usuarios.py) e não pode ser alterado nem desativado."""
+    __tablename__ = "usuarios"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    login        = Column(String, unique=True, index=True, nullable=False)
+    nome         = Column(String, nullable=False)
+    cargo        = Column(String, default="")
+    registro     = Column(String, default="")   # matrícula, CREA, CRQ...
+    email        = Column(String, default="")
+    senha_hash   = Column(String, nullable=False)
+    ativo        = Column(Boolean, default=True)
+    trocar_senha = Column(Boolean, default=False)  # obriga trocar no próximo login
+    created_at   = Column(DateTime, default=datetime.utcnow)
+    updated_at   = Column(DateTime, default=datetime.utcnow)
+    ultimo_login = Column(DateTime, nullable=True)
+
+
+class SessaoDB(Base):
+    """Sessão de login. Guarda só o SHA-256 do token (o token fica no cookie)."""
+    __tablename__ = "sessoes"
+
+    token_hash = Column(String, primary_key=True)
+    usuario_id = Column(Integer, index=True)       # 0 = acesso mestre
+    criada_em  = Column(DateTime, default=datetime.utcnow)
+    ultimo_uso = Column(DateTime, default=datetime.utcnow)
+    ip         = Column(String, default="")
+
+
+class AuditoriaDB(Base):
+    """Registro de quem fez o quê (login, usuários, ensaios, relatórios, exclusões)."""
+    __tablename__ = "auditoria"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    data       = Column(DateTime, default=datetime.utcnow, index=True)
+    usuario_id = Column(Integer, nullable=True, index=True)
+    usuario    = Column(String, default="")   # login no momento do evento
+    acao       = Column(String, index=True)
+    detalhe    = Column(Text, default="")
+    ip         = Column(String, default="")
 
 
 def get_db():

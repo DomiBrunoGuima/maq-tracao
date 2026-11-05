@@ -75,7 +75,8 @@ banco local (`tracao.db`) e não dependem de internet.
 2. Ligue o computador. O sistema inicia sozinho com o Windows, em segundo plano.
 3. Dê dois cliques no atalho **Máquina de Tração** da área de trabalho. A tela
    abre numa janela própria.
-4. Confira o indicador **CLP CONECTADO** no canto superior esquerdo. Verde: a
+4. Entre com o seu **usuário e senha** (veja abaixo).
+5. Confira o indicador **CLP CONECTADO** no canto superior esquerdo. Verde: a
    máquina responde. Vermelho: veja [Solução de problemas](#13-solução-de-problemas).
 
 Logo depois de ligar o computador, a tela pode levar alguns segundos para
@@ -83,6 +84,28 @@ carregar. Se aparecer em branco, aguarde e aperte **F5**.
 
 Fechar a janela **não** desliga o sistema; ele continua rodando. Basta abrir o
 atalho de novo.
+
+### Entrando no sistema (login)
+
+Cada pessoa que usa a máquina tem o próprio usuário e senha, criados pelo
+administrador na tela **Usuários e acessos** ([11.6](#116-usuários-e-acessos-acesso-mestre)).
+Tudo o que é feito fica registrado com o usuário: quem iniciou cada ensaio e
+quem emitiu cada relatório.
+
+1. Digite o **usuário** (ex.: `maria.souza`) e a **senha** e clique em **Entrar**.
+2. Se o administrador marcou a senha como **provisória**, o sistema pede para
+   você criar a sua senha antes de continuar (mínimo de 8 caracteres, com letras
+   e números).
+3. Seu nome e cargo aparecem no canto inferior esquerdo. Ali ficam os botões
+   **Trocar minha senha** (chave) e **Sair**.
+
+Saia ao terminar o turno, para que o próximo operador entre com o usuário dele.
+A sessão também se encerra sozinha depois de 8 horas sem uso (ou 24 horas no
+total) e quando o administrador desativa o usuário ou gera uma senha nova.
+Depois de 5 senhas erradas seguidas, o login fica bloqueado por 5 minutos.
+
+Esqueceu a senha? Peça ao administrador para **gerar uma nova senha**. Ninguém,
+nem o administrador, consegue ver a senha atual: ela é guardada criptografada.
 
 ### A tela principal
 
@@ -95,7 +118,8 @@ atalho de novo.
 | **Comparar (n)** | Abre a comparação dos ensaios marcados com "+ Comparar". |
 | Reimportar todos | Reprocessa os ensaios importados de CSV com os cálculos atuais (mantém o cadastro de cada um). |
 | Lista de ensaios | Todos os ensaios salvos, do mais novo ao mais antigo. Os de flexão têm a etiqueta FLEXÃO. Clique para abrir o resultado. |
-| Clientes, Relatórios, Configurações | Menu inferior esquerdo. |
+| Clientes, Relatórios, Configurações | Menu inferior esquerdo. O acesso mestre também vê **Usuários e acessos**. |
+| Usuário logado | Nome e cargo de quem está usando, com **Trocar minha senha** e **Sair**. |
 
 ---
 
@@ -105,8 +129,9 @@ atalho de novo.
 
 1. Clique em **TRAÇÃO**.
 2. Preencha os **Dados do teste**: cliente, amostra (ex.: `Lote 23 · CP 1`),
-   norma e operador. Esses dados vão automaticamente para o ensaio gravado e
-   para o relatório. O botão **+** cadastra um cliente novo ali mesmo.
+   norma e operador. O operador já vem com o nome do usuário logado (troque se
+   outra pessoa executar). Esses dados vão automaticamente para o ensaio gravado e
+   para o relatório. O ensaio também guarda o usuário que clicou em Iniciar. O botão **+** cadastra um cliente novo ali mesmo.
 3. Ao escolher a **norma**, o sistema sugere velocidade, L₀ e corpo de prova
    (tabela em [14.6](#146-normas-cadastradas)). São valores de partida: confira
    a edição vigente da norma.
@@ -364,9 +389,24 @@ dados medidos ficam registrados e **não mudam**.
      observações finais (uma por linha).
 3. Desmarque o que não quiser incluir e clique em **Gerar Relatório**.
 
+**Seus dados entram sozinhos.** O relatório sai com os dados do usuário logado,
+sem precisar digitar:
+
+- no cabeçalho: "Emitido em *data* por *seu nome*";
+- na assinatura da conclusão: seu nome, cargo e registro (se ainda não estiver
+  na lista de assinaturas);
+- no quadro **Responsabilidade**, antes das observações: quem executou o ensaio,
+  quem emitiu o relatório (nome, cargo e registro), o usuário do sistema e a
+  data de emissão.
+
+Por isso o nome completo, o cargo e o registro (CREA, CRQ, matrícula) de cada
+usuário devem estar certos em **Usuários e acessos**. O acesso mestre não assina
+pelos outros: num relatório emitido por ele, só o quadro Responsabilidade
+mostra "Administrador".
+
 O relatório é baixado como arquivo HTML. Abra e use **Imprimir → Salvar como
 PDF** para enviar ao cliente. Uma cópia fica em **Relatórios** (menu inferior),
-com número, cliente e data, e pode ser aberta, baixada ou apagada pelos ícones à
+com número, cliente, data e quem emitiu, e pode ser aberta, baixada ou apagada pelos ícones à
 direita. A assinatura é feita no papel ou no PDF; o sistema ainda não tem
 assinatura eletrônica.
 
@@ -445,7 +485,9 @@ Testes: `pytest backend/tests/ -v`. A documentação interativa da API fica em
 
 ### 11.1 Acesso
 
-A tela **Configurações** pede a **senha do técnico** (padrão `tracao2026`).
+Para usar o sistema é preciso entrar com usuário e senha ([2](#entrando-no-sistema-login)).
+Além disso, a tela **Configurações** pede a **senha do técnico** (padrão `tracao2026`).
+O **acesso mestre** entra nas Configurações direto, sem essa senha.
 Sem ela não dá para salvar configurações nem testar registradores, nem pela
 tela nem pela API. Troque a senha em **Configurações → Sobre** logo depois de
 instalar. Uma alteração errada aqui faz o sistema perder contato com a máquina;
@@ -504,6 +546,43 @@ Ver [12](#12-backup-e-restauração).
 
 Versão do software e troca da senha das Configurações.
 
+### 11.6 Usuários e acessos (acesso mestre)
+
+O **acesso mestre** é o administrador do sistema. O usuário é `mestre` e a
+senha é entregue em separado pela Automatic, junto com a instalação (ela não
+aparece neste manual nem no código). O acesso é fixo: vem gravado no programa,
+não pode ser alterado, desativado nem excluído, e funciona mesmo com o banco
+vazio (instalação nova ou banco restaurado). Guarde a senha em lugar seguro e
+não use o mestre para operar a máquina no dia a dia.
+
+Só o mestre vê o item **Usuários e acessos** no menu inferior. Nessa tela:
+
+- **Novo usuário**: informe nome completo, login (sugerido a partir do nome,
+  ex.: `maria.souza`), cargo, registro (CREA, CRQ, matrícula) e e-mail. Ao
+  clicar em **Criar e gerar senha**, o sistema gera uma senha aleatória de 10
+  caracteres e mostra **uma única vez**, com o botão **Copiar**. Entregue usuário
+  e senha à pessoa. Se perder, gere outra.
+- **Editar** (lápis): corrige nome, login, cargo, registro e e-mail. As
+  mudanças valem nos próximos relatórios; os já emitidos não mudam.
+- **Gerar nova senha** (chave): a senha antiga deixa de valer e a pessoa é
+  desconectada. Marque **Senha provisória** para obrigar a pessoa a criar a
+  própria senha no próximo login.
+- **Desativar / Reativar**: bloqueia o acesso sem apagar nada. Use quando
+  alguém sai da empresa.
+- **Excluir** (lixeira): remove o acesso. Ensaios e relatórios feitos por essa
+  pessoa continuam com o nome gravado.
+
+A aba **Registro de atividades** mostra quem fez o quê e quando: entradas e
+saídas, tentativas de login recusadas, usuários criados ou alterados, senhas
+trocadas ou redefinidas, ensaios iniciados, editados ou excluídos, relatórios
+gerados ou excluídos, clientes excluídos e alterações nas Configurações. Filtre
+por usuário ou por ação.
+
+Segurança: as senhas ficam no banco só como hash PBKDF2-SHA256 com salt
+individual (ninguém consegue ler a senha). A sessão fica num cookie protegido
+(HttpOnly), e no banco fica só o hash do token. Usuários, sessões e registro de
+atividades ficam no `tracao.db` e entram no backup.
+
 ---
 
 ## 12. Backup e restauração
@@ -555,6 +634,9 @@ Faça sempre um backup antes de atualizar o programa.
 | Porta 8000 ocupada | Mude `"server_port"` no `config.json` e o endereço do atalho. |
 | Faixa de sobrecarga / "Alarme de sobrecarga ativo" ao iniciar | Confira a máquina e a célula, depois clique em Reconhecer. Se dispara sem carga, faça a Tara e confira o limite e a unidade da força. |
 | Backup falha | A pasta existe e é gravável? Salve a pasta nova antes de testar. |
+| "Usuário ou senha incorretos" | Confira maiúsculas e minúsculas da senha (o usuário não diferencia). Usuário desativado também cai aqui. Peça ao mestre para gerar uma nova senha. |
+| "Muitas tentativas erradas" | Aguarde 5 minutos e tente de novo. |
+| "Sua sessão expirou" | Entre de novo. A sessão encerra após 8 h sem uso, ao gerar nova senha ou ao desativar o usuário. |
 
 Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
 
@@ -714,7 +796,13 @@ O servidor responde em `http://localhost:8000`. Principais rotas:
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/api/health` | Servidor no ar. |
+| GET | `/api/health` | Servidor no ar (não exige login). |
+| POST | `/api/auth/login` · `/api/auth/logout` | Entrar e sair. O login devolve o cookie de sessão `maq_sessao`. |
+| GET | `/api/auth/me` | Usuário logado. |
+| POST | `/api/auth/senha` | Trocar a própria senha. |
+| GET/POST/PUT/DELETE | `/api/usuarios` · `/api/usuarios/{id}` | Gestão de usuários (só mestre). Criar devolve a senha gerada. |
+| POST | `/api/usuarios/{id}/senha` | Gerar nova senha (só mestre). |
+| GET | `/api/auditoria?usuario=&acao=` | Registro de atividades (só mestre). |
 | GET | `/api/clp/conexao` | Estado da conexão com a IHM/CLP. |
 | GET | `/api/ensaios` · `/api/ensaios/{id}` | Lista e detalhe de ensaios de tração (`?cliente_id=`). |
 | PATCH | `/api/ensaios/{id}` | Altera só o cadastro (cliente, amostra…). |
@@ -738,8 +826,10 @@ O servidor responde em `http://localhost:8000`. Principais rotas:
 | POST | `/api/control/probe` | Diagnóstico de registrador (exige token). |
 | POST | `/api/scan` · `/api/ftp/fetch_csv` | Importação de CSV. |
 
-A API não tem autenticação além da senha das Configurações e só atende no
-próprio PC por padrão. Não exponha a porta para fora da rede local.
+Todas as rotas `/api`, menos login, logout e health, exigem a sessão de um
+usuário logado (resposta 401 sem ela). As rotas de configuração exigem ainda a
+senha do técnico ou o acesso mestre. O servidor só atende no próprio PC por
+padrão. Não exponha a porta para fora da rede local.
 
 ---
 

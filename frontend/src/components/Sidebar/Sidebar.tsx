@@ -7,6 +7,10 @@ import {
   ChevronRight,
   FileText,
   GitCompare,
+  KeyRound,
+  LogOut,
+  ShieldCheck,
+  UserCog,
   Moon,
   RotateCcw,
   Search,
@@ -24,6 +28,8 @@ import { useTheme } from "../../hooks/useTheme";
 import { useConfig } from "../../hooks/useConfig";
 import type { EnsaioFlexaoSummary, EnsaioSummary, ResultadoBusca, TipoBusca } from "../../types";
 import { ConexaoCLPIndicator } from "../Common/Status";
+import { useAuth } from "../../hooks/useAuth";
+import { FormTrocarSenha } from "../Auth/LoginScreen";
 
 const FILTROS: { key: TipoBusca; label: string }[] = [
   { key: "todos", label: "Todos" },
@@ -46,6 +52,7 @@ interface Props {
   onViewFlexao: () => void;
   onViewClientes: () => void;
   onViewRelatorios: () => void;
+  onViewUsuarios: () => void;
   onOpenCliente: (id: number) => void;
   onOpenFlexao: (id: number) => void;
   onSetCompare: (ids: number[]) => void;
@@ -66,6 +73,7 @@ export default function Sidebar({
   onViewFlexao,
   onViewClientes,
   onViewRelatorios,
+  onViewUsuarios,
   onOpenCliente,
   onOpenFlexao,
   onSetCompare,
@@ -84,6 +92,9 @@ export default function Sidebar({
   ].sort((a, b) => (b.e.created_at ?? "").localeCompare(a.e.created_at ?? ""));
   const reimportMut = useReimportAll();
   const { tema, alternar } = useTheme();
+  const { usuario, sair } = useAuth();
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
+  const [senhaOk, setSenhaOk] = useState(false);
 
   // Busca: espera o operador parar de digitar antes de consultar
   const [texto, setTexto] = useState("");
@@ -311,7 +322,50 @@ export default function Sidebar({
           <Settings size={15} />
           Configurações
         </button>
+        {usuario.mestre && (
+          <NavButton ativo={currentView === "usuarios"} onClick={onViewUsuarios} icon={<UserCog size={15} />} label="Usuários e acessos" />
+        )}
       </div>
+
+      {/* Usuário logado */}
+      <div className="px-3 py-2.5 border-t border-border flex items-center gap-2">
+        <div className={clsx(
+          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold",
+          usuario.mestre ? "bg-amber-500/20 text-amber-300" : "bg-accent/15 text-accent",
+        )}>
+          {usuario.mestre ? <ShieldCheck size={15} /> : iniciais(usuario.nome)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-white truncate" title={usuario.nome}>{usuario.nome}</p>
+          <p className="text-[11px] text-muted truncate">{usuario.cargo || usuario.login}</p>
+        </div>
+        {!usuario.mestre && (
+          <button onClick={() => { setSenhaOk(false); setTrocandoSenha(true); }} title="Trocar minha senha"
+            className="p-1.5 rounded text-muted hover:text-accent transition-colors">
+            <KeyRound size={14} />
+          </button>
+        )}
+        <button onClick={sair} title="Sair"
+          className="p-1.5 rounded text-muted hover:text-red-400 transition-colors">
+          <LogOut size={14} />
+        </button>
+      </div>
+
+      {trocandoSenha && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setTrocandoSenha(false)}>
+          <div className="w-full max-w-sm bg-surface border border-border rounded-xl p-5" onClick={(e) => e.stopPropagation()}>
+            {senhaOk ? (
+              <div className="space-y-3">
+                <p className="text-sm text-emerald-300">Senha trocada. Use a nova senha no próximo login.</p>
+                <button onClick={() => setTrocandoSenha(false)}
+                  className="w-full px-4 py-2 bg-accent text-bg rounded-lg font-semibold text-sm">Fechar</button>
+              </div>
+            ) : (
+              <FormTrocarSenha onPronto={() => setSenhaOk(true)} onCancelar={() => setTrocandoSenha(false)} />
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -487,4 +541,9 @@ function Stat({ label, value }: { label: string; value: string }) {
       <span className="font-mono text-slate-300">{value}</span>
     </span>
   );
+}
+
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/);
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
 }

@@ -41,6 +41,7 @@ import { BigValue, SobrecargaAlerta, StatusEnsaioBar, fmtBig, fmtKgf, type Statu
 import FlexaoResultado from "./FlexaoResultado";
 import { confirmarExclusao } from "../Sidebar/Sidebar";
 import CadastroTeste, { CADASTRO_VAZIO, type CadastroForm } from "../Common/CadastroTeste";
+import { useUsuarioOpcional } from "../../hooks/useAuth";
 
 const CADASTRO_KEY = "maq-tracao.cadastro-flexao";
 
@@ -259,7 +260,12 @@ function ControleTab({ onOpenEnsaios }: { onOpenEnsaios: () => void }) {
   // Leitura ao vivo mesmo com o ensaio parado (conferir condições antes de iniciar).
   const [live, setLive] = useState<{ forca: number | null; desloc: number | null }>({ forca: null, desloc: null });
   const [status, setStatus] = useState<StatusEnsaio>("parado");
-  const [cadastro, setCadastro] = useState<CadastroForm>(cadastroSalvo);
+  // O operador do teste é o usuário logado (pode ser trocado se outra pessoa executar).
+  const usuarioLogado = useUsuarioOpcional();
+  const [cadastro, setCadastro] = useState<CadastroForm>(() => {
+    const c = cadastroSalvo();
+    return usuarioLogado && !usuarioLogado.mestre ? { ...c, operador: usuarioLogado.nome } : c;
+  });
 
   useEffect(() => {
     try { localStorage.setItem(CADASTRO_KEY, JSON.stringify(cadastro)); } catch { /* ignore */ }

@@ -9,6 +9,7 @@ import sys
 import time
 import unicodedata
 from contextlib import asynccontextmanager
+from datetime import datetime as _datetime
 from pathlib import Path
 
 # Windows: o console usa cp1252 e prints de debug com Unicode (ex.: setas, σ, ε)
@@ -29,16 +30,18 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, defer
 
-from . import acesso
+from . import acesso, usuarios
 from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
 from .database import (
+    AuditoriaDB,
     ClienteDB,
     EnsaioDB,
     EnsaioFlexaoDB,
     ParametrosIHMDB,
     RelatorioDB,
     SessionLocal,
+    UsuarioDB,
     engine,
     get_db,
 )
@@ -356,9 +359,53 @@ async def lifespan(app: FastAPI):
 # App
 # ---------------------------------------------------------------------------
 
+# ── Login ────────────────────────────────────────────────────────────────
+# Toda rota /api exige sessão (cookie HttpOnly), menos as de _ROTAS_PUBLICAS. O
+# usuário logado fica em request.state.usuario.
+_ROTAS_PUBLICAS = {"/api/auth/login", "/api/auth/logout", "/api/health"}
+
+
+def exigir_login(request: Request, db: Session = Depends(get_db)) -> None:
+    path = request.url.path
+    if not path.startswith("/api") or path in _ROTAS_PUBLICAS:
+        return
+    u = usuarios.usuario_da_sessao(db, request.cookies.get(usuarios.COOKIE))
+    if not u:
+        raise HTTPException(status_code=401, detail="Faça login para continuar.")
+    # Com senha provisória, só dá para ver a sessão e trocar a senha.
+    if u.trocar_senha and path not in ("/api/auth/me", "/api/auth/senha"):
+        raise HTTPException(status_code=403, detail="Troque a senha provisória para continuar.")
+    request.state.usuario = u
+
+
+def usuario_atual(request: Request) -> "usuarios.Usuario":
+    u = getattr(request.state, "usuario", None)
+    if u is None:
+        raise HTTPException(status_code=401, detail="Faça login para continuar.")
+    return u
+
+
+def exigir_mestre(request: Request) -> None:
+    if not usuario_atual(request).mestre:
+        raise HTTPException(status_code=403, detail="Só o acesso mestre pode fazer isso.")
+
+
+def _utcnow():
+    return _datetime.utcnow()
+
+
+def _ip(request: Request) -> str:
+    return request.client.host if request.client else ""
+
+
+def _auditar(request: Request, db: Session, acao: str, detalhe: str = "") -> None:
+    usuarios.auditar(db, getattr(request.state, "usuario", None), acao, detalhe, _ip(request))
+
+
 # Na instalação do cliente a documentação da API (/docs, /redoc) fica desligada.
 _api_docs = {} if not _HOME else {"docs_url": None, "redoc_url": None, "openapi_url": None}
-app = FastAPI(title="Analisador de Ensaios de Tração", version="1.0.0", lifespan=lifespan, **_api_docs)
+app = FastAPI(title="Analisador de Ensaios de Tração", version="1.0.0", lifespan=lifespan,
+              dependencies=[Depends(exigir_login)], **_api_docs)
 
 app.add_middleware(
     CORSMiddleware,
@@ -392,6 +439,7 @@ def _ensaio_summary_fields(r: EnsaioDB, clientes: dict[int, str]) -> dict:
         amostra=r.amostra or "",
         norma=r.norma or "",
         operador=r.operador or "",
+        usuario_nome=r.usuario_nome or "",
     )
 
 
@@ -431,7 +479,7 @@ def get_ensaio(id: int, db: Session = Depends(get_db)):
 
 
 @app.patch("/api/ensaios/{id}", response_model=EnsaioDetail)
-def update_ensaio(id: int, body: EnsaioUpdate, db: Session = Depends(get_db)):
+def update_ensaio(id: int, body: EnsaioUpdate, request: Request, db: Session = Depends(get_db)):
     r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
@@ -446,6 +494,8 @@ def update_ensaio(id: int, body: EnsaioUpdate, db: Session = Depends(get_db)):
         if v is not None:
             setattr(r, campo, v.strip() if campo != "observacoes" else v)
     db.commit()
+    _auditar(request, db, "ensaio_editado",
+             f"Tração #{id}: " + ", ".join(k for k, v in body.model_dump(exclude_unset=True).items()))
     return get_ensaio(id, db)
 
 
@@ -513,12 +563,14 @@ def get_parametros_ihm(id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/ensaios/{id}", status_code=204)
-def delete_ensaio(id: int, db: Session = Depends(get_db)):
+def delete_ensaio(id: int, request: Request, db: Session = Depends(get_db)):
     r = db.query(EnsaioDB).filter(EnsaioDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
+    detalhe = f"Tração #{r.id} — {r.nome} ({r.filename})"
     db.delete(r)
     db.commit()
+    _auditar(request, db, "ensaio_excluido", detalhe)
 
 
 @app.post("/api/ensaios/{id}/reimport")
@@ -591,10 +643,19 @@ def reimport_all(db: Session = Depends(get_db)):
     return {"reimported": len([r for r in results if r["ok"]]), "details": results}
 
 
+def _dados_relatorio_usuario(db: Session, r, u: "usuarios.Usuario") -> dict:
+    """Quem emite o relatório (usuário logado) e quem executou o ensaio."""
+    return {
+        "emissor": u.publico(),
+        "executor": (getattr(r, "usuario_nome", "") or getattr(r, "operador", "") or ""),
+    }
+
+
 @app.post("/api/relatorio")
-def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
+def generate_report(req: ReportRequest, request: Request, db: Session = Depends(get_db)):
+    u = usuario_atual(request)
     if req.tipo == "flexao":
-        return _generate_report_flexao(req, db)
+        return _generate_report_flexao(req, db, request, u)
     r = db.query(EnsaioDB).filter(EnsaioDB.id == req.ensaio_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio não encontrado")
@@ -614,11 +675,13 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
                 except Exception as exc:
                     print(f"[relatorio] falha ao carregar ensaio {cid} para comparativo: {exc}", flush=True)
 
-    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series)
-    return _salvar_relatorio(db, req, r, html, "tracao")
+    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series,
+                                responsavel=_dados_relatorio_usuario(db, r, u))
+    return _salvar_relatorio(db, req, r, html, "tracao", request, u)
 
 
-def _generate_report_flexao(req: ReportRequest, db: Session) -> HTMLResponse:
+def _generate_report_flexao(req: ReportRequest, db: Session, request: Request,
+                            u: "usuarios.Usuario") -> HTMLResponse:
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == req.ensaio_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
@@ -637,11 +700,13 @@ def _generate_report_flexao(req: ReportRequest, db: Session) -> HTMLResponse:
                 except Exception as exc:
                     print(f"[relatorio] falha ao carregar ensaio de flexão {cid} para comparativo: {exc}", flush=True)
 
-    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series, modo="flexao")
-    return _salvar_relatorio(db, req, r, html, "flexao")
+    html = generate_html_report(r, df, kpis, req, comparacao_series=comparacao_series, modo="flexao",
+                                responsavel=_dados_relatorio_usuario(db, r, u))
+    return _salvar_relatorio(db, req, r, html, "flexao", request, u)
 
 
-def _salvar_relatorio(db: Session, req: ReportRequest, r, html: str, tipo: str) -> HTMLResponse:
+def _salvar_relatorio(db: Session, req: ReportRequest, r, html: str, tipo: str,
+                      request: Request, u: "usuarios.Usuario") -> HTMLResponse:
     """Guarda o relatório gerado para abrir/buscar depois."""
     cliente_id = req.cliente_id or r.cliente_id
     cliente_nome = req.cliente.nome.strip()
@@ -661,9 +726,13 @@ def _salvar_relatorio(db: Session, req: ReportRequest, r, html: str, tipo: str) 
         cliente_nome=cliente_nome,
         request_json=json.dumps(req_dump, ensure_ascii=False),
         html=html,
+        usuario_id=u.id,
+        usuario_nome=u.nome,
     )
     db.add(rel)
     db.commit()
+    _auditar(request, db, "relatorio_gerado",
+             f"Relatório #{rel.id} {rel.numero or ''} — {tipo} #{r.id} {r.nome}")
     return HTMLResponse(content=html, headers={"X-Relatorio-Id": str(rel.id)})
 
 
@@ -767,7 +836,8 @@ def _relatorio_summary(rel: RelatorioDB) -> RelatorioSummary:
     return RelatorioSummary(
         id=rel.id, ensaio_id=rel.ensaio_id, tipo=rel.tipo or "tracao", cliente_id=rel.cliente_id,
         numero=rel.numero or "", titulo=rel.titulo or "",
-        cliente_nome=rel.cliente_nome or "", created_at=rel.created_at,
+        cliente_nome=rel.cliente_nome or "", usuario_nome=rel.usuario_nome or "",
+        created_at=rel.created_at,
     )
 
 
@@ -798,12 +868,14 @@ def get_relatorio_html(id: int, download: bool = False, db: Session = Depends(ge
 
 
 @app.delete("/api/relatorios/{id}", status_code=204)
-def delete_relatorio(id: int, db: Session = Depends(get_db)):
+def delete_relatorio(id: int, request: Request, db: Session = Depends(get_db)):
     rel = db.query(RelatorioDB).filter(RelatorioDB.id == id).first()
     if not rel:
         raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    detalhe = f"Relatório #{rel.id} {rel.numero or ''} — {rel.titulo}"
     db.delete(rel)
     db.commit()
+    _auditar(request, db, "relatorio_excluido", detalhe)
     return Response(status_code=204)
 
 
@@ -851,15 +923,17 @@ def update_cliente(id: int, body: ClienteIn, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/clientes/{id}", status_code=204)
-def delete_cliente(id: int, db: Session = Depends(get_db)):
+def delete_cliente(id: int, request: Request, db: Session = Depends(get_db)):
     """Remove o cliente; ensaios e relatórios dele continuam, só sem cliente."""
     c = db.query(ClienteDB).filter(ClienteDB.id == id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     for model in (EnsaioDB, EnsaioFlexaoDB, RelatorioDB):
         db.query(model).filter(model.cliente_id == id).update({model.cliente_id: None})
+    nome = c.nome
     db.delete(c)
     db.commit()
+    _auditar(request, db, "cliente_excluido", f"Cliente #{id} — {nome}")
     return Response(status_code=204)
 
 
@@ -985,8 +1059,12 @@ def get_normas(tipo: str | None = None):
     return listar_normas(tipo)
 
 
-def exigir_tecnico(x_config_token: str | None = Header(default=None)) -> None:
-    """Rotas que mudam configuração/registradores exigem o token da senha."""
+def exigir_tecnico(request: Request, x_config_token: str | None = Header(default=None)) -> None:
+    """Rotas que mudam configuração/registradores exigem o token da senha das
+    Configurações. O acesso mestre já tem essa permissão."""
+    u = getattr(request.state, "usuario", None)
+    if u is not None and u.mestre:
+        return
     if not acesso.token_valido(x_config_token):
         raise HTTPException(status_code=401, detail="Senha das Configurações necessária.")
 
@@ -1001,10 +1079,12 @@ class _TrocaSenhaIn(BaseModel):
 
 
 @app.post("/api/config/login")
-def config_login(body: _SenhaIn):
+def config_login(body: _SenhaIn, request: Request, db: Session = Depends(get_db)):
     if not acesso.confere(body.senha, _config):
         time.sleep(1)  # atrasa tentativas por força bruta
+        _auditar(request, db, "config_senha_errada")
         raise HTTPException(status_code=401, detail="Senha incorreta.")
+    _auditar(request, db, "config_aberta")
     return {"token": acesso.novo_token()}
 
 
@@ -1015,18 +1095,20 @@ def config_logout(x_config_token: str | None = Header(default=None)):
 
 
 @app.get("/api/config/sessao")
-def config_sessao(x_config_token: str | None = Header(default=None)):
-    return {"ok": acesso.token_valido(x_config_token)}
+def config_sessao(request: Request, x_config_token: str | None = Header(default=None)):
+    u = getattr(request.state, "usuario", None)
+    return {"ok": bool(u and u.mestre) or acesso.token_valido(x_config_token)}
 
 
 @app.post("/api/config/senha", dependencies=[Depends(exigir_tecnico)])
-def config_trocar_senha(body: _TrocaSenhaIn):
+def config_trocar_senha(body: _TrocaSenhaIn, request: Request, db: Session = Depends(get_db)):
     if not acesso.confere(body.atual, _config):
         raise HTTPException(status_code=401, detail="Senha atual incorreta.")
     if len(body.nova) < 4:
         raise HTTPException(status_code=422, detail="A senha nova precisa ter ao menos 4 caracteres.")
     _config["senha_config"] = acesso.hash_senha(body.nova)
     _save_config(_config)
+    _auditar(request, db, "config_senha_trocada")
     return {"ok": True}
 
 
@@ -1036,9 +1118,12 @@ def get_config():
 
 
 @app.put("/api/config", dependencies=[Depends(exigir_tecnico)])
-def update_config(body: ConfigModel):
-    _config.update(body.model_dump())
+def update_config(body: ConfigModel, request: Request, db: Session = Depends(get_db)):
+    novo = body.model_dump()
+    mudou = sorted(k for k, v in novo.items() if _config.get(k) != v)
+    _config.update(novo)
     _save_config(_config)
+    _auditar(request, db, "config_alterada", ", ".join(mudou)[:1500] or "sem mudanças")
     if body.auto_load:
         _watcher.start(body.watch_directory)
         for csv_file in sorted(Path(body.watch_directory).glob("*.csv")):
@@ -1153,8 +1238,8 @@ def _aplicar_cadastro(db, rec, info: dict | None) -> None:
         cid = info.get("cliente_id")
         if cid and db.query(ClienteDB).filter(ClienteDB.id == cid).first():
             rec.cliente_id = cid
-        for campo in ("amostra", "norma", "operador"):
-            if info.get(campo) and hasattr(rec, campo):
+        for campo in ("amostra", "norma", "operador", "usuario_id", "usuario_nome"):
+            if info.get(campo) is not None and info.get(campo) != "" and hasattr(rec, campo):
                 setattr(rec, campo, info[campo])
         if info.get("setup") and hasattr(rec, "setup_json"):
             rec.setup_json = json.dumps(info["setup"])
@@ -1195,7 +1280,8 @@ def _pulse_sentido(ctrl: ModbusController, sentido: str | None, pulse_ms: int) -
 
 
 @app.post("/api/control/start")
-def control_start(req: ControlStartRequest):
+def control_start(req: ControlStartRequest, request: Request, db: Session = Depends(get_db)):
+    u = usuario_atual(request)
     ip, port, timeout = _clp_conn()
     if not ip:
         raise HTTPException(status_code=400, detail="IP do CLP não configurado — preencha em Configurações → Controle (CLP).")
@@ -1224,7 +1310,8 @@ def control_start(req: ControlStartRequest):
             _config["comprimento_inicial_mm"] = req.comprimento_inicial
         _config["proximo_ensaio"] = {
             "cliente_id": req.cliente_id, "amostra": req.amostra.strip(),
-            "norma": req.norma.strip(), "operador": req.operador.strip(),
+            "norma": req.norma.strip(), "operador": req.operador.strip() or u.nome,
+            "usuario_id": u.id, "usuario_nome": u.nome,
             "setup": {
                 "sentido": req.sentido, "velocidade": req.velocidade,
                 "deslocamento": req.deslocamento, "limite_forca": req.limite_forca,
@@ -1238,6 +1325,8 @@ def control_start(req: ControlStartRequest):
         if sent:
             applied["sentido"] = sent
         ctrl.pulse("iniciar", pulse_ms)
+        _auditar(request, db, "ensaio_iniciado",
+                 f"Tração — amostra {req.amostra.strip() or '-'}, sentido {req.sentido}, setpoints {applied}")
         return {"status": "started", "sentido": req.sentido, "setpoints": applied}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao iniciar ensaio: {exc}")
@@ -1706,6 +1795,7 @@ def _flexao_summary_fields(r: EnsaioFlexaoDB, clientes: dict[int, str]) -> dict:
         cliente_id=r.cliente_id,
         cliente_nome=clientes.get(r.cliente_id, "") if r.cliente_id else "",
         amostra=r.amostra or "", norma=r.norma or "", operador=r.operador or "",
+        usuario_nome=r.usuario_nome or "",
     )
 
 
@@ -1796,16 +1886,19 @@ def get_curvas_flexao(id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/flexao/ensaios/{id}", status_code=204)
-def delete_ensaio_flexao(id: int, db: Session = Depends(get_db)):
+def delete_ensaio_flexao(id: int, request: Request, db: Session = Depends(get_db)):
     r = db.query(EnsaioFlexaoDB).filter(EnsaioFlexaoDB.id == id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Ensaio de flexão não encontrado")
+    detalhe = f"Flexão #{r.id} — {r.nome} ({r.filename})"
     db.delete(r)
     db.commit()
+    _auditar(request, db, "ensaio_excluido", detalhe)
 
 
 @app.post("/api/flexao/control/start")
-def flexao_control_start(req: FlexaoControlStartRequest):
+def flexao_control_start(req: FlexaoControlStartRequest, request: Request, db: Session = Depends(get_db)):
+    u = usuario_atual(request)
     if not _config.get("flexao_habilitada", True):
         raise HTTPException(status_code=403, detail="Flexão desabilitada nesta máquina (Configurações → Geral).")
     ip, port, timeout = _clp_conn()
@@ -1838,7 +1931,8 @@ def flexao_control_start(req: FlexaoControlStartRequest):
                 _config[cfg_key] = val
         _config["proximo_ensaio_flexao"] = {
             "cliente_id": req.cliente_id, "amostra": req.amostra.strip(),
-            "operador": req.operador.strip(),
+            "operador": req.operador.strip() or u.nome,
+            "usuario_id": u.id, "usuario_nome": u.nome,
         }
         _save_config(_config)
 
@@ -1847,6 +1941,8 @@ def flexao_control_start(req: FlexaoControlStartRequest):
         if sent:
             applied["sentido"] = sent
         ctrl.pulse("iniciar", pulse_ms)
+        _auditar(request, db, "ensaio_iniciado",
+                 f"Flexão — amostra {req.amostra.strip() or '-'}, setpoints {applied}")
         return {"status": "started", "sentido": req.sentido, "setpoints": applied}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao iniciar ensaio de flexão: {exc}")
@@ -2035,6 +2131,211 @@ async def flexao_control_stream(request: Request):
             "Connection":        "keep-alive",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Login, gestão de usuários (acesso mestre) e auditoria
+# ---------------------------------------------------------------------------
+
+class _LoginIn(BaseModel):
+    login: str
+    senha: str
+
+
+class _MinhaSenhaIn(BaseModel):
+    atual: str
+    nova: str
+
+
+class _UsuarioIn(BaseModel):
+    login: str
+    nome: str
+    cargo: str = ""
+    registro: str = ""
+    email: str = ""
+    ativo: bool = True
+
+
+class _NovaSenhaIn(BaseModel):
+    # Vazio = o sistema gera uma senha aleatória
+    senha: str = ""
+    trocar_no_login: bool = False
+
+
+def _usuario_out(u: UsuarioDB) -> dict:
+    return {
+        "id": u.id, "login": u.login, "nome": u.nome, "cargo": u.cargo or "",
+        "registro": u.registro or "", "email": u.email or "", "ativo": bool(u.ativo),
+        "trocar_senha": bool(u.trocar_senha), "created_at": u.created_at,
+        "ultimo_login": u.ultimo_login,
+    }
+
+
+def _set_cookie(resp: Response, token: str) -> None:
+    resp.set_cookie(usuarios.COOKIE, token, httponly=True, samesite="strict", path="/",
+                    max_age=usuarios.SESSAO_MAX_H * 3600)
+
+
+@app.post("/api/auth/login")
+def auth_login(body: _LoginIn, request: Request, db: Session = Depends(get_db)):
+    login = usuarios.normaliza_login(body.login)
+    fim = usuarios.bloqueado_ate(login)
+    if fim:
+        minutos = max(1, int((fim - time.time()) // 60) + 1)
+        raise HTTPException(status_code=429,
+                            detail=f"Muitas tentativas erradas. Tente de novo em {minutos} min.")
+    u = usuarios.autenticar(db, login, body.senha)
+    if not u:
+        time.sleep(0.5)  # atrasa força bruta
+        usuarios.auditar(db, None, "login_falhou", f"login '{login}'", _ip(request), login=login)
+        raise HTTPException(status_code=401, detail="Usuário ou senha incorretos.")
+    token = usuarios.criar_sessao(db, u, _ip(request))
+    usuarios.auditar(db, u, "login", "", _ip(request))
+    resp = JSONResponse(content=u.publico())
+    _set_cookie(resp, token)
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get(usuarios.COOKIE)
+    u = usuarios.usuario_da_sessao(db, token)
+    usuarios.encerrar_sessao(db, token)
+    if u:
+        usuarios.auditar(db, u, "logout", "", _ip(request))
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie(usuarios.COOKIE, path="/")
+    return resp
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    return usuario_atual(request).publico()
+
+
+@app.post("/api/auth/senha")
+def auth_trocar_senha(body: _MinhaSenhaIn, request: Request, db: Session = Depends(get_db)):
+    u = usuario_atual(request)
+    if u.mestre:
+        raise HTTPException(status_code=403, detail="A senha do acesso mestre é fixa e não pode ser alterada.")
+    rec = db.query(UsuarioDB).filter(UsuarioDB.id == u.id).first()
+    if not rec or not usuarios.confere_senha(body.atual, rec.senha_hash):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta.")
+    erro = usuarios.valida_senha_nova(body.nova)
+    if erro:
+        raise HTTPException(status_code=422, detail=erro)
+    if body.nova == body.atual:
+        raise HTTPException(status_code=422, detail="A senha nova precisa ser diferente da atual.")
+    rec.senha_hash = usuarios.hash_senha(body.nova)
+    rec.trocar_senha = False
+    rec.updated_at = _utcnow()
+    db.commit()
+    # Derruba as outras sessões do usuário (ex.: outro PC)
+    usuarios.encerrar_sessoes_do_usuario(db, u.id, exceto_token=request.cookies.get(usuarios.COOKIE))
+    _auditar(request, db, "senha_trocada", "pelo próprio usuário")
+    return {"ok": True}
+
+
+@app.get("/api/usuarios", dependencies=[Depends(exigir_mestre)])
+def listar_usuarios(db: Session = Depends(get_db)):
+    return [_usuario_out(u) for u in db.query(UsuarioDB).order_by(UsuarioDB.nome).all()]
+
+
+def _valida_usuario_in(body: _UsuarioIn) -> tuple[str, str]:
+    import re
+    login = usuarios.normaliza_login(body.login)
+    nome = body.nome.strip()
+    if not re.fullmatch(r"[a-z0-9._-]{3,32}", login):
+        raise HTTPException(status_code=422,
+                            detail="Login: 3 a 32 caracteres, só letras minúsculas, números, ponto, hífen ou _.")
+    if login == usuarios.MESTRE_LOGIN:
+        raise HTTPException(status_code=422, detail="Esse login é reservado ao acesso mestre.")
+    if not nome:
+        raise HTTPException(status_code=422, detail="Informe o nome completo.")
+    return login, nome
+
+
+@app.post("/api/usuarios", status_code=201, dependencies=[Depends(exigir_mestre)])
+def criar_usuario(body: _UsuarioIn, request: Request, db: Session = Depends(get_db)):
+    login, nome = _valida_usuario_in(body)
+    if db.query(UsuarioDB).filter(UsuarioDB.login == login).first():
+        raise HTTPException(status_code=409, detail=f"Já existe um usuário com o login '{login}'.")
+    senha = usuarios.gerar_senha()
+    u = UsuarioDB(login=login, nome=nome, cargo=body.cargo.strip(), registro=body.registro.strip(),
+                  email=body.email.strip(), ativo=body.ativo, senha_hash=usuarios.hash_senha(senha),
+                  trocar_senha=False)
+    db.add(u)
+    db.commit()
+    _auditar(request, db, "usuario_criado", f"{login} — {nome}")
+    # A senha gerada só aparece agora; no banco fica só o hash.
+    return {"usuario": _usuario_out(u), "senha": senha}
+
+
+@app.put("/api/usuarios/{id}", dependencies=[Depends(exigir_mestre)])
+def editar_usuario(id: int, body: _UsuarioIn, request: Request, db: Session = Depends(get_db)):
+    u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    login, nome = _valida_usuario_in(body)
+    if db.query(UsuarioDB).filter(UsuarioDB.login == login, UsuarioDB.id != id).first():
+        raise HTTPException(status_code=409, detail=f"Já existe um usuário com o login '{login}'.")
+    antes = _usuario_out(u)
+    u.login, u.nome = login, nome
+    u.cargo, u.registro, u.email = body.cargo.strip(), body.registro.strip(), body.email.strip()
+    u.ativo = body.ativo
+    u.updated_at = _utcnow()
+    db.commit()
+    if not u.ativo:
+        usuarios.encerrar_sessoes_do_usuario(db, u.id)
+    depois = _usuario_out(u)
+    mudou = [k for k in ("login", "nome", "cargo", "registro", "email", "ativo") if antes[k] != depois[k]]
+    _auditar(request, db, "usuario_editado", f"{login}: {', '.join(mudou) or 'sem mudanças'}")
+    return depois
+
+
+@app.post("/api/usuarios/{id}/senha", dependencies=[Depends(exigir_mestre)])
+def redefinir_senha_usuario(id: int, body: _NovaSenhaIn, request: Request, db: Session = Depends(get_db)):
+    u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    senha = body.senha or usuarios.gerar_senha()
+    if body.senha:
+        erro = usuarios.valida_senha_nova(senha)
+        if erro:
+            raise HTTPException(status_code=422, detail=erro)
+    u.senha_hash = usuarios.hash_senha(senha)
+    u.trocar_senha = body.trocar_no_login
+    u.updated_at = _utcnow()
+    db.commit()
+    usuarios.encerrar_sessoes_do_usuario(db, u.id)
+    _auditar(request, db, "senha_redefinida", f"{u.login} (pelo mestre)")
+    return {"usuario": _usuario_out(u), "senha": senha}
+
+
+@app.delete("/api/usuarios/{id}", status_code=204, dependencies=[Depends(exigir_mestre)])
+def excluir_usuario(id: int, request: Request, db: Session = Depends(get_db)):
+    """Exclui o acesso. Os ensaios e relatórios dele continuam com o nome gravado."""
+    u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    detalhe = f"{u.login} — {u.nome}"
+    usuarios.encerrar_sessoes_do_usuario(db, u.id)
+    db.delete(u)
+    db.commit()
+    _auditar(request, db, "usuario_excluido", detalhe)
+    return Response(status_code=204)
+
+
+@app.get("/api/auditoria", dependencies=[Depends(exigir_mestre)])
+def listar_auditoria(usuario: str = "", acao: str = "", limite: int = 300, db: Session = Depends(get_db)):
+    q = db.query(AuditoriaDB)
+    if usuario:
+        q = q.filter(AuditoriaDB.usuario == usuarios.normaliza_login(usuario))
+    if acao:
+        q = q.filter(AuditoriaDB.acao == acao)
+    rows = q.order_by(AuditoriaDB.id.desc()).limit(max(1, min(limite, 2000))).all()
+    return [{"id": a.id, "data": a.data, "usuario": a.usuario, "acao": a.acao,
+             "detalhe": a.detalhe or "", "ip": a.ip or ""} for a in rows]
 
 
 # Serve frontend dist (built with `npm run build` in frontend/)

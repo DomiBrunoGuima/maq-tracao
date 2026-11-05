@@ -61,6 +61,7 @@ export default function RelatoriosView({ onOpenEnsaio, onOpenFlexao }: {
                 <th className="px-4 py-2 font-medium">Cliente</th>
                 <th className="px-4 py-2 font-medium">Ensaio</th>
                 <th className="px-4 py-2 font-medium">Gerado em</th>
+                <th className="px-4 py-2 font-medium">Emitido por</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -80,6 +81,7 @@ export default function RelatoriosView({ onOpenEnsaio, onOpenFlexao }: {
                     )}
                   </td>
                   <td className="px-4 py-2 text-slate-300">{dataUTC(r.created_at).toLocaleString("pt-BR")}</td>
+                  <td className="px-4 py-2 text-slate-300">{r.usuario_nome || "—"}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-3 text-muted">
                       <a href={relatorioUrl(r.id)} target="_blank" rel="noreferrer" title="Abrir" className="hover:text-accent"><ExternalLink size={14} /></a>
