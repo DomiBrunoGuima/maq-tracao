@@ -315,6 +315,11 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   const emergencia = frame?.emergencia ?? live?.emergencia;
   const limSup = frame?.limite_superior ?? live?.limite_superior;
   const limInf = frame?.limite_inferior ?? live?.limite_inferior;
+  // Alongamento ao vivo nas duas formas: d/L₀ e (d − L₀)/L₀, em %
+  const l0Num = Number(form.comprimento_inicial);
+  const alongaAtual = deslocShown != null && l0Num > 0
+    ? `${(deslocShown / l0Num * 100).toFixed(2)} % · (d−L₀)/L₀ ${((deslocShown - l0Num) / l0Num * 100).toFixed(2)} %`
+    : undefined;
 
   async function handleStart() {
     setError(null);
@@ -420,6 +425,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
           alt={forcaShown != null ? `${fmtBig(forcaShown, 1)} N` : undefined}
           color={forcaShown != null ? "text-sky-300" : "text-muted"} />
         <BigValue icon={<MoveHorizontal size={18} />} label="Deslocamento atual" value={fmtBig(deslocShown, 2)} unit="mm"
+          sub={alongaAtual ? `Alongamento ${alongaAtual}` : undefined}
           color={deslocShown != null ? "text-violet-300" : "text-muted"} />
         <BigValue icon={<Gauge size={18} />} label="Força máxima"
           value={forcaMaxClp != null ? fmtKgf(forcaMaxClp) : maxForca > 0 ? fmtKgf(maxForca) : "—"} unit="kgf"

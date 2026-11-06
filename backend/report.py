@@ -264,8 +264,15 @@ def _linhas_resultado_tracao(kpis: dict, tensao_max, alongamento, area, l0) -> l
          _num(tensao_max), "MPa"),
         ("Força Máxima (Fmax)", _num(kpis.get("forca_max_N"), ".1f"), "N"),
         ("Força Máxima (Fmax)", _num(kpis.get("forca_max_kN"), ".4f"), "kN"),
-        ("Alongamento (A% = d/L₀×100)" if kpis.get("alonga_calc_pct") is not None else "Alongamento (δ)",
-         _num(alongamento), "%"),
+        ("Alongamento na Força Máxima (d/L₀×100)", _num(alongamento), "%"),
+    ]
+    if kpis.get("alonga_fmax_menos_l0_pct") is not None:
+        rows.append(("Alongamento na Força Máxima ((d−L₀)/L₀×100)", _num(kpis["alonga_fmax_menos_l0_pct"]), "%"))
+    rows.append(("Alongamento Final (d/L₀×100)", _num(kpis.get("alonga_final_pct")), "%"))
+    if kpis.get("alonga_final_menos_l0_pct") is not None:
+        rows.append(("Alongamento Final ((d−L₀)/L₀×100)", _num(kpis["alonga_final_menos_l0_pct"]), "%"))
+    rows += [
+        ("Deslocamento Final", _num(kpis.get("deslocamento_final_mm")), "mm"),
         ("Deslocamento Máximo", _num(kpis.get("deslocamento_max_mm")), "mm"),
         ("Tempo até a Força Máxima", _num(kpis.get("tempo_ruptura_s"), ".1f"), "s"),
         ("Rigidez (k)", _num(kpis.get("rigidez_N_mm")), "N/mm"),
@@ -632,7 +639,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 if ca is None:
                     ca = ck.get("alonga_ruptura_pct")
                 cmp_rows.append((nome, _num(ck.get("forca_max_N"), ".1f"), _num(ct), _num(ck.get("modulo_elasticidade_MPa"), ".1f"),
-                                 _num(ca), _num(ck.get("energia_J"))))
+                                 _num(ca), _num(ck.get("alonga_final_pct")), _num(ck.get("energia_J"))))
             if cmp_rows:
                 tab_num += 1
                 th = 'style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999"'
@@ -645,7 +652,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                        f'<th {th}>Ef (MPa)</th><th {th}>Deflexão máx. (mm)</th><th {th}>Energia (J)</th>'
                        if flexao else
                        f'<th {th}>Ensaio</th><th {th}>Fmax (N)</th><th {th}>σmax (MPa)</th>'
-                       f'<th {th}>E (MPa)</th><th {th}>Alongamento (%)</th><th {th}>Energia (J)</th>')
+                       f'<th {th}>E (MPa)</th><th {th}>Along. Fmáx (%)</th><th {th}>Along. final (%)</th><th {th}>Energia (J)</th>')
                     + '</tr></thead><tbody>'
                     + "".join(
                         f'<tr><td style="border:1px solid #bbb;padding:5px 9px">{_esc(r[0])}</td>'
@@ -731,7 +738,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             resumo = [
                 ("Módulo de Elasticidade", _num(kpis.get("modulo_elasticidade_GPa"), ".3f"), "GPa"),
                 ("Tensão Máxima", _num(tensao_max), "MPa"),
-                ("Alongamento", _num(alongamento), "%"),
+                ("Alongamento na Força Máxima", _num(alongamento), "%"),
+                ("Alongamento Final", _num(kpis.get("alonga_final_pct")), "%"),
                 ("Energia Absorvida", _num(kpis.get("energia_J")), "J"),
             ]
         resumo_html = "".join(

@@ -198,6 +198,27 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
         if ruptura_detectada and comprimento_inicial_mm else None
     )
 
+    # ── Alongamento final (último deslocamento do ensaio) ───────────────────
+    # Duas formas, a pedido: d/L₀×100 e (d − L₀)/L₀×100 (quando o deslocamento
+    # lido da máquina já inclui o comprimento inicial).
+    desl_validos = df["Deslocamento"].dropna()
+    deslocamento_final = float(desl_validos.iloc[-1]) if len(desl_validos) else None
+    alonga_final_pct: float | None = None
+    if deslocamento_final is not None:
+        if comprimento_inicial_mm:
+            alonga_final_pct = deslocamento_final / comprimento_inicial_mm * 100
+        elif "Alonga_Ruptura" in df.columns:
+            ult = df.loc[desl_validos.index[-1], "Alonga_Ruptura"]
+            alonga_final_pct = float(ult) if pd.notna(ult) else None
+    alonga_final_menos_l0_pct = (
+        (deslocamento_final - comprimento_inicial_mm) / comprimento_inicial_mm * 100
+        if deslocamento_final is not None and comprimento_inicial_mm else None
+    )
+    alonga_fmax_menos_l0_pct = (
+        (deslocamento_ruptura - comprimento_inicial_mm) / comprimento_inicial_mm * 100
+        if comprimento_inicial_mm else None
+    )
+
     return _clean({
         "forca_max_N": forca_max,
         "forca_max_kN": forca_max / 1000,
@@ -226,6 +247,10 @@ def calculate_kpis(df: pd.DataFrame, ihm_params: dict | None = None) -> dict:
         "forca_ruptura_N": forca_ruptura,
         "deslocamento_ruptura_mm": desl_ruptura_real,
         "alonga_ruptura_real_pct": alonga_ruptura_real,
+        "deslocamento_final_mm": deslocamento_final,
+        "alonga_final_pct": alonga_final_pct,
+        "alonga_final_menos_l0_pct": alonga_final_menos_l0_pct,
+        "alonga_fmax_menos_l0_pct": alonga_fmax_menos_l0_pct,
     })
 
 

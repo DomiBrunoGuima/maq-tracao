@@ -275,3 +275,26 @@ def test_forca_do_clp_em_kgf_vira_newton(monkeypatch):
 
     main._config["forca_clp_kgf"] = False
     assert all(r.get("scale", 1.0) == 1.0 for r in main._control_registers())
+
+
+def test_alongamento_final_duas_formas():
+    """Alongamento final usa o último deslocamento, nas formas d/L₀ e (d−L₀)/L₀."""
+    import pandas as pd
+    from backend.calculator import calculate_kpis
+
+    l0 = 50.0
+    desl = [0, 1, 2, 3, 4, 5, 6, 7]
+    forca = [0, 100, 200, 300, 400, 350, 200, 10]   # Fmáx em d=4, fim em d=7
+    df = pd.DataFrame({
+        "Forca_N": forca, "Deslocamento": desl,
+        "Tensao_Pa": [f / 10 for f in forca], "Tensao_Max": [f / 10 for f in forca],
+        "Deform_Along": [d / l0 for d in desl], "Alonga_Ruptura": [d / l0 * 100 for d in desl],
+        "Modulo_Elast": [1000.0] * 8, "elapsed_seconds": list(range(8)),
+        "fase": ["elastica"] * 4 + ["pico", "estriccao", "estriccao", "ruptura"],
+    })
+    k = calculate_kpis(df, ihm_params={"area_seccao": 10.0, "comprimento_inicial": l0})
+    assert k["alonga_calc_pct"] == pytest.approx(4 / l0 * 100)
+    assert k["deslocamento_final_mm"] == pytest.approx(7)
+    assert k["alonga_final_pct"] == pytest.approx(7 / l0 * 100)
+    assert k["alonga_final_menos_l0_pct"] == pytest.approx((7 - l0) / l0 * 100)
+    assert k["alonga_fmax_menos_l0_pct"] == pytest.approx((4 - l0) / l0 * 100)

@@ -311,15 +311,19 @@ export default function Dashboard({ ensaioId }: Props) {
       </header>
 
       {/* ── Valores principais em destaque ── */}
-      <div className="flex-shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 pt-4">
+      <div className="flex-shrink-0 grid grid-cols-2 lg:grid-cols-5 gap-3 px-4 pt-4">
         <HeroValue label="Força máxima" value={fmtKgf(kpis.forca_max_N)} unit="kgf" sub={`${fmt(kpis.forca_max_N, 0)} N · ${fmt(kpis.forca_max_kN, 2)} kN`} cor="text-rupture" />
         <HeroValue label="Tensão máxima" value={fmt(kpis.tensao_max_calc_MPa ?? kpis.tensao_max_MPa, 1)} unit="MPa"
           sub={kpis.tensao_rp02_MPa != null ? `Rp0,2 = ${fmt(kpis.tensao_rp02_MPa, 1)} MPa` : undefined} cor="text-sky-300" />
         <HeroValue label="Módulo de elasticidade"
           value={fmt((kpis.modulo_trecho_elastico_MPa ?? kpis.modulo_elasticidade_MPa) / 1000, 2)} unit="GPa"
           sub={kpis.r2_elastico != null ? `R² = ${kpis.r2_elastico.toFixed(4)}` : undefined} cor="text-emerald-300" />
-        <HeroValue label="Alongamento" value={fmt(kpis.alonga_calc_pct ?? kpis.alonga_ruptura_pct, 1)} unit="%"
-          sub={kpis.ruptura_detectada ? "na força máxima · ruptura detectada" : "na força máxima"} cor="text-violet-300" />
+        <HeroValue label="Alongamento na força máx." value={fmt(kpis.alonga_calc_pct ?? kpis.alonga_ruptura_pct, 1)} unit="%"
+          sub={kpis.alonga_fmax_menos_l0_pct != null
+            ? `d/L₀ · (d−L₀)/L₀ = ${fmt(kpis.alonga_fmax_menos_l0_pct, 1)} %` : "d/L₀"} cor="text-violet-300" />
+        <HeroValue label="Alongamento final" value={fmt(kpis.alonga_final_pct, 1)} unit="%"
+          sub={kpis.alonga_final_menos_l0_pct != null
+            ? `d/L₀ · (d−L₀)/L₀ = ${fmt(kpis.alonga_final_menos_l0_pct, 1)} %` : "d/L₀ no fim do ensaio"} cor="text-violet-300" />
       </div>
 
       {/* ── Content area: flex row, fills remaining height ── */}
@@ -467,8 +471,12 @@ export default function Dashboard({ ensaioId }: Props) {
               <KPICard compact label="Módulo E"
                 value={`${fmt(kpis.modulo_elasticidade_MPa, 0)} MPa`}
                 sub={`${fmt(kpis.modulo_elasticidade_GPa, 2)} GPa`} />
-              <KPICard compact label="Alongamento"
-                value={`${fmt(kpis.alonga_ruptura_pct)} %`} />
+              <KPICard compact label="Along. Fmáx"
+                value={`${fmt(kpis.alonga_calc_pct ?? kpis.alonga_ruptura_pct)} %`}
+                sub={kpis.alonga_fmax_menos_l0_pct != null ? `(d−L₀)/L₀ = ${fmt(kpis.alonga_fmax_menos_l0_pct)} %` : undefined} />
+              <KPICard compact label="Along. final"
+                value={`${fmt(kpis.alonga_final_pct)} %`}
+                sub={kpis.alonga_final_menos_l0_pct != null ? `(d−L₀)/L₀ = ${fmt(kpis.alonga_final_menos_l0_pct)} %` : undefined} />
               <KPICard compact label="Deslocamento"
                 value={`${fmt(kpis.deslocamento_max_mm)} mm`} />
               <KPICard compact label="Tempo Ruptura"

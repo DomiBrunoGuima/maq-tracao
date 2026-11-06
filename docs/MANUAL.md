@@ -213,7 +213,8 @@ Clique no ensaio na lista. A tela mostra:
 | E | Módulo de elasticidade: inclinação da reta σ × ε no trecho elástico. |
 | R² | Qualidade do ajuste da reta. Acima de 0,99 indica trecho elástico bem definido; abaixo de 0,98 gera aviso. |
 | Rp0,2 | Tensão de escoamento convencional: onde a curva cruza a reta elástica deslocada de 0,2 % de deformação. |
-| Alongamento A% | (Lf − L₀) ÷ L₀ × 100, pelo deslocamento do travessão (sem extensômetro). |
+| Alongamento na força máxima | Deslocamento no instante da Fmáx ÷ L₀ × 100. Também mostrado como (d − L₀) ÷ L₀ × 100. |
+| Alongamento final | Último deslocamento do ensaio (fim/ruptura) ÷ L₀ × 100, e também (d − L₀) ÷ L₀ × 100, para quando o deslocamento da máquina já inclui o L₀. |
 | Ruptura | Queda brusca de força: a força cai ao menos 25 % de Fmáx em até 2 leituras. Sem isso, aceita queda gradual abaixo de 10 % de Fmáx. Sem nenhuma das duas, o ensaio foi interrompido antes de romper. |
 | Energia | Área sob a curva força × deslocamento até a ruptura, em joules. |
 | Rigidez k | Força por milímetro no trecho elástico (N/mm). |

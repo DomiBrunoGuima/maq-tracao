@@ -160,6 +160,13 @@ export interface KPIs {
   forca_ruptura_N: number | null;
   deslocamento_ruptura_mm: number | null;
   alonga_ruptura_real_pct: number | null;
+  deslocamento_final_mm: number | null;
+  /** Alongamento final: último deslocamento ÷ L₀ × 100 */
+  alonga_final_pct: number | null;
+  /** Alongamento final: (último deslocamento − L₀) ÷ L₀ × 100 */
+  alonga_final_menos_l0_pct: number | null;
+  /** Alongamento na força máxima: (d − L₀) ÷ L₀ × 100 */
+  alonga_fmax_menos_l0_pct: number | null;
 }
 
 export interface DataPoint {
