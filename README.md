@@ -4,6 +4,8 @@ Software desktop para análise automática de arquivos CSV gerados pela IHM da m
 
 Manual completo do sistema: PDF em slides em [docs/Manual completo - Sistema de Ensaios.pdf](docs/Manual%20completo%20-%20Sistema%20de%20Ensaios.pdf) e texto em [docs/MANUAL.md](docs/MANUAL.md) (operação, configuração, backup, solução de problemas e referência técnica).
 
+Documento de design do software (SDD, versão como entregue): [docs/SDD - Sistema de Ensaios.pdf](docs/SDD%20-%20Sistema%20de%20Ensaios.pdf), com fonte em [docs/sdd/](docs/sdd/SDD.md) (`python docs/sdd/gerar_pdf.py` gera o PDF de novo).
+
 ## Stack
 
 | Camada | Tecnologia |
