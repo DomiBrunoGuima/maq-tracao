@@ -78,7 +78,7 @@ from .modbus_client import (
 from .simulator import SIM, SimController, SimReader, sim_capture
 from .sobrecarga import MonitorSobrecarga
 from .normas import listar_normas
-from .parser import parse_csv
+from .parser import parse_csv, parametros_da_planilha
 from .qualidade import avaliar_qualidade, avaliar_qualidade_flexao, resumo_status
 from .report import generate_html_report
 from .watcher import DirectoryWatcher
@@ -307,6 +307,12 @@ def _load_csv(filepath: str) -> tuple[bool, str]:
         ihm_params = _fetch_ihm_params()
         if ihm_params is None and _config.get("ihm_ip"):
             print(f"[modbus] IHM inacessível — parâmetros não capturados para {path.name}", flush=True)
+        # Etapa 5: a própria planilha traz área, L0, velocidade e deslocamento
+        # programado do ensaio. Valem mais que a leitura Modbus feita agora, que
+        # devolve o que está na IHM no momento (pode já ser o próximo ensaio).
+        da_planilha = parametros_da_planilha(df)
+        if da_planilha:
+            ihm_params = {**(ihm_params or {}), **da_planilha}
 
         persist_ensaio(
             db, metadata, df,

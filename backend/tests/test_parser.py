@@ -172,3 +172,53 @@ def test_chart_data_structure(tmp_path):
 
     assert len(charts["stress_strain"]) == 5
     assert charts["rupture"]["Forca_N"] == pytest.approx(15000.0)
+
+
+# ---------------------------------------------------------------------------
+# Etapa 5: planilha H0001 com 13 colunas (títulos lidos do cabeçalho)
+# ---------------------------------------------------------------------------
+
+_TITULOS_E5 = ["Tensão_Pa", "Modulo_Elast", "Tensão_Max,", "Deform.Along", "Alonga_Ruptura",
+               "Deslocamento", "Força_N", "Forca_Max_N", "Desl_Max_mm", "Area_mm2",
+               "L0_mm", "Veloc_mm_min", "Desl_Prog_mm"]
+
+
+def _write_csv_etapa5(tmp_path: Path, n: int = 12) -> Path:
+    linhas = [
+        "HISTORY V1.0\t0004\tMoGNNQ",
+        "\t\t" + "\t".join(_TITULOS_E5) + "\t",
+        "TIME\tDATA\t" + "\t".join("1" for _ in _TITULOS_E5) + "\tChecksum",
+    ]
+    for i in range(n):
+        d = 0.5 * (i + 1)
+        f = 100.0 * (i + 1)
+        vals = [f / 20, 1000.0, f / 20, d / 50, d / 50 * 100, d, f, f, d, 20.0, 50.0, 10.0, 25.0]
+        linhas.append(f"08:00:{i:02d}\t01/06/2026\t" + "\t".join(f"{v:08.2f}" for v in vals) + "\tabc")
+    p = tmp_path / "H0001.csv"
+    p.write_text("\n".join(linhas) + "\n", encoding="utf-16")
+    return p
+
+
+def test_etapa5_colunas_pelo_cabecalho(tmp_path):
+    _, df = parse_csv(_write_csv_etapa5(tmp_path))
+    assert len(df) == 12  # a primeira linha de dados não é mais descartada
+    assert df["Forca_N"].iloc[0] == pytest.approx(100.0)
+    assert df["Deslocamento"].iloc[-1] == pytest.approx(6.0)
+    for col in ("Forca_Max_N", "Desl_Max_mm", "Area_mm2", "L0_mm", "Veloc_mm_min", "Desl_Prog_mm"):
+        assert col in df.columns
+    assert "Checksum" not in df.columns
+
+
+def test_etapa5_parametros_da_planilha(tmp_path):
+    from backend.parser import parametros_da_planilha
+    _, df = parse_csv(_write_csv_etapa5(tmp_path))
+    assert parametros_da_planilha(df) == {
+        "area_seccao": 20.0, "comprimento_inicial": 50.0,
+        "velocidade_processamento": 10.0, "deslocamento_programado": 25.0,
+    }
+
+
+def test_planilha_antiga_de_7_colunas_continua_valida():
+    _, df = parse_csv(Path(__file__).resolve().parents[2] / "H0001.csv")
+    assert df["Forca_N"].iloc[0] == pytest.approx(1250.35)
+    assert df["Deslocamento"].iloc[0] == pytest.approx(13.48)

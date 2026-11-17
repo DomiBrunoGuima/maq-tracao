@@ -273,6 +273,75 @@ NUMERIC_COLS = [
     "Deform_Along", "Alonga_Ruptura", "Deslocamento", "Forca_N",
 ]
 
+# Títulos da planilha H0001 da IHM (linha 2 do CSV) → nome interno da coluna.
+# Etapa 5 (nov/2026): além das 7 colunas antigas, a IHM grava força máxima,
+# deslocamento máximo, área, L0, velocidade e deslocamento programado
+# (D2160…D2184, ver docs/REGISTRADORES_ETAPA5.md). A chave é o título sem acento,
+# em minúsculas e só com letras/números.
+_TITULOS_H0001 = {
+    "tensaopa": "Tensao_Pa",
+    "moduloelast": "Modulo_Elast",
+    "tensaomax": "Tensao_Max",
+    "deformalong": "Deform_Along",
+    "alongaruptura": "Alonga_Ruptura",
+    "deslocamento": "Deslocamento",
+    "forcan": "Forca_N",
+    "forcamaxn": "Forca_Max_N",
+    "deslmaxmm": "Desl_Max_mm",
+    "areamm2": "Area_mm2",
+    "l0mm": "L0_mm",
+    "velocmmmin": "Veloc_mm_min",
+    "deslprogmm": "Desl_Prog_mm",
+}
+
+# Colunas extras da Etapa 5 que viram parâmetros do ensaio quando a leitura
+# Modbus da IHM não os trouxe (mesmas chaves de ihm_params).
+COLUNAS_PARAMETROS = {
+    "Area_mm2": "area_seccao",
+    "L0_mm": "comprimento_inicial",
+    "Veloc_mm_min": "velocidade_processamento",
+    "Desl_Prog_mm": "deslocamento_programado",
+}
+
+
+def _chave_titulo(titulo: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", titulo).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]", "", t.lower())
+
+
+def _colunas_do_cabecalho(linha_titulos: str, linha_tipos: str) -> list[str]:
+    """Monta os nomes das colunas a partir do cabeçalho da IHM. A linha 3
+    (TIME, DATA, 1, 1, …, Checksum) diz quantas colunas de dados há; a linha 2
+    traz os títulos. Sem títulos legíveis, usa a ordem antiga (7 colunas)."""
+    tipos = [c.strip() for c in linha_tipos.rstrip("\r\n").split("\t")]
+    n_dados = len(tipos) - 3 if len(tipos) >= 4 and tipos[-1].lower() == "checksum" else 0
+    titulos = [c.strip() for c in linha_titulos.rstrip("\r\n").split("\t")][2:]
+    titulos = titulos[:n_dados] if n_dados else [t for t in titulos if t]
+    if not titulos or not any(_chave_titulo(t) in _TITULOS_H0001 for t in titulos):
+        if n_dados and n_dados != len(COLUMN_NAMES) - 3:
+            nomes = COLUMN_NAMES[2:-1] + [f"Col_{i}" for i in range(len(COLUMN_NAMES) - 2, n_dados + 1)]
+            return ["TIME", "DATA"] + nomes[:n_dados] + ["Checksum"]
+        return list(COLUMN_NAMES)
+    nomes = []
+    for i, t in enumerate(titulos, start=1):
+        nome = _TITULOS_H0001.get(_chave_titulo(t)) or (_chave_titulo(t) or f"Col_{i}")
+        nomes.append(nome if nome not in nomes else f"{nome}_{i}")
+    return ["TIME", "DATA"] + nomes + ["Checksum"]
+
+
+def parametros_da_planilha(df: pd.DataFrame) -> dict:
+    """Parâmetros do ensaio gravados nas colunas da planilha (Etapa 5): último
+    valor não nulo de cada coluna de COLUNAS_PARAMETROS."""
+    out: dict = {}
+    for col, chave in COLUNAS_PARAMETROS.items():
+        if col in df.columns:
+            serie = pd.to_numeric(df[col], errors="coerce")
+            serie = serie[serie.notna() & (serie != 0)]
+            if not serie.empty:
+                out[chave] = float(serie.iloc[-1])
+    return out
+
 
 @dataclass
 class EnsaioMetadata:
@@ -303,14 +372,29 @@ def parse_csv(filepath: str | Path) -> tuple[EnsaioMetadata, pd.DataFrame]:
         filename=filepath.stem,
     )
 
+    # Cabeçalho da IHM: linha "HISTORY", linha de títulos e a linha
+    # "TIME DATA 1 1 … Checksum". Os dados começam logo depois desta última.
+    i_tipos = 2
+    for i, linha in enumerate(raw_lines[:8]):
+        if linha.startswith("TIME\t"):
+            i_tipos = i
+    colunas = _colunas_do_cabecalho(
+        raw_lines[i_tipos - 1] if i_tipos >= 1 else "",
+        raw_lines[i_tipos] if len(raw_lines) > i_tipos else "",
+    )
     df = pd.read_csv(
-        filepath, encoding="utf-16", sep="\t", skiprows=4,
-        header=None, names=COLUMN_NAMES, dtype=str, on_bad_lines="skip",
+        filepath, encoding="utf-16", sep="\t", skiprows=i_tipos + 1,
+        header=None, names=colunas, dtype=str, on_bad_lines="skip",
+        index_col=False,
     )
 
     df = df.dropna(how="all")
     for col in NUMERIC_COLS:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        if col not in df.columns:
+            df[col] = np.nan
+    for col in colunas:
+        if col not in ("TIME", "DATA", "Checksum"):
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["Forca_N"])
     df = df.drop(columns=["Checksum"], errors="ignore")
