@@ -244,7 +244,7 @@ def test_relatorio_por_lote_e_requisitos_reaproveitados(client):
     })
     assert r.status_code == 200
     html = r.text
-    assert html.count("CLP_L") >= 3 and "Média" in html and "APROVADO" in html
+    assert html.count("CLP_L") >= 3 and "Mínimo" in html and "APROVADO" in html
     campos = client.get(f"/api/ensaios/{e2}/campos-relatorio").json()
     assert campos["requisitos"][0]["valor"] == "1"
     assert campos["metodo_ensaio"] == "ISO 13953"

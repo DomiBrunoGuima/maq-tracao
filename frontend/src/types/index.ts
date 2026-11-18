@@ -601,6 +601,7 @@ export interface CondicoesEnsaio {
   equipamentos: string;
   norma_referencia: string;
   metodo_ensaio?: string;
+  certificado_calibracao?: string;
 }
 
 export interface Assinatura {

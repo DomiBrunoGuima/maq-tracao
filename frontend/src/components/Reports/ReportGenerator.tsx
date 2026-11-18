@@ -30,8 +30,13 @@ const EMPTY_CONDICOES: CondicoesEnsaio = {
   tipo_corpo_prova: "", distancia_garras_mm: "", extensometro: "",
   largura_cp_mm: "", espessura_cp_mm: "", preparacao_cp: [],
   data_realizacao: "", equipamentos: "", norma_referencia: "ISO 527-1:2019",
-  metodo_ensaio: "",
+  metodo_ensaio: "", certificado_calibracao: "",
 };
+
+// Requisito padrão da qualidade (editável e removível na tela)
+const REQUISITOS_PADRAO: Requisito[] = [
+  { propriedade: "alongamento", criterio: ">=", valor: "350", referencia: "NBR 15561" },
+];
 
 const TITULO_TRACAO = "Relatório de Resistência ao Alongamento (Tração)";
 
@@ -218,7 +223,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
   const [escopo, setEscopo] = useState<"teste" | "lote">("teste");
   const [cpIds, setCpIds] = useState<number[]>([]);
   const [graficos, setGraficos] = useState<GraficoRelatorio[]>(["tensao_alongamento"]);
-  const [requisitos, setRequisitos] = useState<Requisito[]>([]);
+  const [requisitos, setRequisitos] = useState<Requisito[]>(flexao ? [] : REQUISITOS_PADRAO);
   const [conclusaoManual, setConclusaoManual] = useState("");
   const [extras, setExtras] = useState({
     include_sumario: flexao,
@@ -519,8 +524,13 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                   onChange={v => setCondicoes("temp_laboratorio", v)} placeholder="ex: 23,0" suffix="°C" />
                 <FieldWithSuffix label="Umidade do Laboratório" value={condicoes.umidade_laboratorio}
                   onChange={v => setCondicoes("umidade_laboratorio", v)} placeholder="ex: 59" suffix="%" />
-                <FieldWithSuffix label="Temperatura do Ensaio" value={condicoes.temp_ensaio}
-                  onChange={v => setCondicoes("temp_ensaio", v)} placeholder="ex: 23,0 ou Tamb" suffix="°C" />
+                {flexao ? (
+                  <FieldWithSuffix label="Temperatura do Ensaio" value={condicoes.temp_ensaio}
+                    onChange={v => setCondicoes("temp_ensaio", v)} placeholder="ex: 23,0 ou Tamb" suffix="°C" />
+                ) : (
+                  <Field label="Certificado de Calibração" value={condicoes.certificado_calibracao ?? ""}
+                    onChange={v => setCondicoes("certificado_calibracao", v)} placeholder="nº do certificado" />
+                )}
                 <Field label="Número de Corpos de Prova" value={condicoes.num_corpos_prova}
                   onChange={v => setCondicoes("num_corpos_prova", v)} />
                 <FieldWithUnitSelect
@@ -590,7 +600,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Método de Ensaio" value={condicoes.metodo_ensaio ?? ""}
-                  onChange={v => setCondicoes("metodo_ensaio", v)} placeholder="ex: NBR 15561 ou ISO 13953" />
+                  onChange={v => setCondicoes("metodo_ensaio", v)} placeholder="ex: NBR 15561 ou NBR ISO 6259" />
                 <Field label="Norma de Referência" value={condicoes.norma_referencia}
                   onChange={v => setCondicoes("norma_referencia", v)} />
               </div>
@@ -703,7 +713,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
               {resumido && (
                 <div className="space-y-2">
                   <span className="text-xs text-muted block">
-                    Requisitos normativos (definidos pelo laboratório). O resultado sai como APROVADO ou REPROVADO comparando o menor valor dos CPs.
+                    Requisitos normativos (definidos pelo laboratório; já vem com Alongamento ≥ 350 % da NBR 15561). Cada linha sai Aprovado/Reprovado comparando o menor valor dos CPs.
                   </span>
                   {requisitos.map((r, i) => (
                     <div key={i} className="grid grid-cols-[1.3fr_0.7fr_0.8fr_1.4fr_auto] gap-2 items-center">

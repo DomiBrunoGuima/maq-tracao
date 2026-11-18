@@ -106,7 +106,7 @@ def test_resumido_por_lote_tem_min_max_media_e_sem_sumario():
                                 comparacao_series=_lote())
     assert "Sumário" not in html
     assert "RESISTÊNCIA AO ALONGAMENTO" in html.upper()
-    assert "Mínimo" in html and "Máximo" in html and "Média" in html
+    assert "Mínimo" in html and "Máximo" not in html and "Média" not in html
     assert "Método de Ensaio" in html and "NBR 15561" in html
     assert "Temperatura do Ensaio" not in html and "Célula de Carga" not in html
     assert "Número de Corpos de Prova:" in html and ">3<" in html
@@ -126,7 +126,7 @@ def test_resumido_conclusao_pelos_requisitos_do_laboratorio():
     assert "≥ 45 MPa (NBR 15561)" in html
     req = _req_resumido(requisitos=[{"propriedade": "tensao_max", "criterio": ">=", "valor": "55"}])
     html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), req, comparacao_series=_lote())
-    assert "REPROVADO" in html and "Não conforme" in html
+    assert "REPROVADO" in html and ">Reprovado<" in html
 
 
 def test_resumido_sem_requisito_usa_conclusao_manual_ou_omite():

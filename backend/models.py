@@ -346,7 +346,8 @@ class CondicoesEnsaio(BaseModel):
     data_realizacao: str = ""
     equipamentos: str = ""
     norma_referencia: str = "ISO 527-1:2019"
-    metodo_ensaio: str = ""            # ex.: NBR 15561, ISO 13953 (editável pelo laboratório)
+    metodo_ensaio: str = ""            # texto livre, ex.: "NBR 15561 ou NBR ISO 6259"
+    certificado_calibracao: str = ""   # nº do certificado de calibração da máquina/célula
 
 class Assinatura(BaseModel):
     nome: str = ""

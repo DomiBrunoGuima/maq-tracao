@@ -487,21 +487,18 @@ def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, a
 
     if linhas:
         tab_num += 1
-        base_txt = ""
-        if linhas[0]["base"]:
-            base_txt = ("distância entre garras" if linhas[0]["base_garras"] else "comprimento inicial L₀")
         corpo = "".join(
             f'<tr><td {_TD_TXT}>{_esc(ln["nome"])}</td><td {_TD_NUM}>{_num(ln["forca_max"], ".1f")}</td>'
             f'<td {_TD_NUM}>{_num(ln["tensao_max"])}</td><td {_TD_NUM}>{_num(ln["alongamento"])}</td></tr>'
             for ln in linhas
         )
         if n > 1:
+            # A qualidade pediu só o mínimo (é o valor que vai para a conclusão)
             est = [_estatisticas([ln[k] for ln in linhas]) for k in ("forca_max", "tensao_max", "alongamento")]
-            for i, rotulo in enumerate(("Mínimo", "Máximo", "Média")):
-                fmts = (".1f", ".2f", ".2f")
-                corpo += (f'<tr style="background:#f4f6f9;font-weight:bold"><td {_TD_TXT}>{rotulo}</td>'
-                          + "".join(f'<td {_TD_NUM}>{_num(e[i], fmts[j]) if e else "—"}</td>' for j, e in enumerate(est))
-                          + '</tr>')
+            fmts = (".1f", ".2f", ".2f")
+            corpo += (f'<tr style="background:#f4f6f9;font-weight:bold"><td {_TD_TXT}>Mínimo</td>'
+                      + "".join(f'<td {_TD_NUM}>{_num(e[0], fmts[j]) if e else "—"}</td>' for j, e in enumerate(est))
+                      + '</tr>')
         partes.append(
             f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentados os resultados '
             f'{"de cada corpo de prova" if n > 1 else "do ensaio"}.</p>'
@@ -510,9 +507,7 @@ def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, a
             f'<table style="width:85%;margin:0 auto 6px"><thead><tr>'
             f'<th {_TH}>Corpo de prova</th><th {_TH}>Fmax (N)</th><th {_TH}>σmax (MPa)</th>'
             f'<th {_TH}>Alongamento final (%)</th></tr></thead><tbody>{corpo}</tbody></table>'
-            + (f'<p style="text-align:center;font-size:8.5pt;color:#555;margin-bottom:18px">'
-               f'Alongamento final calculado sobre a {base_txt}.</p>' if base_txt else
-               '<div style="margin-bottom:18px"></div>')
+            '<div style="margin-bottom:18px"></div>'
         )
 
     if getattr(req, "include_tabela_detalhada", False):
@@ -571,8 +566,8 @@ def _conclusao_resumida(linhas: list[dict], req, tab_num: int) -> str:
             if oks:
                 ok = all(oks)
                 resultados.append(ok)
-                res_txt = "Conforme" if ok else "Não conforme"
-        cor = "" if res_txt == "—" else (";color:#15803d" if res_txt == "Conforme" else ";color:#b91c1c")
+                res_txt = "Aprovado" if ok else "Reprovado"
+        cor = "" if res_txt == "—" else (";color:#15803d" if res_txt == "Aprovado" else ";color:#b91c1c")
         linhas_html += (
             f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">{_esc(rotulo)}</td>'
             f'<td {_TD_NUM}>{_num(valor, fmt)}</td><td {_TD_TXT}>{unidade}</td>'
@@ -783,6 +778,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
 
         _par("Temperatura do Laboratório:", c.temp_laboratorio, "°C")
         _par("Umidade do Laboratório:", c.umidade_laboratorio, "%")
+        _par("Certificado de Calibração:", getattr(c, "certificado_calibracao", ""))
         te = (c.temp_ensaio or "").strip()
         if te:
             numerico = te.replace(",", ".").replace("-", "").strip().replace(".", "", 1).isdigit()
