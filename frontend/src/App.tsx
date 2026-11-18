@@ -12,7 +12,7 @@ import UsuariosView from "./components/Usuarios/UsuariosView";
 import LoginScreen, { TrocaObrigatoria } from "./components/Auth/LoginScreen";
 import { useConfig } from "./hooks/useConfig";
 import { AuthContext, useAuth } from "./hooks/useAuth";
-import { EVENTO_SESSAO, getUsuarioLogado, logout, logoutConfig } from "./api/client";
+import { EVENTO_SESSAO, getUsuarioLogado, logout } from "./api/client";
 import type { UsuarioLogado } from "./types";
 
 type View = "dashboard" | "comparison" | "config" | "control" | "flexao" | "clientes" | "relatorios" | "usuarios";
@@ -41,7 +41,6 @@ export default function App() {
   }, [encerrar]);
 
   const sair = useCallback(() => {
-    logoutConfig();
     logout().finally(() => encerrar());
   }, [encerrar]);
 
@@ -118,7 +117,7 @@ function AppPrincipal() {
           <ComparisonView key={compareModo} modoInicial={compareModo} ids={compareIds} onRemove={handleToggleCompare}
             flexaoIds={flexaoOn ? compareFlexaoIds : []} onRemoveFlexao={handleToggleCompareFlexao} />
         )}
-        {view === "config" && (
+        {view === "config" && usuario.configura && (
           <ConfigPanel onClose={() => setView("dashboard")} />
         )}
         {(view === "control" || (view === "flexao" && !flexaoOn)) && (
@@ -138,7 +137,7 @@ function AppPrincipal() {
             flexaoOn={flexaoOn}
           />
         )}
-        {view === "usuarios" && usuario.mestre && <UsuariosView />}
+        {view === "usuarios" && usuario.gerencia_usuarios && <UsuariosView />}
         {view === "relatorios" && (
           <RelatoriosView onOpenEnsaio={handleSelectEnsaio}
             onOpenFlexao={(id) => { setFlexaoId(id); setView("flexao"); }} />

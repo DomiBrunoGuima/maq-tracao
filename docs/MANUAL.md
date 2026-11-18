@@ -88,7 +88,7 @@ atalho de novo.
 ### Entrando no sistema (login)
 
 Cada pessoa que usa a máquina tem o próprio usuário e senha, criados pelo
-administrador na tela **Usuários e acessos** ([11.6](#116-usuários-e-acessos-acesso-mestre)).
+administrador na tela **Usuários e acessos** ([11.6](#116-usuários-e-acessos-mestre-e-desenvolvedor)).
 Tudo o que é feito fica registrado com o usuário: quem iniciou cada ensaio e
 quem emitiu cada relatório.
 
@@ -118,7 +118,7 @@ nem o administrador, consegue ver a senha atual: ela é guardada criptografada.
 | **Comparar (n)** | Abre a comparação dos ensaios marcados com "+ Comparar". |
 | Reimportar todos | Reprocessa os ensaios importados de CSV com os cálculos atuais (mantém o cadastro de cada um). |
 | Lista de ensaios | Todos os ensaios salvos, do mais novo ao mais antigo. Os de flexão têm a etiqueta FLEXÃO. Clique para abrir o resultado. |
-| Clientes, Relatórios, Configurações | Menu inferior esquerdo. O acesso mestre também vê **Usuários e acessos**. |
+| Clientes, Relatórios | Menu inferior esquerdo. O acesso mestre também vê **Usuários e acessos**; só o acesso desenvolvedor (AUTOMATIC) vê **Configurações**. |
 | Usuário logado | Nome e cargo de quem está usando, com **Trocar minha senha** e **Sair**. |
 
 ---
@@ -401,7 +401,7 @@ sem precisar digitar:
   data de emissão.
 
 Por isso o nome completo, o cargo e o registro (CREA, CRQ, matrícula) de cada
-usuário devem estar certos em **Usuários e acessos**. O acesso mestre não assina
+usuário devem estar certos em **Usuários e acessos**. Os acessos mestre e desenvolvedor não assinam
 pelos outros: num relatório emitido por ele, só o quadro Responsabilidade
 mostra "Administrador".
 
@@ -429,7 +429,8 @@ Python ou Node. O passo a passo completo, com geração do pacote, está em
    `build-cliente\MaqTracao-instalador.zip`.
 2. **Instalar**: copiar o zip para o PC do cliente, extrair, clicar com o
    botão direito em `instalar.bat` → **Executar como administrador**.
-3. Conferir em **Configurações** o IP da IHM e trocar a senha do técnico.
+3. Entrar com o acesso **desenvolvedor** e conferir em **Configurações** o IP da
+   IHM, os registradores e o modo vendido (só tração ou tração + flexão).
 4. Apagar o zip e a pasta extraída. Reiniciar o PC uma vez e confirmar que a
    tela abre pelo atalho.
 
@@ -487,11 +488,11 @@ Testes: `pytest backend/tests/ -v`. A documentação interativa da API fica em
 ### 11.1 Acesso
 
 Para usar o sistema é preciso entrar com usuário e senha ([2](#entrando-no-sistema-login)).
-Além disso, a tela **Configurações** pede a **senha do técnico** (padrão `tracao2026`).
-O **acesso mestre** entra nas Configurações direto, sem essa senha.
-Sem ela não dá para salvar configurações nem testar registradores, nem pela
-tela nem pela API. Troque a senha em **Configurações → Sobre** logo depois de
-instalar. Uma alteração errada aqui faz o sistema perder contato com a máquina;
+A tela **Configurações** (registradores, CLP, IHM, modo da máquina, backup) só
+aparece para o **acesso desenvolvedor**, da AUTOMATIC ([11.6](#116-usuários-e-acessos-mestre-e-desenvolvedor)).
+O acesso mestre do cliente e os operadores não veem o item no menu, e o
+servidor recusa salvar configurações ou testar registradores para eles, nem
+pela tela nem pela API. A antiga "senha do técnico" não existe mais. Uma alteração errada aqui faz o sistema perder contato com a máquina;
 no dia a dia, o operador não precisa mexer em nada.
 
 Depois de alterar, clique em **Salvar e Aplicar**. As mudanças valem na hora,
@@ -545,18 +546,44 @@ Ver [12](#12-backup-e-restauração).
 
 ### 11.5 Sobre
 
-Versão do software e troca da senha das Configurações.
+Versão do software.
 
-### 11.6 Usuários e acessos (acesso mestre)
+### 11.6 Usuários e acessos (mestre e desenvolvedor)
 
-O **acesso mestre** é o administrador do sistema. O usuário é `mestre` e a
+O sistema tem dois acessos fixos, gravados no programa, além dos usuários
+criados na tela:
+
+| Acesso | Quem usa | Pode |
+|---|---|---|
+| `mestre` | Cliente (responsável pela máquina) | Criar e gerenciar usuários e ver o registro de atividades. Opera a máquina e gera relatórios como os demais. **Não** abre as Configurações. |
+| `desenvolvedor` | AUTOMATIC | Tudo: Configurações, registradores, CLP/IHM, backup e o **modo vendido** (só tração ou tração + flexão), além de gerenciar usuários. |
+| Usuários criados | Operadores | Operar a máquina, cadastros, relatórios, trocar a própria senha. |
+
+O modo vendido fica em **Configurações → Geral → Máquina com flexão**. Como só
+o desenvolvedor abre essa tela, o cliente não consegue fazer aparecer a flexão
+numa máquina vendida só para tração.
+
+**Senha do desenvolvedor.** Só o hash fica no programa, em
+`backend/credencial_desenvolvedor.py`. Enquanto o hash estiver vazio, o login
+`desenvolvedor` fica desativado. Para definir ou trocar a senha, na raiz do
+repositório:
+
+```
+python instalacao\definir_senha_desenvolvedor.py
+```
+
+O script pede a senha duas vezes (mínimo 10 caracteres, com letras e números),
+sem mostrar na tela, e grava só o hash. Depois faça commit do arquivo e gere um
+novo build. `--desativar` apaga o hash. A senha não pode ser trocada pela tela.
+
+O **acesso mestre** é o administrador do cliente. O usuário é `mestre` e a
 senha é entregue em separado pela Automatic, junto com a instalação (ela não
 aparece neste manual nem no código). O acesso é fixo: vem gravado no programa,
 não pode ser alterado, desativado nem excluído, e funciona mesmo com o banco
 vazio (instalação nova ou banco restaurado). Guarde a senha em lugar seguro e
 não use o mestre para operar a máquina no dia a dia.
 
-Só o mestre vê o item **Usuários e acessos** no menu inferior. Nessa tela:
+Só o mestre e o desenvolvedor veem o item **Usuários e acessos** no menu inferior. Nessa tela:
 
 - **Novo usuário**: informe nome completo, login (sugerido a partir do nome,
   ex.: `maria.souza`), cargo, registro (CREA, CRQ, matrícula) e e-mail. Ao
@@ -667,7 +694,7 @@ Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
 | `backend/normas.py` | Normas e parâmetros sugeridos. |
 | `backend/report.py` | Relatório HTML. |
 | `backend/backup.py` | Backup em pasta sincronizada. |
-| `backend/acesso.py` | Senha das Configurações. |
+| `backend/credencial_desenvolvedor.py` | Hash da senha do acesso desenvolvedor (gerado por `instalacao/definir_senha_desenvolvedor.py`). |
 | `backend/simulator.py` | Modo simulador. |
 | `backend/config.json` | Configuração (na instalação: `C:\MaqTracao\config.json`). |
 | `tracao.db` | Banco SQLite: ensaios, ensaios de flexão, clientes, relatórios, parâmetros da IHM. |
@@ -697,7 +724,7 @@ Ferramentas de diagnóstico (no ambiente de desenvolvimento, com o venv ativo):
 | `simulator_enabled` | `false` | Modo simulador. |
 | `server_host`, `server_port` | 127.0.0.1, 8000 | Só na versão do cliente. |
 | `proximo_ensaio`, `proximo_ensaio_flexao` | | Cadastro do próximo ensaio (preenchido pela tela). |
-| `senha_config` | | Hash da senha das Configurações (gravado pela tela; apagar a chave volta à senha padrão). |
+| `senha_config` | | Obsoleta (antiga senha do técnico). Ignorada se existir. |
 
 ### 14.3 Roles
 
@@ -801,9 +828,9 @@ O servidor responde em `http://localhost:8000`. Principais rotas:
 | POST | `/api/auth/login` · `/api/auth/logout` | Entrar e sair. O login devolve o cookie de sessão `maq_sessao`. |
 | GET | `/api/auth/me` | Usuário logado. |
 | POST | `/api/auth/senha` | Trocar a própria senha. |
-| GET/POST/PUT/DELETE | `/api/usuarios` · `/api/usuarios/{id}` | Gestão de usuários (só mestre). Criar devolve a senha gerada. |
-| POST | `/api/usuarios/{id}/senha` | Gerar nova senha (só mestre). |
-| GET | `/api/auditoria?usuario=&acao=` | Registro de atividades (só mestre). |
+| GET/POST/PUT/DELETE | `/api/usuarios` · `/api/usuarios/{id}` | Gestão de usuários (mestre ou desenvolvedor). Criar devolve a senha gerada. |
+| POST | `/api/usuarios/{id}/senha` | Gerar nova senha (mestre ou desenvolvedor). |
+| GET | `/api/auditoria?usuario=&acao=` | Registro de atividades (mestre ou desenvolvedor). |
 | GET | `/api/clp/conexao` | Estado da conexão com a IHM/CLP. |
 | GET | `/api/ensaios` · `/api/ensaios/{id}` | Lista e detalhe de ensaios de tração (`?cliente_id=`). |
 | PATCH | `/api/ensaios/{id}` | Altera só o cadastro (cliente, amostra…). |
@@ -822,14 +849,13 @@ O servidor responde em `http://localhost:8000`. Principais rotas:
 | GET | `/api/normas?tipo=` | Normas. |
 | GET/POST | `/api/sobrecarga` · `/api/sobrecarga/reconhecer` | Estado do alarme de sobrecarga e reconhecimento. |
 | GET/POST | `/api/backup` · `/api/backup/agora` | Estado do backup e backup imediato. |
-| POST | `/api/config/login` · `/logout` · `/senha` | Senha das Configurações (devolve o token do cabeçalho `X-Config-Token`). |
-| GET/PUT | `/api/config` | Ler e salvar configurações (PUT exige token). |
-| POST | `/api/control/probe` | Diagnóstico de registrador (exige token). |
+| GET/PUT | `/api/config` | Ler e salvar configurações (PUT só desenvolvedor). |
+| POST | `/api/control/probe` | Diagnóstico de registrador (só desenvolvedor). |
 | POST | `/api/scan` · `/api/ftp/fetch_csv` | Importação de CSV. |
 
 Todas as rotas `/api`, menos login, logout e health, exigem a sessão de um
-usuário logado (resposta 401 sem ela). As rotas de configuração exigem ainda a
-senha do técnico ou o acesso mestre. O servidor só atende no próprio PC por
+usuário logado (resposta 401 sem ela). As rotas que alteram configuração ou testam
+registradores exigem o acesso desenvolvedor (403 para os demais). O servidor só atende no próprio PC por
 padrão. Não exponha a porta para fora da rede local.
 
 ---

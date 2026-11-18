@@ -697,7 +697,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                 <p className="text-xs text-muted bg-accent/5 border border-accent/20 rounded-lg px-3 py-2">
                   O relatório sai automaticamente com os seus dados como emissor
                   (<span className="text-slate-300">{[usuario.nome, usuario.cargo, usuario.registro].filter(Boolean).join(" · ")}</span>)
-                  {!usuario.mestre && ", e a sua assinatura entra aqui se não estiver na lista"}.
+                  {!usuario.mestre && !usuario.desenvolvedor && ", e a sua assinatura entra aqui se não estiver na lista"}.
                 </p>
               )}
               {resumido && (

@@ -10,6 +10,7 @@ import {
   KeyRound,
   LogOut,
   ShieldCheck,
+  Wrench,
   UserCog,
   Moon,
   RotateCcw,
@@ -310,19 +311,10 @@ export default function Sidebar({
       <div className="p-3 border-t border-border space-y-1">
         <NavButton ativo={currentView === "clientes"} onClick={onViewClientes} icon={<Users size={15} />} label="Clientes" />
         <NavButton ativo={currentView === "relatorios"} onClick={onViewRelatorios} icon={<FileText size={15} />} label="Relatórios" />
-        <button
-          onClick={onViewConfig}
-          className={clsx(
-            "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
-            currentView === "config"
-              ? "bg-border text-white"
-              : "text-muted hover:text-white hover:bg-border"
-          )}
-        >
-          <Settings size={15} />
-          Configurações
-        </button>
-        {usuario.mestre && (
+        {usuario.configura && (
+          <NavButton ativo={currentView === "config"} onClick={onViewConfig} icon={<Settings size={15} />} label="Configurações" />
+        )}
+        {usuario.gerencia_usuarios && (
           <NavButton ativo={currentView === "usuarios"} onClick={onViewUsuarios} icon={<UserCog size={15} />} label="Usuários e acessos" />
         )}
       </div>
@@ -331,15 +323,16 @@ export default function Sidebar({
       <div className="px-3 py-2.5 border-t border-border flex items-center gap-2">
         <div className={clsx(
           "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold",
-          usuario.mestre ? "bg-amber-500/20 text-amber-300" : "bg-accent/15 text-accent",
+          usuario.mestre ? "bg-amber-500/20 text-amber-300"
+            : usuario.desenvolvedor ? "bg-violet-500/20 text-violet-300" : "bg-accent/15 text-accent",
         )}>
-          {usuario.mestre ? <ShieldCheck size={15} /> : iniciais(usuario.nome)}
+          {usuario.mestre ? <ShieldCheck size={15} /> : usuario.desenvolvedor ? <Wrench size={15} /> : iniciais(usuario.nome)}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-white truncate" title={usuario.nome}>{usuario.nome}</p>
           <p className="text-[11px] text-muted truncate">{usuario.cargo || usuario.login}</p>
         </div>
-        {!usuario.mestre && (
+        {!usuario.mestre && !usuario.desenvolvedor && (
           <button onClick={() => { setSenhaOk(false); setTrocandoSenha(true); }} title="Trocar minha senha"
             className="p-1.5 rounded text-muted hover:text-accent transition-colors">
             <KeyRound size={14} />

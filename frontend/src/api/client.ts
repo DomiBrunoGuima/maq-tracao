@@ -86,33 +86,6 @@ export const excluirUsuario = (id: number): Promise<void> =>
 export const getAuditoria = (params: { usuario?: string; acao?: string; limite?: number } = {}): Promise<EventoAuditoria[]> =>
   api.get("/auditoria", { params }).then((r) => r.data);
 
-// Token da senha das Configurações (vale até fechar a tela ou o navegador).
-const TOKEN_KEY = "config_token";
-export const getConfigToken = (): string | null => {
-  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
-};
-const setConfigToken = (t: string | null) => {
-  try { t ? sessionStorage.setItem(TOKEN_KEY, t) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* sem storage */ }
-};
-api.interceptors.request.use((cfg) => {
-  const t = getConfigToken();
-  if (t) cfg.headers.set("X-Config-Token", t);
-  return cfg;
-});
-
-export const loginConfig = (senha: string): Promise<void> =>
-  api.post("/config/login", { senha }).then((r) => setConfigToken(r.data.token));
-
-export const logoutConfig = (): Promise<void> =>
-  api.post("/config/logout").catch(() => undefined).then(() => setConfigToken(null));
-
-// O acesso mestre já entra nas Configurações sem a senha do técnico.
-export const sessaoConfig = (): Promise<boolean> =>
-  api.get("/config/sessao").then((r) => !!r.data.ok);
-
-export const trocarSenhaConfig = (atual: string, nova: string): Promise<void> =>
-  api.post("/config/senha", { atual, nova }).then(() => undefined);
-
 export const getEnsaios = (): Promise<EnsaioSummary[]> =>
   api.get("/ensaios").then((r) => r.data);
 

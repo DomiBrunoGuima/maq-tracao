@@ -93,7 +93,8 @@ O software lê arquivos `.csv` com as seguintes características:
 
 ### Login e usuários
 - Toda a API exige login (cookie de sessão HttpOnly). Acesso mestre fixo (`mestre`, senha entregue em separado; só o hash fica em `backend/usuarios.py`).
-- O mestre cria os operadores e gera as senhas em **Usuários e acessos**, e vê o registro de atividades (auditoria).
+- O mestre cria os operadores e gera as senhas em **Usuários e acessos**, e vê o registro de atividades (auditoria). Não abre as Configurações.
+- Acesso desenvolvedor fixo (`desenvolvedor`, AUTOMATIC): acesso completo, inclusive Configurações e o modo vendido (só tração ou tração + flexão). Senha definida com `python instalacao/definir_senha_desenvolvedor.py`, que grava só o hash em `backend/credencial_desenvolvedor.py`.
 - Ensaios guardam quem os iniciou; relatórios saem com nome, cargo e registro de quem emitiu. Detalhes em `docs/MANUAL.md` (seções 2, 9 e 11.6).
 
 ### Dashboard
