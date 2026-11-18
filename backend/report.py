@@ -222,7 +222,7 @@ def _section_header(num: int, title: str) -> str:
 
 def _figure(img_src: str, caption: str) -> str:
     return (
-        f'<div style="text-align:center;margin:14px 0 20px">'
+        f'<div class="figura" style="text-align:center;margin:14px 0 20px">'
         f'<img src="{_src(img_src)}" alt="{_esc(caption)}" '
         f'style="max-width:75%;border:1px solid #ddd;padding:2px"/>'
         f'<p style="font-style:italic;font-size:9pt;margin-top:6px">{_esc(caption)}</p>'
@@ -243,6 +243,9 @@ p { margin: 6px 0; }
   .page { max-width: 21cm; margin: 0; padding: 1.5cm 2cm;
           box-shadow: none; border-radius: 0; }
   .page-break { page-break-before: always; }
+  /* Não cortar gráfico, linha de tabela nem o bloco de data + assinaturas */
+  .figura, tr, .assinaturas-bloco, .responsavel { page-break-inside: avoid; break-inside: avoid; }
+  h2 { page-break-after: avoid; break-after: avoid; }
 }
 """
 
@@ -1081,9 +1084,8 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             )
 
         local_data = req.local_data or _data_extenso(datetime.now())
-        body_parts.append(
-            f'<p style="text-align:right;margin:20px 0">{_esc(local_data)}</p>'
-        )
+        bloco_data = f'<p style="text-align:right;margin:20px 0">{_esc(local_data)}</p>'
+        sigs_bloco = ""
 
         # O usuário logado que emite o relatório assina automaticamente (se ainda
         # não estiver na lista). O acesso mestre não assina por ninguém.
@@ -1106,10 +1108,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 for s in assinaturas
             )
             if sigs_html:
-                body_parts.append(
-                    f'<div style="display:flex;gap:80px;justify-content:center;margin-top:40px">'
-                    f'{sigs_html}</div>'
-                )
+                sigs_bloco = (f'<div style="display:flex;gap:80px;justify-content:center;margin-top:40px">'
+                              f'{sigs_html}</div>')
+        # Data e assinaturas ficam juntas na mesma página
+        body_parts.append(f'<div class="assinaturas-bloco">{bloco_data}{sigs_bloco}</div>')
 
     # ── RESPONSABILIDADE (usuário logado) ─────
     if (emissor.get("nome") or executor) and getattr(req, "include_responsabilidade", True):
