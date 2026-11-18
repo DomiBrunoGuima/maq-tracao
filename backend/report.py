@@ -315,6 +315,291 @@ def _linhas_resultado_flexao(kpis: dict) -> list[tuple[str, str, str]]:
 
 
 # ──────────────────────────────────────────────
+# Modelo resumido (tração): relatório por teste ou por lote de CPs
+# ──────────────────────────────────────────────
+
+# Gráficos que o laboratório pode escolher. Deformação usa o comprimento inicial
+# (L₀, base de medida); alongamento usa a distância entre garras. São curvas
+# diferentes porque as duas distâncias são diferentes.
+GRAFICOS_TRACAO = {
+    "tensao_alongamento": ("Tensão × Alongamento", "Alongamento (%)", "Tensão (MPa)"),
+    "tensao_deformacao": ("Tensão × Deformação", "Deformação (%)", "Tensão (MPa)"),
+    "tensao_deslocamento": ("Tensão × Deslocamento", "Deslocamento (mm)", "Tensão (MPa)"),
+    "forca_deslocamento": ("Força × Deslocamento", "Deslocamento (mm)", "Força (N)"),
+}
+
+_PALETA = ["#1e3a5f", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#2980b9",
+           "#7f8c8d", "#d35400", "#16a085", "#2c3e50"]
+
+# Fora disso o valor quase sempre é área digitada errada (ex.: "1.127" em vez de 1127 mm²)
+_AREA_MIN_MM2 = 5.0
+_TENSAO_MAX_PLAUSIVEL_MPA = 100.0
+
+
+def _float_br(v) -> float | None:
+    """Converte texto digitado no formulário ("115", "115,0") em número."""
+    if v is None:
+        return None
+    try:
+        f = float(str(v).strip().replace(" ", "").replace(",", "."))
+    except ValueError:
+        return None
+    return f if f > 0 else None
+
+
+def _kpis_do_cp(cp: tuple) -> dict:
+    if len(cp) > 2 and cp[2] is not None:
+        return cp[2]
+    return calculate_kpis(cp[1])
+
+
+def _linhas_por_cp(cps: list[tuple], condicoes) -> list[dict]:
+    """Fmax, σmax e alongamento final de cada CP. O alongamento usa a distância entre
+    garras quando ela foi informada; senão usa L₀."""
+    garras = _float_br(getattr(condicoes, "distancia_garras_mm", ""))
+    linhas = []
+    for cp in cps:
+        nome, cdf = cp[0], cp[1]
+        try:
+            k = _kpis_do_cp(cp)
+        except Exception as exc:
+            print(f"[report] KPIs do CP {nome} falharam: {exc}", flush=True)
+            continue
+        area = k.get("area_secao_mm2")
+        l0 = k.get("comprimento_inicial_mm")
+        fmax = k.get("forca_max_N")
+        tensao = k.get("tensao_max_calc_MPa")
+        if tensao is None:
+            tensao = k.get("tensao_max_MPa")
+        base = garras or l0
+        desl = k.get("deslocamento_final_mm")
+        along = (desl / base * 100) if (desl is not None and base) else k.get("alonga_final_pct")
+        linhas.append({"nome": nome, "df": cdf, "kpis": k, "area": area, "l0": l0,
+                       "base": base, "base_garras": bool(garras),
+                       "forca_max": fmax, "tensao_max": tensao, "alongamento": along})
+    return linhas
+
+
+def _curva_xy(linha: dict, grafico: str):
+    cdf = linha["df"]
+    d = cdf["Deslocamento"].to_numpy(dtype=float)
+    f = cdf["Forca_N"].to_numpy(dtype=float)
+    area = linha["area"]
+    if area and area > 0:
+        sigma = f / area
+    else:
+        sigma = cdf["Tensao_Pa"].to_numpy(dtype=float)
+    if grafico == "forca_deslocamento":
+        return d, f
+    if grafico == "tensao_deslocamento":
+        return d, sigma
+    if grafico == "tensao_deformacao":
+        if linha["l0"]:
+            return d / linha["l0"] * 100, sigma
+        return cdf["Deform_Along"].to_numpy(dtype=float) * 100, sigma
+    base = linha["base"]   # tensao_alongamento
+    if base:
+        return d / base * 100, sigma
+    return cdf["Deform_Along"].to_numpy(dtype=float) * 100, sigma
+
+
+def _chart_curvas_b64(linhas: list[dict], grafico: str) -> str:
+    """Uma curva por CP no mesmo gráfico, com o ponto de força máxima marcado."""
+    try:
+        _, x_label, y_label = GRAFICOS_TRACAO[grafico]
+        fig, ax = plt.subplots(figsize=(8, 4.8))
+        for idx, ln in enumerate(linhas):
+            cor = _PALETA[idx % len(_PALETA)]
+            x, y = _curva_xy(ln, grafico)
+            ax.plot(x, y, color=cor, linewidth=1.6, label=ln["nome"] if len(linhas) > 1 else None)
+            pos = int(ln["df"]["Forca_N"].fillna(float("-inf")).values.argmax())
+            ax.scatter([x[pos]], [y[pos]], color=cor, s=40, zorder=5)
+        ax.set_xlabel(x_label, fontsize=10)
+        ax.set_ylabel(y_label, fontsize=10)
+        _eixos_a_partir_de_zero(ax)
+        ax.grid(True, alpha=0.25, linestyle="--", color="gray")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        if len(linhas) > 1:
+            ax.legend(fontsize=8, loc="best")
+        plt.tight_layout(pad=0.5)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+    except Exception as exc:
+        print(f"[report] _chart_curvas_b64({grafico}) falhou: {exc}", flush=True)
+        return ""
+
+
+def _estatisticas(valores: list) -> tuple | None:
+    v = [float(x) for x in valores if x is not None and x == x]
+    if not v:
+        return None
+    return min(v), max(v), sum(v) / len(v)
+
+
+_TH = 'style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999"'
+_TD_NUM = 'style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace"'
+_TD_TXT = 'style="border:1px solid #bbb;padding:5px 9px"'
+
+
+def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, alongamento, area, l0):
+    partes: list[str] = []
+
+    # Aviso de área/tensão fora do esperado (quase sempre área digitada errada na IHM)
+    suspeitos = [ln for ln in linhas
+                 if (ln["area"] is not None and 0 < ln["area"] < _AREA_MIN_MM2)
+                 or (ln["tensao_max"] is not None and ln["tensao_max"] > _TENSAO_MAX_PLAUSIVEL_MPA)]
+    if suspeitos:
+        itens = "; ".join(f'{_esc(ln["nome"])}: área {_num(ln["area"], ".3f")} mm², σmax {_num(ln["tensao_max"])} MPa'
+                          for ln in suspeitos)
+        partes.append(
+            '<p class="aviso-area" style="color:#b45309;background:#fff7ed;border:1px solid #fed7aa;'
+            f'padding:8px 12px;margin-bottom:12px">Atenção: a tensão calculada está fora do esperado '
+            f'({itens}). Confira a área da seção digitada na IHM antes de emitir o relatório.</p>'
+        )
+
+    n = len(linhas)
+    graficos = [g for g in (getattr(req, "graficos", None) or []) if g in GRAFICOS_TRACAO]
+    for g in graficos:
+        b64 = _chart_curvas_b64(linhas, g)
+        titulo = GRAFICOS_TRACAO[g][0]
+        if not b64:
+            partes.append(f'<p style="color:#c00;font-style:italic">[Gráfico {titulo}: falha na geração]</p>')
+            continue
+        fig_num += 1
+        detalhe = ""
+        if g == "tensao_alongamento" and linhas:
+            ln0 = linhas[0]
+            if ln0["base"]:
+                detalhe = (f" (base: distância entre garras de {_num(ln0['base'], '.0f')} mm)" if ln0["base_garras"]
+                           else f" (base: L₀ de {_num(ln0['base'], '.0f')} mm)")
+        alvo = f"dos {n} corpos de prova" if n > 1 else f"do ensaio {linhas[0]['nome']}" if linhas else ""
+        partes.append(f'<p style="margin-bottom:8px">Na Figura {fig_num} está apresentada a curva '
+                      f'{_esc(titulo)} {_esc(alvo)}.</p>')
+        partes.append(_figure(f"data:image/png;base64,{b64}",
+                              f"Figura {fig_num} – Curva {titulo}{detalhe}" + (f" — {n} CPs." if n > 1 else ".")))
+
+    if linhas:
+        tab_num += 1
+        base_txt = ""
+        if linhas[0]["base"]:
+            base_txt = ("distância entre garras" if linhas[0]["base_garras"] else "comprimento inicial L₀")
+        corpo = "".join(
+            f'<tr><td {_TD_TXT}>{_esc(ln["nome"])}</td><td {_TD_NUM}>{_num(ln["forca_max"], ".1f")}</td>'
+            f'<td {_TD_NUM}>{_num(ln["tensao_max"])}</td><td {_TD_NUM}>{_num(ln["alongamento"])}</td></tr>'
+            for ln in linhas
+        )
+        if n > 1:
+            est = [_estatisticas([ln[k] for ln in linhas]) for k in ("forca_max", "tensao_max", "alongamento")]
+            for i, rotulo in enumerate(("Mínimo", "Máximo", "Média")):
+                fmts = (".1f", ".2f", ".2f")
+                corpo += (f'<tr style="background:#f4f6f9;font-weight:bold"><td {_TD_TXT}>{rotulo}</td>'
+                          + "".join(f'<td {_TD_NUM}>{_num(e[i], fmts[j]) if e else "—"}</td>' for j, e in enumerate(est))
+                          + '</tr>')
+        partes.append(
+            f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentados os resultados '
+            f'{"de cada corpo de prova" if n > 1 else "do ensaio"}.</p>'
+            f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+            f'Tabela {tab_num} – Resultados do ensaio de tração.</p>'
+            f'<table style="width:85%;margin:0 auto 6px"><thead><tr>'
+            f'<th {_TH}>Corpo de prova</th><th {_TH}>Fmax (N)</th><th {_TH}>σmax (MPa)</th>'
+            f'<th {_TH}>Alongamento final (%)</th></tr></thead><tbody>{corpo}</tbody></table>'
+            + (f'<p style="text-align:center;font-size:8.5pt;color:#555;margin-bottom:18px">'
+               f'Alongamento final calculado sobre a {base_txt}.</p>' if base_txt else
+               '<div style="margin-bottom:18px"></div>')
+        )
+
+    if getattr(req, "include_tabela_detalhada", False):
+        tab_num += 1
+        rows = _linhas_resultado_tracao(kpis, tensao_max, alongamento, area, l0)
+        partes.append(
+            f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+            f'Tabela {tab_num} – Resultados detalhados — {_esc(linhas[0]["nome"] if linhas else "")}.</p>'
+            f'<table style="width:70%;margin:0 auto 20px"><thead><tr><th {_TH}>Propriedade</th>'
+            f'<th {_TH}>Valor</th><th {_TH}>Unidade</th></tr></thead><tbody>'
+            + "".join(f'<tr><td {_TD_TXT}>{_esc(r[0])}</td><td {_TD_NUM}>{r[1]}</td><td {_TD_TXT}>{r[2]}</td></tr>'
+                      for r in rows)
+            + '</tbody></table>'
+        )
+    return partes, fig_num, tab_num
+
+
+_PROPRIEDADES = {
+    "tensao_max": ("Tensão Máxima", "MPa", ".2f"),
+    "alongamento": ("Alongamento Final", "%", ".2f"),
+    "forca_max": ("Força Máxima", "N", ".1f"),
+}
+
+
+def _conclusao_resumida(linhas: list[dict], req, tab_num: int) -> str:
+    """Tensão máxima e alongamento final (menor valor entre os CPs), com os requisitos
+    definidos pelo laboratório e a conclusão APROVADO/REPROVADO."""
+    n = len(linhas)
+    requisitos = [r for r in (getattr(req, "requisitos", None) or [])
+                  if r.propriedade in _PROPRIEDADES and _float_br(r.valor) is not None]
+    props = ["tensao_max", "alongamento"] + [r.propriedade for r in requisitos
+                                              if r.propriedade not in ("tensao_max", "alongamento")]
+    props = list(dict.fromkeys(props))
+    linhas_html = ""
+    resultados: list[bool] = []
+    for p in props:
+        rotulo, unidade, fmt = _PROPRIEDADES[p]
+        est = _estatisticas([ln[p] for ln in linhas])
+        reqs = [r for r in requisitos if r.propriedade == p]
+        # Para requisito de mínimo vale o menor valor; para máximo, o maior.
+        usa_maior = bool(reqs) and all(r.criterio == "<=" for r in reqs)
+        valor = (est[1] if usa_maior else est[0]) if est else None
+        if n > 1:
+            rotulo += " (maior valor encontrado)" if usa_maior else " (menor valor encontrado)"
+        req_txt, res_txt = "—", "—"
+        if reqs:
+            partes_req, oks = [], []
+            for r in reqs:
+                lim = _float_br(r.valor)
+                sinal = "≤" if r.criterio == "<=" else "≥"
+                partes_req.append(f"{sinal} {r.valor.strip()} {unidade}" + (f" ({r.referencia.strip()})" if r.referencia.strip() else ""))
+                if est:
+                    v = est[1] if r.criterio == "<=" else est[0]
+                    oks.append(v <= lim if r.criterio == "<=" else v >= lim)
+            req_txt = "; ".join(partes_req)
+            if oks:
+                ok = all(oks)
+                resultados.append(ok)
+                res_txt = "Conforme" if ok else "Não conforme"
+        cor = "" if res_txt == "—" else (";color:#15803d" if res_txt == "Conforme" else ";color:#b91c1c")
+        linhas_html += (
+            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">{_esc(rotulo)}</td>'
+            f'<td {_TD_NUM}>{_num(valor, fmt)}</td><td {_TD_TXT}>{unidade}</td>'
+            f'<td {_TD_TXT}>{_esc(req_txt)}</td>'
+            f'<td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold{cor}">{res_txt}</td></tr>'
+        )
+
+    if resultados:
+        conclusao = "APROVADO" if all(resultados) else "REPROVADO"
+    else:
+        conclusao = (getattr(req, "conclusao_manual", "") or "").strip().upper()
+    if conclusao:
+        cor = "#15803d" if conclusao == "APROVADO" else "#b91c1c" if conclusao == "REPROVADO" else "#1a1a1a"
+        linhas_html += (
+            f'<tr><td style="border:1px solid #bbb;padding:7px 9px;font-weight:bold;background:#f4f6f9">Conclusão</td>'
+            f'<td colspan="4" class="conclusao" style="border:1px solid #bbb;padding:7px 9px;font-weight:bold;'
+            f'font-size:12pt;letter-spacing:1px;color:{cor}">{_esc(conclusao)}</td></tr>'
+        )
+    return (
+        f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
+        f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+        f'Tabela {tab_num} – Resumo dos Resultados.</p>'
+        f'<table style="width:90%;margin:0 auto 20px"><thead><tr>'
+        f'<th {_TH}>Propriedade</th><th {_TH}>Valor</th><th {_TH}>Unidade</th>'
+        f'<th {_TH}>Requisito normativo</th><th {_TH}>Resultado</th></tr></thead>'
+        f'<tbody>{linhas_html}</tbody></table>'
+    )
+
+
+# ──────────────────────────────────────────────
 # Main function
 # ──────────────────────────────────────────────
 
@@ -330,7 +615,14 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     executor = (responsavel.get("executor") or "").strip()
     flexao = modo == "flexao"
     tipo_ensaio = "Flexão" if flexao else "Tração"
-    titulo_rel = f"Relatório de Ensaio de {tipo_ensaio}"
+    titulo_rel = (getattr(req, "titulo", "") or "").strip() or f"Relatório de Ensaio de {tipo_ensaio}"
+    resumido = (not flexao) and getattr(req, "modelo", "completo") == "resumido"
+    # Série de CPs: o ensaio principal + os outros CPs do lote (cada item é
+    # (nome, df) ou (nome, df, kpis)). No modelo resumido os CPs do lote chegam
+    # por ``comparacao_series``.
+    cps: list[tuple] = [(ensaio.nome, df, kpis)]
+    if resumido and comparacao_series:
+        cps += list(comparacao_series)
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     body_parts: list[str] = []
     sec_num = 0
@@ -360,7 +652,9 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         f'<div style="font-size:9pt;color:#444;margin-top:3px">N°&nbsp;{_esc(numero_rel)}</div>'
         if numero_rel else ""
     )
-    emitido_por = f" por {_esc(emissor['nome'])}" if emissor.get("nome") else ""
+    # Quem emitiu é controle interno: só aparece com o quadro de responsabilidade
+    emitido_por = (f" por {_esc(emissor['nome'])}"
+                   if emissor.get("nome") and getattr(req, "include_responsabilidade", True) else "")
     emitido_html = f'<div style="font-size:7.5pt;color:#888;margin-top:6px">Emitido em {now}{emitido_por}</div>'
 
     header_html = f"""
@@ -414,7 +708,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
     if req.include_condicoes: toc_items.append(f"CONDIÇÕES DO ENSAIO DE {tipo_ensaio.upper()}")
     if req.include_resultados: toc_items.append("RESULTADOS")
     if req.include_conclusao: toc_items.append("CONCLUSÃO")
-    if toc_items:
+    if toc_items and getattr(req, "include_sumario", True):
         toc_rows = "".join(
             f'<tr>'
             f'<td style="padding:7px 14px;width:30px;font-weight:bold;color:#1e3a5f;'
@@ -475,35 +769,42 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
             f'Tabela {tab_num} – Condições do ensaio de {tipo_ensaio}.</p>'
         )
         rows = []
-        if c.temp_laboratorio or c.umidade_laboratorio:
-            rows.append(_td2("Temperatura do Laboratório:", f"{c.temp_laboratorio} °C" if c.temp_laboratorio else "—",
-                             "Umidade do Laboratório:", f"{c.umidade_laboratorio} %" if c.umidade_laboratorio else "—"))
-        if c.temp_ensaio or c.num_corpos_prova:
-            te = c.temp_ensaio.strip() if c.temp_ensaio else "Tamb"
-            # Append °C only when value is numeric (not "Tamb" or other text)
-            te_display = te if not te.replace(",", ".").replace("-", "").strip().replace(".", "", 1).isdigit() else f"{te} °C"
-            rows.append(_td2("Temperatura do Ensaio:", te_display,
-                             "Número de Corpos de Prova:", c.num_corpos_prova or "—"))
+        # Só entram os campos preenchidos, dois por linha (a qualidade pediu para
+        # tirar "Temperatura do ensaio" e "Célula de carga": basta deixá-los vazios).
+        pares: list[tuple[str, str]] = []
+
+        def _par(rotulo: str, valor: str, sufixo: str = "") -> None:
+            v = (valor or "").strip()
+            if v:
+                pares.append((rotulo, f"{v} {sufixo}".strip() if sufixo else v))
+
+        _par("Temperatura do Laboratório:", c.temp_laboratorio, "°C")
+        _par("Umidade do Laboratório:", c.umidade_laboratorio, "%")
+        te = (c.temp_ensaio or "").strip()
+        if te:
+            numerico = te.replace(",", ".").replace("-", "").strip().replace(".", "", 1).isdigit()
+            _par("Temperatura do Ensaio:", te, "°C" if numerico else "")
+        n_cps = (c.num_corpos_prova or "").strip()
+        if resumido and len(cps) > 1 and n_cps in ("", "1"):
+            n_cps = str(len(cps))
+        _par("Número de Corpos de Prova:", n_cps)
+        if c.celula_carga:
+            _par("Célula de Carga:", c.celula_carga, c.celula_carga_unidade)
         if flexao:
-            # Na flexão não há L₀ nem garras: o comprimento relevante é o vão entre apoios
-            if c.celula_carga or c.distancia_garras_mm:
-                carga_display = f"{c.celula_carga} {c.celula_carga_unidade}".strip() if c.celula_carga else "—"
-                rows.append(_td2("Célula de Carga:", carga_display,
-                                 "Distância entre Apoios (L):", f"{c.distancia_garras_mm} mm" if c.distancia_garras_mm else "—"))
-        elif c.celula_carga or c.comprimento_inicial_mm:
-            carga_display = f"{c.celula_carga} {c.celula_carga_unidade}".strip() if c.celula_carga else "—"
-            rows.append(_td2("Célula de Carga:", carga_display,
-                             "Comprimento Inicial (L₀):", f"{c.comprimento_inicial_mm} mm" if c.comprimento_inicial_mm else "—"))
-        if c.velocidade_ensaio or c.tipo_corpo_prova:
-            vel_display = f"{c.velocidade_ensaio} {c.velocidade_ensaio_unidade}".strip() if c.velocidade_ensaio else "—"
-            rows.append(_td2("Velocidade do Ensaio:", vel_display,
-                             "Corpo de Prova:", c.tipo_corpo_prova or "—"))
-        if flexao:
-            if c.extensometro:
-                rows.append(_td("Extensômetro:", c.extensometro, "22%"))
-        elif c.distancia_garras_mm or c.extensometro:
-            rows.append(_td2("Distância entre Garras:", f"{c.distancia_garras_mm} mm" if c.distancia_garras_mm else "—",
-                             "Extensômetro:", c.extensometro or "—"))
+            _par("Distância entre Apoios (L):", c.distancia_garras_mm, "mm")
+        else:
+            _par("Comprimento Inicial (L₀):", c.comprimento_inicial_mm, "mm")
+            _par("Distância entre Garras:", c.distancia_garras_mm, "mm")
+        if c.velocidade_ensaio:
+            _par("Velocidade do Ensaio:", c.velocidade_ensaio, c.velocidade_ensaio_unidade)
+        _par("Tipo de Corpo de Prova:" if resumido else "Corpo de Prova:", c.tipo_corpo_prova)
+        _par("Extensômetro:", c.extensometro)
+        for i in range(0, len(pares), 2):
+            if i + 1 < len(pares):
+                rows.append(_td2(pares[i][0], pares[i][1], pares[i + 1][0], pares[i + 1][1]))
+            else:
+                rows.append(f'<tr><td style="font-weight:bold;width:22%;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px">{_esc(pares[i][0])}</td>'
+                            f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(pares[i][1])}</td></tr>')
         if c.largura_cp_mm or c.espessura_cp_mm:
             rows.append(f'<tr>'
                         f'<td style="font-weight:bold;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px" rowspan="2">Dimensões dos Corpos de Prova:</td>'
@@ -523,6 +824,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         if c.equipamentos:
             rows.append(f'<tr><td style="font-weight:bold;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px">Equipamento(s):</td>'
                         f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(c.equipamentos)}</td></tr>')
+        metodo = (getattr(c, "metodo_ensaio", "") or "").strip()
+        if metodo:
+            rows.append(f'<tr><td style="font-weight:bold;background:#f0f0f0;border:1px solid #bbb;padding:5px 9px">Método de Ensaio:</td>'
+                        f'<td colspan="3" style="border:1px solid #bbb;padding:5px 9px">{_esc(metodo)}</td></tr>')
         norma_ref = c.norma_referencia
         if flexao and norma_ref == "ISO 527-1:2019":   # padrão do pedido é o da tração
             norma_ref = kpis.get("norma") or norma_ref
@@ -548,7 +853,16 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         unidades_cruas = not all(kpis.get(k) for k in ("largura_mm", "espessura_mm", "span_mm"))
 
     # ── SEÇÃO 4: RESULTADOS ───────────────────
-    if req.include_resultados:
+    linhas_cp: list[dict] = []
+    if resumido:
+        linhas_cp = _linhas_por_cp(cps, req.condicoes)
+    if resumido and req.include_resultados:
+        sec_num += 1
+        body_parts.append(_section_header(sec_num, "Resultados"))
+        partes, fig_num, tab_num = _resultados_resumido(cps, linhas_cp, req, fig_num, tab_num,
+                                                       kpis, tensao_max, alongamento, area, l0)
+        body_parts += partes
+    elif req.include_resultados:
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Resultados"))
 
@@ -727,7 +1041,10 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         sec_num += 1
         body_parts.append(_section_header(sec_num, "Conclusão"))
         tab_num += 1
-        if flexao:
+        if resumido:
+            body_parts.append(_conclusao_resumida(linhas_cp, req, tab_num))
+            resumo = []
+        elif flexao:
             resumo = [
                 ("Módulo de Flexão", _num(kpis.get("modulo_flexao_GPa"), ".3f"), "GPa"),
                 ("Resistência à Flexão", _num(kpis.get("tensao_flexao_max_MPa")), "MPa"),
@@ -742,25 +1059,26 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 ("Alongamento Final", _num(kpis.get("alonga_final_pct")), "%"),
                 ("Energia Absorvida", _num(kpis.get("energia_J")), "J"),
             ]
-        resumo_html = "".join(
-            f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">{_esc(r[0])}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{r[1]}</td>'
-            f'<td style="border:1px solid #bbb;padding:5px 9px">{r[2]}</td></tr>'
-            for r in resumo
-        )
-        body_parts.append(
-            f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
-            f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
-            f'Tabela {tab_num} – Resumo dos Resultados.</p>'
-            f'<table style="width:65%;margin:0 auto 20px">'
-            f'<thead><tr>'
-            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Propriedade</th>'
-            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Valor</th>'
-            f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Unidade</th>'
-            f'</tr></thead>'
-            f'<tbody>{resumo_html}'
-            f'</tbody></table>'
-        )
+        if not resumido:
+            resumo_html = "".join(
+                f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">{_esc(r[0])}</td>'
+                f'<td style="border:1px solid #bbb;padding:5px 9px;text-align:right;font-family:monospace">{r[1]}</td>'
+                f'<td style="border:1px solid #bbb;padding:5px 9px">{r[2]}</td></tr>'
+                for r in resumo
+            )
+            body_parts.append(
+                f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
+                f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+                f'Tabela {tab_num} – Resumo dos Resultados.</p>'
+                f'<table style="width:65%;margin:0 auto 20px">'
+                f'<thead><tr>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Propriedade</th>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Valor</th>'
+                f'<th style="background:#1e3a5f;color:#fff;padding:6px 9px;border:1px solid #999">Unidade</th>'
+                f'</tr></thead>'
+                f'<tbody>{resumo_html}'
+                f'</tbody></table>'
+            )
 
         local_data = req.local_data or _data_extenso(datetime.now())
         body_parts.append(
@@ -770,15 +1088,18 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         # O usuário logado que emite o relatório assina automaticamente (se ainda
         # não estiver na lista). O acesso mestre não assina por ninguém.
         assinaturas = [s for s in req.assinaturas if s.nome]
-        if emissor.get("nome") and not emissor.get("mestre"):
+        if emissor.get("nome") and not emissor.get("mestre") and getattr(req, "assinar_emissor", True):
             nomes = {s.nome.strip().lower() for s in assinaturas}
             if emissor["nome"].strip().lower() not in nomes:
                 cargo = " · ".join(x for x in (emissor.get("cargo"), emissor.get("registro")) if x)
-                assinaturas.insert(0, SimpleNamespace(nome=emissor["nome"], cargo=cargo))
+                assinaturas.insert(0, SimpleNamespace(nome=emissor["nome"], cargo=cargo, funcao=""))
         if assinaturas:
             sigs_html = "".join(
                 f'<div style="text-align:center">'
-                f'<div style="border-top:1px solid #333;width:180px;margin:0 auto 6px"></div>'
+                + (f'<div style="font-size:8.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;'
+                   f'color:#555;text-align:left;margin-bottom:34px">{_esc(s.funcao)}:</div>'
+                   if (getattr(s, "funcao", "") or "").strip() else "")
+                + f'<div style="border-top:1px solid #333;width:180px;margin:0 auto 6px"></div>'
                 f'<div style="font-weight:bold">{_esc(s.nome)}</div>'
                 f'<div style="font-size:9.5pt">{_esc(s.cargo)}</div>'
                 f'</div>'
@@ -791,7 +1112,7 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
                 )
 
     # ── RESPONSABILIDADE (usuário logado) ─────
-    if emissor.get("nome") or executor:
+    if (emissor.get("nome") or executor) and getattr(req, "include_responsabilidade", True):
         linhas = []
         if executor:
             linhas.append(("Ensaio executado por", executor))

@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useUsuarioOpcional } from "../../hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2, Sparkles } from "lucide-react";
+import { X, FileText, Loader2, ChevronDown, Upload, Trash2, BarChart2, Sparkles, Plus } from "lucide-react";
 import { generateReport, getCamposRelatorio } from "../../api/client";
 import { useClientes, useEnsaios } from "../../hooks/useEnsaios";
 import { useEnsaiosFlexao } from "../../hooks/useFlexao";
 import type {
   ReportRequest, DadosEmpresa, DadosCliente, DadosAmostra,
-  CondicoesEnsaio, Assinatura, TipoEnsaio,
+  CondicoesEnsaio, Assinatura, TipoEnsaio, GraficoRelatorio, Requisito,
 } from "../../types";
 
 interface Props {
@@ -24,13 +24,30 @@ const EMPTY_EMPRESA: DadosEmpresa = { nome: "", endereco: "", telefone: "", emai
 const EMPTY_CLIENTE: DadosCliente = { nome: "", os: "", contato: "", email_cliente: "", telefone_cliente: "", endereco: "", bairro: "", cidade_uf: "", cep: "", data_recebimento: "", periodo_realizacao: "" };
 const EMPTY_AMOSTRA: DadosAmostra = { id_interno: "", id_cliente: "", imagem_data_url: "" };
 const EMPTY_CONDICOES: CondicoesEnsaio = {
-  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "Tamb",
+  temp_laboratorio: "", umidade_laboratorio: "", temp_ensaio: "",
   num_corpos_prova: "1", celula_carga: "", celula_carga_unidade: "kN",
   comprimento_inicial_mm: "", velocidade_ensaio: "", velocidade_ensaio_unidade: "mm/min",
   tipo_corpo_prova: "", distancia_garras_mm: "", extensometro: "",
   largura_cp_mm: "", espessura_cp_mm: "", preparacao_cp: [],
   data_realizacao: "", equipamentos: "", norma_referencia: "ISO 527-1:2019",
+  metodo_ensaio: "",
 };
+
+const TITULO_TRACAO = "Relatório de Resistência ao Alongamento (Tração)";
+
+// Deformação usa L₀ (base de medida); alongamento usa a distância entre garras.
+const GRAFICOS: [GraficoRelatorio, string][] = [
+  ["tensao_alongamento", "Tensão × Alongamento (%) — base: distância entre garras"],
+  ["tensao_deformacao", "Tensão × Deformação (%) — base: L₀"],
+  ["tensao_deslocamento", "Tensão × Deslocamento (mm)"],
+  ["forca_deslocamento", "Força × Deslocamento (mm)"],
+];
+
+const PROPRIEDADES: [Requisito["propriedade"], string, string][] = [
+  ["tensao_max", "Tensão máxima", "MPa"],
+  ["alongamento", "Alongamento final", "%"],
+  ["forca_max", "Força máxima", "N"],
+];
 
 const PREPARACAO_OPCOES = ["Injeção", "Usinagem", "Prensagem", "Estampagem", "Recorte", "Enviados pelo Cliente"];
 
@@ -194,6 +211,22 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
 
   const [comparacaoIds, setComparacaoIds] = useState<number[]>([]);
 
+  // Modelo resumido (pedido da qualidade): só tração
+  const [titulo, setTitulo] = useState(flexao ? "" : TITULO_TRACAO);
+  const [modelo, setModelo] = useState<"resumido" | "completo">(flexao ? "completo" : "resumido");
+  const resumido = !flexao && modelo === "resumido";
+  const [escopo, setEscopo] = useState<"teste" | "lote">("teste");
+  const [cpIds, setCpIds] = useState<number[]>([]);
+  const [graficos, setGraficos] = useState<GraficoRelatorio[]>(["tensao_alongamento"]);
+  const [requisitos, setRequisitos] = useState<Requisito[]>([]);
+  const [conclusaoManual, setConclusaoManual] = useState("");
+  const [extras, setExtras] = useState({
+    include_sumario: flexao,
+    include_tabela_detalhada: false,
+    include_responsabilidade: flexao,
+    assinar_emissor: flexao,
+  });
+
   const [empresa, setEmpresaState] = useState<DadosEmpresa>(EMPTY_EMPRESA);
   const [cliente, setClienteState] = useState<DadosCliente>(EMPTY_CLIENTE);
   const [amostra, setAmostraState] = useState<DadosAmostra>(EMPTY_AMOSTRA);
@@ -203,8 +236,8 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
   );
   const [localData, setLocalData] = useState("");
   const [assinaturas, setAssinaturas] = useState<Assinatura[]>([
-    { nome: "", cargo: "" },
-    { nome: "", cargo: "" },
+    { nome: "", cargo: "", funcao: "Executado por" },
+    { nome: "", cargo: "", funcao: "Validado por" },
   ]);
   const [obsFinais, setObsFinais] = useState(DEFAULT_OBS);
 
@@ -227,7 +260,13 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
         ...x, ...cheios(c.condicoes),
         equipamentos: x.equipamentos || c.equipamentos,
       }));
-      if (c.assinaturas?.length) setAssinaturas(c.assinaturas);
+      if (c.assinaturas?.length) {
+        const padrao = ["Executado por", "Validado por"];
+        setAssinaturas(c.assinaturas.map((s, i) => ({ ...s, funcao: s.funcao ?? padrao[i] ?? "" })));
+      }
+      if (c.requisitos?.length) setRequisitos(c.requisitos);
+      if (c.titulo) setTitulo(c.titulo);
+      if (c.metodo_ensaio) setCondicoesState((x) => ({ ...x, metodo_ensaio: x.metodo_ensaio || c.metodo_ensaio }));
       setAutoPreenchido(true);
     }).catch(() => { /* sem preenchimento automático */ });
     return () => { cancel = true; };
@@ -269,6 +308,15 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
   function setAssinatura(i: number, field: keyof Assinatura, v: string) {
     setAssinaturas(sigs => sigs.map((s, idx) => idx === i ? { ...s, [field]: v } : s));
   }
+  function toggleCp(id: number) {
+    setCpIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  }
+  function toggleGrafico(g: GraficoRelatorio) {
+    setGraficos(gs => gs.includes(g) ? gs.filter(x => x !== g) : [...gs, g]);
+  }
+  function setRequisito(i: number, field: keyof Requisito, v: string) {
+    setRequisitos(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: v } as Requisito : r));
+  }
   function toggleComparacao(id: number) {
     setComparacaoIds(ids =>
       ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
@@ -284,6 +332,14 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
         tipo,
         cliente_id: clienteId,
         ...flags,
+        ...extras,
+        titulo,
+        modelo: flexao ? "completo" : modelo,
+        escopo: resumido ? escopo : "teste",
+        cp_ids: resumido && escopo === "lote" ? cpIds : [],
+        graficos: resumido ? graficos : [],
+        requisitos: requisitos.filter(r => r.valor.trim()),
+        conclusao_manual: conclusaoManual,
         comparacao_ids: flags.include_comparativo ? comparacaoIds : [],
         empresa, cliente, amostra, objetivos,
         condicoes, local_data: localData,
@@ -326,6 +382,72 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
 
         {/* Body */}
         <div className="overflow-y-auto p-5 space-y-3 flex-1">
+
+          {/* Modelo do relatório */}
+          <div className="rounded-lg border border-border p-4 space-y-3 bg-bg">
+            <Field label="Título do relatório" value={titulo} onChange={setTitulo}
+              placeholder={flexao ? "Relatório de Ensaio de Flexão" : TITULO_TRACAO} />
+            {!flexao && (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted">Modelo</span>
+                  <select value={modelo} onChange={e => setModelo(e.target.value as "resumido" | "completo")} className={INPUT_CLS}>
+                    <option value="resumido">Resumido (Fmax, σmax, alongamento e conclusão)</option>
+                    <option value="completo">Completo (todas as propriedades calculadas)</option>
+                  </select>
+                </label>
+                {resumido && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-muted">Relatório de</span>
+                    <select value={escopo} onChange={e => setEscopo(e.target.value as "teste" | "lote")} className={INPUT_CLS}>
+                      <option value="teste">Um teste (este CP)</option>
+                      <option value="lote">Um lote (vários CPs, com mínimo, máximo e média)</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+            {resumido && escopo === "lote" && (
+              <div>
+                <p className="text-xs text-muted mb-2">
+                  Este ensaio já é o primeiro CP. Marque os outros CPs do mesmo lote:
+                </p>
+                {outrosEnsaios.length === 0 ? (
+                  <p className="text-xs text-muted/50 italic">Nenhum outro ensaio disponível.</p>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-lg p-2 bg-surface">
+                    {outrosEnsaios.map(e => (
+                      <label key={e.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded cursor-pointer hover:bg-bg transition-colors">
+                        <input type="checkbox" checked={cpIds.includes(e.id)} onChange={() => toggleCp(e.id)}
+                          className="w-3.5 h-3.5 accent-accent shrink-0" />
+                        <span className="text-xs font-mono text-slate-300 truncate">{e.nome || e.filename.replace(".csv", "")}</span>
+                        <span className="text-xs text-muted/60 ml-auto shrink-0">
+                          {e.tensao != null ? `${e.tensao.toFixed(1)} MPa` : "—"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-accent mt-1.5">{cpIds.length + 1} corpo{cpIds.length ? "s" : ""} de prova no relatório</p>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {(
+                [
+                  ["include_sumario", "Sumário"],
+                  ["include_responsabilidade", "Quadro de responsabilidade (controle interno)"],
+                  ["assinar_emissor", "Usuário logado assina o relatório"],
+                ] as [keyof typeof extras, string][]
+              ).map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={extras[k]}
+                    onChange={() => setExtras(x => ({ ...x, [k]: !x[k] }))}
+                    className="w-4 h-4 accent-accent" />
+                  <span className="text-sm text-slate-300">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           {/* Empresa */}
           <SectionCard title="Cabeçalho / Empresa" enabled={flags.include_empresa} onToggle={() => toggleFlag("include_empresa")}>
@@ -423,8 +545,17 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                   units={["mm/min", "mm/s", "m/min"]}
                   placeholder="ex: 5,00"
                 />
-                <Field label="Tipo de Corpo de Prova" value={condicoes.tipo_corpo_prova}
-                  onChange={v => setCondicoes("tipo_corpo_prova", v)} placeholder={flexao ? "ex: Barra 80 × 10 × 4" : "ex: Tipo 1A"} />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted">Tipo de Corpo de Prova</span>
+                  <input list="tipos-cp" value={condicoes.tipo_corpo_prova}
+                    onChange={e => setCondicoes("tipo_corpo_prova", e.target.value)}
+                    placeholder={flexao ? "ex: Barra 80 × 10 × 4" : "ex: Tipo 1, 2 ou 3"} className={INPUT_CLS} />
+                  {!flexao && (
+                    <datalist id="tipos-cp">
+                      <option value="Tipo 1" /><option value="Tipo 2" /><option value="Tipo 3" />
+                    </datalist>
+                  )}
+                </label>
                 <FieldWithSuffix label={flexao ? "Distância entre Apoios (L)" : "Distância entre Garras"} value={condicoes.distancia_garras_mm}
                   onChange={v => setCondicoes("distancia_garras_mm", v)} placeholder={flexao ? "ex: 64" : "ex: 115"} suffix="mm" />
                 <Field label="Extensômetro" value={condicoes.extensometro}
@@ -457,13 +588,39 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                   className="bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-white
                              focus:outline-none focus:border-accent transition-colors resize-none font-mono" />
               </label>
-              <Field label="Norma de Referência" value={condicoes.norma_referencia}
-                onChange={v => setCondicoes("norma_referencia", v)} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Método de Ensaio" value={condicoes.metodo_ensaio ?? ""}
+                  onChange={v => setCondicoes("metodo_ensaio", v)} placeholder="ex: NBR 15561 ou ISO 13953" />
+                <Field label="Norma de Referência" value={condicoes.norma_referencia}
+                  onChange={v => setCondicoes("norma_referencia", v)} />
+              </div>
+              <p className="text-[11px] text-muted">Campos vazios não aparecem no relatório (ex.: temperatura do ensaio, célula de carga).</p>
             </div>
           </SectionCard>
 
           {/* Resultados */}
           <SectionCard title="Resultados" enabled={flags.include_resultados} onToggle={() => toggleFlag("include_resultados")}>
+            {resumido ? (
+              <div className="space-y-2">
+                <span className="text-xs text-muted block">Gráficos (todos os CPs no mesmo gráfico)</span>
+                {GRAFICOS.map(([g, label]) => (
+                  <label key={g} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={graficos.includes(g)} onChange={() => toggleGrafico(g)}
+                      className="w-4 h-4 accent-accent" />
+                    <span className="text-sm text-slate-300">{label}</span>
+                  </label>
+                ))}
+                {graficos.includes("tensao_alongamento") && !condicoes.distancia_garras_mm && (
+                  <p className="text-xs text-amber-400">Preencha a Distância entre Garras em Condições do Ensaio; sem ela o alongamento usa L₀.</p>
+                )}
+                <label className="flex items-center gap-2 cursor-pointer border-t border-border/50 pt-2">
+                  <input type="checkbox" checked={extras.include_tabela_detalhada}
+                    onChange={() => setExtras(x => ({ ...x, include_tabela_detalhada: !x.include_tabela_detalhada }))}
+                    className="w-4 h-4 accent-accent" />
+                  <span className="text-sm text-slate-300">Tabela detalhada (módulo, energia, rigidez...)</span>
+                </label>
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="space-y-2">
                 {(
@@ -530,6 +687,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                 )}
               </div>
             </div>
+            )}
           </SectionCard>
 
           {/* Conclusão */}
@@ -542,16 +700,55 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                   {!usuario.mestre && ", e a sua assinatura entra aqui se não estiver na lista"}.
                 </p>
               )}
+              {resumido && (
+                <div className="space-y-2">
+                  <span className="text-xs text-muted block">
+                    Requisitos normativos (definidos pelo laboratório). O resultado sai como APROVADO ou REPROVADO comparando o menor valor dos CPs.
+                  </span>
+                  {requisitos.map((r, i) => (
+                    <div key={i} className="grid grid-cols-[1.3fr_0.7fr_0.8fr_1.4fr_auto] gap-2 items-center">
+                      <select value={r.propriedade} onChange={e => setRequisito(i, "propriedade", e.target.value)} className={INPUT_CLS}>
+                        {PROPRIEDADES.map(([k, l, u]) => <option key={k} value={k}>{l} ({u})</option>)}
+                      </select>
+                      <select value={r.criterio} onChange={e => setRequisito(i, "criterio", e.target.value)} className={INPUT_CLS}>
+                        <option value=">=">mínimo ≥</option>
+                        <option value="<=">máximo ≤</option>
+                      </select>
+                      <input value={r.valor} onChange={e => setRequisito(i, "valor", e.target.value)} placeholder="valor" className={INPUT_CLS} />
+                      <input value={r.referencia} onChange={e => setRequisito(i, "referencia", e.target.value)} placeholder="norma citada, ex.: NBR 15561" className={INPUT_CLS} />
+                      <button type="button" onClick={() => setRequisitos(rs => rs.filter((_, idx) => idx !== i))}
+                        className="text-muted hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setRequisitos(rs => [...rs, { propriedade: rs.length === 0 ? "tensao_max" : "alongamento", criterio: ">=", valor: "", referencia: condicoes.metodo_ensaio || "" }])}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded text-xs text-white hover:border-accent transition-colors">
+                    <Plus size={12} /> Adicionar requisito
+                  </button>
+                  {requisitos.filter(r => r.valor.trim()).length === 0 && (
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted">Sem requisitos: conclusão escrita à mão</span>
+                      <select value={conclusaoManual} onChange={e => setConclusaoManual(e.target.value)} className={INPUT_CLS}>
+                        <option value="">— não mostrar —</option>
+                        <option value="APROVADO">APROVADO</option>
+                        <option value="REPROVADO">REPROVADO</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
               <Field label="Local e Data" value={localData} onChange={setLocalData}
                 placeholder="ex: São Carlos, 27 de maio de 2026." />
               <div className="space-y-3">
                 <span className="text-xs text-muted block">Assinaturas</span>
                 {assinaturas.map((sig, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-3">
+                  <div key={i} className="grid grid-cols-3 gap-3">
+                    <Field label="Função" value={sig.funcao ?? ""}
+                      onChange={v => setAssinatura(i, "funcao", v)} placeholder="ex: Executado por" />
                     <Field label={`Assinatura ${i + 1} — Nome`} value={sig.nome}
                       onChange={v => setAssinatura(i, "nome", v)} placeholder="Nome completo" />
                     <Field label="Cargo" value={sig.cargo}
-                      onChange={v => setAssinatura(i, "cargo", v)} placeholder="ex: Pesquisador" />
+                      onChange={v => setAssinatura(i, "cargo", v)} placeholder="ex: Inspetor de Qualidade" />
                   </div>
                 ))}
               </div>

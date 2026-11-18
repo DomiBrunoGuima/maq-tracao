@@ -130,6 +130,9 @@ export interface CamposRelatorio {
   numero_relatorio_sugerido: string;
   assinaturas: Assinatura[];
   equipamentos: string;
+  requisitos?: Requisito[];
+  titulo?: string;
+  metodo_ensaio?: string;
 }
 
 export interface KPIs {
@@ -597,17 +600,40 @@ export interface CondicoesEnsaio {
   data_realizacao: string;
   equipamentos: string;
   norma_referencia: string;
+  metodo_ensaio?: string;
 }
 
 export interface Assinatura {
   nome: string;
   cargo: string;
+  funcao?: string;
+}
+
+export type GraficoRelatorio =
+  | "tensao_alongamento" | "tensao_deformacao" | "tensao_deslocamento" | "forca_deslocamento";
+
+export interface Requisito {
+  propriedade: "tensao_max" | "alongamento" | "forca_max";
+  criterio: ">=" | "<=";
+  valor: string;
+  referencia: string;
 }
 
 export interface ReportRequest {
   ensaio_id: number;
   tipo?: TipoEnsaio;
   cliente_id?: number | null;
+  titulo?: string;
+  modelo?: "completo" | "resumido";
+  escopo?: "teste" | "lote";
+  cp_ids?: number[];
+  graficos?: GraficoRelatorio[];
+  include_sumario?: boolean;
+  include_tabela_detalhada?: boolean;
+  include_responsabilidade?: boolean;
+  assinar_emissor?: boolean;
+  requisitos?: Requisito[];
+  conclusao_manual?: string;
   include_empresa: boolean;
   include_cliente: boolean;
   include_amostra: boolean;

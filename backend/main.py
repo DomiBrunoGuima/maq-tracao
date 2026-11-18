@@ -670,7 +670,24 @@ def generate_report(req: ReportRequest, request: Request, db: Session = Depends(
     kpis = calculate_kpis(df, ihm_params=ihm_params)
 
     comparacao_series = None
-    if req.include_comparativo and req.comparacao_ids:
+    if req.modelo == "resumido":
+        # Relatório por lote: os outros CPs entram com os KPIs calculados com os
+        # parâmetros da IHM de cada um (área e L₀ podem mudar de CP para CP).
+        if req.escopo == "lote" and req.cp_ids:
+            comparacao_series = []
+            for cid in dict.fromkeys(req.cp_ids):
+                if cid == r.id:
+                    continue
+                cr = db.query(EnsaioDB).filter(EnsaioDB.id == cid).first()
+                if not cr:
+                    continue
+                try:
+                    cdf = pd.read_json(io.StringIO(cr.data_json))
+                    ck = calculate_kpis(cdf, ihm_params=_load_ihm_params_for(cr.filename, db))
+                    comparacao_series.append((cr.nome, cdf, ck))
+                except Exception as exc:
+                    print(f"[relatorio] falha ao carregar CP {cid} do lote: {exc}", flush=True)
+    elif req.include_comparativo and req.comparacao_ids:
         comparacao_series = []
         for cid in req.comparacao_ids:
             cr = db.query(EnsaioDB).filter(EnsaioDB.id == cid).first()
@@ -830,6 +847,12 @@ def _campos_comuns_relatorio(db: Session, r, condicoes: dict) -> dict:
         "empresa": {k: v for k, v in (anterior.get("empresa") or {}).items() if k != "numero_relatorio"},
         "numero_relatorio_sugerido": f"{n_ano + 1:04d}/{ano}",
         "assinaturas": anterior.get("assinaturas") or [],
+        # Requisitos normativos, método de ensaio e título são definidos pelo
+        # laboratório: reaproveita o que foi usado no último relatório.
+        "requisitos": anterior.get("requisitos") or [],
+        "titulo": (anterior.get("titulo") or "")
+                  if anterior.get("tipo", "tracao") == ("flexao" if isinstance(r, EnsaioFlexaoDB) else "tracao") else "",
+        "metodo_ensaio": (anterior.get("condicoes") or {}).get("metodo_ensaio", ""),
         "equipamentos": (anterior.get("condicoes") or {}).get("equipamentos", ""),
     }
 

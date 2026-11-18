@@ -346,15 +346,39 @@ class CondicoesEnsaio(BaseModel):
     data_realizacao: str = ""
     equipamentos: str = ""
     norma_referencia: str = "ISO 527-1:2019"
+    metodo_ensaio: str = ""            # ex.: NBR 15561, ISO 13953 (editável pelo laboratório)
 
 class Assinatura(BaseModel):
     nome: str = ""
     cargo: str = ""
+    funcao: str = ""                   # ex.: "Executado por", "Validado por"
+
+class Requisito(BaseModel):
+    """Requisito normativo definido pelo laboratório (não fica fixo no código)."""
+    propriedade: str = "tensao_max"    # tensao_max | alongamento | forca_max
+    criterio: str = ">="               # ">=" (mínimo exigido) ou "<=" (máximo permitido)
+    valor: str = ""
+    referencia: str = ""               # norma/cláusula citada, ex.: "NBR 15561"
 
 class ReportRequest(BaseModel):
     ensaio_id: int
     tipo: str = "tracao"               # "tracao" ou "flexao"
     cliente_id: Optional[int] = None   # cliente cadastrado (para salvar/buscar o relatório)
+    titulo: str = ""                   # vazio = "Relatório de Ensaio de Tração/Flexão"
+    # "completo" = layout antigo (tabela detalhada, comparativos); "resumido" = layout
+    # pedido pela qualidade (tabela por CP com Fmax, σmax e alongamento, requisitos e
+    # conclusão aprovado/reprovado). Só vale para tração.
+    modelo: str = "completo"
+    escopo: str = "teste"              # "teste" (um CP) ou "lote" (ensaio_id + cp_ids)
+    cp_ids: List[int] = []
+    # tensao_alongamento | tensao_deformacao | tensao_deslocamento | forca_deslocamento
+    graficos: List[str] = []
+    include_sumario: bool = False
+    include_tabela_detalhada: bool = False
+    include_responsabilidade: bool = True
+    assinar_emissor: bool = True
+    requisitos: List[Requisito] = []
+    conclusao_manual: str = ""         # usada quando não há requisitos: APROVADO/REPROVADO
     # Flags de seção
     include_empresa: bool = True
     include_cliente: bool = False

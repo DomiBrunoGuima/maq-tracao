@@ -230,3 +230,22 @@ def test_dados_do_teste_flexao(client):
         assert db.query(EnsaioFlexaoDB).get(fid).data_json == antes
     finally:
         db.close()
+
+
+def test_relatorio_por_lote_e_requisitos_reaproveitados(client):
+    e1 = _novo_ensaio(client, "CLP_L1.csv")
+    e2 = _novo_ensaio(client, "CLP_L2.csv")
+    e3 = _novo_ensaio(client, "CLP_L3.csv")
+    r = client.post("/api/relatorio", json={
+        "ensaio_id": e1, "modelo": "resumido", "escopo": "lote", "cp_ids": [e2, e3, e1],
+        "graficos": ["tensao_alongamento"], "titulo": "Relatório de Resistência ao Alongamento (Tração)",
+        "condicoes": {"metodo_ensaio": "ISO 13953", "distancia_garras_mm": "115"},
+        "requisitos": [{"propriedade": "alongamento", "criterio": ">=", "valor": "1", "referencia": "ISO 13953"}],
+    })
+    assert r.status_code == 200
+    html = r.text
+    assert html.count("CLP_L") >= 3 and "Média" in html and "APROVADO" in html
+    campos = client.get(f"/api/ensaios/{e2}/campos-relatorio").json()
+    assert campos["requisitos"][0]["valor"] == "1"
+    assert campos["metodo_ensaio"] == "ISO 13953"
+    assert campos["titulo"].startswith("Relatório de Resistência")

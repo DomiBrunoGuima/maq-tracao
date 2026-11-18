@@ -79,3 +79,78 @@ def test_grafico_flexao_com_deflexao_negativa_nao_fica_em_branco():
     _eixos_a_partir_de_zero(ax)
     assert ax.get_xlim()[0] == 0 and ax.get_ylim()[0] == 0
     plt.close(fig)
+
+
+# ── Modelo resumido (revisão da qualidade, nov/2026) ─────────────────────────
+
+def _req_resumido(**kw):
+    base = dict(ensaio_id=1, modelo="resumido", escopo="lote",
+                graficos=["tensao_alongamento", "forca_deslocamento"],
+                condicoes={"distancia_garras_mm": "200", "temp_ensaio": "", "metodo_ensaio": "NBR 15561"},
+                titulo="Relatório de Resistência ao Alongamento (Tração)")
+    base.update(kw)
+    return ReportRequest(**base)
+
+
+def _lote():
+    cps = []
+    for nome, peak in (("CP2", 2500.0), ("CP3", 2800.0)):
+        d = _df(peak=peak)
+        cps.append((nome, d, calculate_kpis(d)))
+    return cps
+
+
+def test_resumido_por_lote_tem_min_max_media_e_sem_sumario():
+    df = _df()
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(),
+                                comparacao_series=_lote())
+    assert "Sumário" not in html
+    assert "RESISTÊNCIA AO ALONGAMENTO" in html.upper()
+    assert "Mínimo" in html and "Máximo" in html and "Média" in html
+    assert "Método de Ensaio" in html and "NBR 15561" in html
+    assert "Temperatura do Ensaio" not in html and "Célula de Carga" not in html
+    assert "Número de Corpos de Prova:" in html and ">3<" in html
+    assert "Módulo de Elasticidade" not in html        # tabela detalhada fica de fora
+    assert "distância entre garras de 200 mm" in html
+    figs = [int(n) for n in re.findall(r"<p[^>]*>Figura (\d+) –", html)]
+    assert figs == [1, 2]
+
+
+def test_resumido_conclusao_pelos_requisitos_do_laboratorio():
+    df = _df()
+    # σmax de cada CP = pico/50 mm² → 60, 50 e 56 MPa; menor = 50
+    req = _req_resumido(requisitos=[{"propriedade": "tensao_max", "criterio": ">=", "valor": "45",
+                                     "referencia": "NBR 15561"}])
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), req, comparacao_series=_lote())
+    assert "APROVADO" in html and "REPROVADO" not in html
+    assert "≥ 45 MPa (NBR 15561)" in html
+    req = _req_resumido(requisitos=[{"propriedade": "tensao_max", "criterio": ">=", "valor": "55"}])
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), req, comparacao_series=_lote())
+    assert "REPROVADO" in html and "Não conforme" in html
+
+
+def test_resumido_sem_requisito_usa_conclusao_manual_ou_omite():
+    df = _df()
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(escopo="teste"))
+    assert 'class="conclusao"' not in html
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df),
+                                _req_resumido(escopo="teste", conclusao_manual="aprovado"))
+    assert "APROVADO" in html
+
+
+def test_resumido_avisa_area_digitada_errada():
+    df = _df(area=1.127)
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(escopo="teste"))
+    assert 'class="aviso-area"' in html
+
+
+def test_assinaturas_com_funcao_e_responsabilidade_opcional():
+    df = _df()
+    resp = {"emissor": {"nome": "Fulano", "login": "fulano"}, "executor": "Fulano"}
+    req = _req_resumido(escopo="teste", include_responsabilidade=False, assinar_emissor=False,
+                        assinaturas=[{"nome": "Inspetor", "cargo": "Qualidade", "funcao": "Executado por"},
+                                     {"nome": "Supervisor", "cargo": "Qualidade", "funcao": "Validado por"}])
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), req, responsavel=resp)
+    assert "Executado por:" in html and "Validado por:" in html
+    assert "Responsabilidade" not in html
+    assert ">Fulano<" not in html
