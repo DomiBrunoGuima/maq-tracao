@@ -60,7 +60,7 @@ o build leva de 20 a 40 minutos. Instalação e uso são iguais.
 1. Copie o zip para o PC do cliente (pen drive) e extraia.
 2. Clique com o botão direito em `instalar.bat` > **Executar como administrador**.
 3. O navegador abre em `http://localhost:8000`. Confira em **Configurações** o
-   IP da IHM (`192.168.11.10`) e a pasta monitorada.
+   IP da IHM (`192.168.15.50`) e a pasta monitorada.
 4. Apague a pasta extraída e o zip.
 5. Reinicie o PC uma vez e confirme que a tela abre pelo atalho sem fazer nada.
 
@@ -71,10 +71,47 @@ Se o cliente usa uma conta administradora, crie uma conta padrão para quem oper
 a máquina (Configurações do Windows > Contas > Outros usuários) e guarde a senha
 de administrador com vocês.
 
-### Atualizar
+### Atualizar (sem mexer nos registradores do cliente)
 
-Gere um zip novo e rode `instalar.bat` de novo. Ele para o programa, troca só o
-executável e mantém `config.json`, `tracao.db`, `data\` e `logs\`.
+Os registradores, o IP da IHM e as demais configurações ficam só no
+`C:\MaqTracao\config.json` do cliente; ensaios, clientes, usuários e auditoria
+ficam no `tracao.db`. O `instalar.bat` troca só o programa e mantém esses dois
+arquivos, `data\` e `logs\`. O `backend\config.json` do repositório só vale na
+primeira instalação (quando ainda não existe `C:\MaqTracao\config.json`).
+
+1. **No seu PC:** `git pull`, defina a senha do desenvolvedor
+   (`python instalacao\definir_senha_desenvolvedor.py`; sem ela ninguém abre as
+   Configurações) e gere o zip (`build_cliente_nuitka.bat`).
+2. **No PC do cliente, antes de instalar:** como administrador, copie
+   `C:\MaqTracao\config.json` e `C:\MaqTracao\tracao.db` para um pen drive ou
+   para a área de trabalho. Tire um print da tela **Configurações** (IP e
+   registradores), se tiver acesso a ela.
+3. Extraia o zip novo e rode `instalar.bat` como administrador. Ele:
+   - para o programa;
+   - guarda outra cópia de `config.json` e `tracao.db` em
+     `C:\MaqTracao\backups-atualizacao\<data-hora>` (nunca apagada pelo instalador);
+   - troca o programa e confere com `fc` que o `config.json` ficou idêntico
+     (se não ficou, restaura a cópia e avisa).
+4. **Conferir depois:**
+   - O instalador não pode mostrar `[AVISO] config.json tinha mudado`. Para
+     conferir à mão: `fc C:\MaqTracao\config.json <cópia>\config.json` deve
+     dizer "nenhuma diferença encontrada".
+   - Entre com o login `desenvolvedor` e confira em **Configurações** o IP e os
+     registradores contra o print. Campos novos aparecem com o valor padrão, sem
+     tocar nos endereços. Não clique em Salvar se não for mudar nada.
+   - Na tela de controle, o indicador do CLP fica **conectado** e a força mostrada
+     bate com a da IHM. Se a força vier ~9,8 vezes maior ou menor, ajuste só
+     **Configurações → Controle → Unidade da força no CLP** (kgf/N): instalações
+     de antes de 29/10/2026 não têm essa opção gravada e assumem kgf.
+   - Os ensaios antigos continuam na lista.
+5. **Se algo der errado:** pare a tarefa (`schtasks /end /tn MaqTracao`), copie de
+   volta o `config.json` e o `tracao.db` da cópia e inicie de novo
+   (`schtasks /run /tn MaqTracao`).
+
+Novidades que dependem de configuração ficam desligadas ou com padrão neutro em
+`config.json` antigos: flexão usa os registradores da tração enquanto
+`flexao_registers` estiver vazio; sobrecarga e backup automático ficam
+desligados. O login `mestre` e os usuários entram no `tracao.db` sem apagar nada.
 
 ### Desinstalar
 
