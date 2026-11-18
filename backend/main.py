@@ -22,7 +22,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 import pandas as pd
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, defer
 
-from . import acesso, usuarios
+from . import usuarios
 from .acquisition import build_ensaio_dataframe, persist_ensaio
 from .calculator import calculate_kpis, format_chart_data
 from .database import (
@@ -391,9 +391,17 @@ def usuario_atual(request: Request) -> "usuarios.Usuario":
     return u
 
 
-def exigir_mestre(request: Request) -> None:
-    if not usuario_atual(request).mestre:
+def exigir_gestor(request: Request) -> None:
+    """Gestão de usuários e auditoria: acesso mestre (cliente) ou desenvolvedor."""
+    if not usuario_atual(request).gerencia_usuarios:
         raise HTTPException(status_code=403, detail="Só o acesso mestre pode fazer isso.")
+
+
+def exigir_desenvolvedor(request: Request) -> None:
+    """Configurações, registradores, CLP e modo da máquina: só o desenvolvedor (AUTOMATIC)."""
+    if not usuario_atual(request).configura:
+        raise HTTPException(status_code=403,
+                            detail="Só o acesso desenvolvedor (AUTOMATIC) pode alterar as configurações.")
 
 
 def _utcnow():
@@ -1088,65 +1096,17 @@ def get_normas(tipo: str | None = None):
     return listar_normas(tipo)
 
 
-def exigir_tecnico(request: Request, x_config_token: str | None = Header(default=None)) -> None:
-    """Rotas que mudam configuração/registradores exigem o token da senha das
-    Configurações. O acesso mestre já tem essa permissão."""
-    u = getattr(request.state, "usuario", None)
-    if u is not None and u.mestre:
-        return
-    if not acesso.token_valido(x_config_token):
-        raise HTTPException(status_code=401, detail="Senha das Configurações necessária.")
-
-
-class _SenhaIn(BaseModel):
-    senha: str
-
-
-class _TrocaSenhaIn(BaseModel):
-    atual: str
-    nova: str
-
-
-@app.post("/api/config/login")
-def config_login(body: _SenhaIn, request: Request, db: Session = Depends(get_db)):
-    if not acesso.confere(body.senha, _config):
-        time.sleep(1)  # atrasa tentativas por força bruta
-        _auditar(request, db, "config_senha_errada")
-        raise HTTPException(status_code=401, detail="Senha incorreta.")
-    _auditar(request, db, "config_aberta")
-    return {"token": acesso.novo_token()}
-
-
-@app.post("/api/config/logout")
-def config_logout(x_config_token: str | None = Header(default=None)):
-    acesso.encerrar(x_config_token)
-    return {"ok": True}
-
-
-@app.get("/api/config/sessao")
-def config_sessao(request: Request, x_config_token: str | None = Header(default=None)):
-    u = getattr(request.state, "usuario", None)
-    return {"ok": bool(u and u.mestre) or acesso.token_valido(x_config_token)}
-
-
-@app.post("/api/config/senha", dependencies=[Depends(exigir_tecnico)])
-def config_trocar_senha(body: _TrocaSenhaIn, request: Request, db: Session = Depends(get_db)):
-    if not acesso.confere(body.atual, _config):
-        raise HTTPException(status_code=401, detail="Senha atual incorreta.")
-    if len(body.nova) < 4:
-        raise HTTPException(status_code=422, detail="A senha nova precisa ter ao menos 4 caracteres.")
-    _config["senha_config"] = acesso.hash_senha(body.nova)
-    _save_config(_config)
-    _auditar(request, db, "config_senha_trocada")
-    return {"ok": True}
+# A antiga "senha das Configurações" (senha_config) não vale mais: quem abre as
+# Configurações é o login do desenvolvedor. A chave é ignorada em config.json antigos.
+_CONFIG_OCULTO = ("senha_config",)
 
 
 @app.get("/api/config")
 def get_config():
-    return JSONResponse(content={k: v for k, v in _config.items() if k != "senha_config"})
+    return JSONResponse(content={k: v for k, v in _config.items() if k not in _CONFIG_OCULTO})
 
 
-@app.put("/api/config", dependencies=[Depends(exigir_tecnico)])
+@app.put("/api/config", dependencies=[Depends(exigir_desenvolvedor)])
 def update_config(body: ConfigModel, request: Request, db: Session = Depends(get_db)):
     novo = body.model_dump()
     mudou = sorted(k for k, v in novo.items() if _config.get(k) != v)
@@ -1159,7 +1119,7 @@ def update_config(body: ConfigModel, request: Request, db: Session = Depends(get
             _load_csv(str(csv_file))
     else:
         _watcher.stop()
-    return JSONResponse(content={k: v for k, v in _config.items() if k != "senha_config"})
+    return JSONResponse(content={k: v for k, v in _config.items() if k not in _CONFIG_OCULTO})
 
 
 @app.post("/api/scan")
@@ -1457,7 +1417,7 @@ def control_zerar_celula():
     return _pulse_command(_make_controller, "zerar_celula", "zerar a célula de carga")
 
 
-@app.post("/api/control/probe", dependencies=[Depends(exigir_tecnico)])
+@app.post("/api/control/probe", dependencies=[Depends(exigir_desenvolvedor)])
 def control_probe(req: RegisterProbeRequest):
     """Testa um registrador isolado (leitura/escrita) contra a IHM/CLP e devolve
     o que foi/voltou no fio. Útil para descobrir tipo, endereço e ordem de palavra
@@ -2163,7 +2123,7 @@ async def flexao_control_stream(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Login, gestão de usuários (acesso mestre) e auditoria
+# Login, gestão de usuários (mestre e desenvolvedor) e auditoria
 # ---------------------------------------------------------------------------
 
 class _LoginIn(BaseModel):
@@ -2245,8 +2205,8 @@ def auth_me(request: Request):
 @app.post("/api/auth/senha")
 def auth_trocar_senha(body: _MinhaSenhaIn, request: Request, db: Session = Depends(get_db)):
     u = usuario_atual(request)
-    if u.mestre:
-        raise HTTPException(status_code=403, detail="A senha do acesso mestre é fixa e não pode ser alterada.")
+    if u.fixo:
+        raise HTTPException(status_code=403, detail=f"A senha do acesso {u.login} é fixa e não pode ser alterada pela tela.")
     rec = db.query(UsuarioDB).filter(UsuarioDB.id == u.id).first()
     if not rec or not usuarios.confere_senha(body.atual, rec.senha_hash):
         raise HTTPException(status_code=401, detail="Senha atual incorreta.")
@@ -2265,7 +2225,7 @@ def auth_trocar_senha(body: _MinhaSenhaIn, request: Request, db: Session = Depen
     return {"ok": True}
 
 
-@app.get("/api/usuarios", dependencies=[Depends(exigir_mestre)])
+@app.get("/api/usuarios", dependencies=[Depends(exigir_gestor)])
 def listar_usuarios(db: Session = Depends(get_db)):
     return [_usuario_out(u) for u in db.query(UsuarioDB).order_by(UsuarioDB.nome).all()]
 
@@ -2277,14 +2237,14 @@ def _valida_usuario_in(body: _UsuarioIn) -> tuple[str, str]:
     if not re.fullmatch(r"[a-z0-9._-]{3,32}", login):
         raise HTTPException(status_code=422,
                             detail="Login: 3 a 32 caracteres, só letras minúsculas, números, ponto, hífen ou _.")
-    if login == usuarios.MESTRE_LOGIN:
-        raise HTTPException(status_code=422, detail="Esse login é reservado ao acesso mestre.")
+    if login in usuarios.LOGINS_RESERVADOS:
+        raise HTTPException(status_code=422, detail="Esse login é reservado a um acesso fixo do sistema.")
     if not nome:
         raise HTTPException(status_code=422, detail="Informe o nome completo.")
     return login, nome
 
 
-@app.post("/api/usuarios", status_code=201, dependencies=[Depends(exigir_mestre)])
+@app.post("/api/usuarios", status_code=201, dependencies=[Depends(exigir_gestor)])
 def criar_usuario(body: _UsuarioIn, request: Request, db: Session = Depends(get_db)):
     login, nome = _valida_usuario_in(body)
     if db.query(UsuarioDB).filter(UsuarioDB.login == login).first():
@@ -2300,7 +2260,7 @@ def criar_usuario(body: _UsuarioIn, request: Request, db: Session = Depends(get_
     return {"usuario": _usuario_out(u), "senha": senha}
 
 
-@app.put("/api/usuarios/{id}", dependencies=[Depends(exigir_mestre)])
+@app.put("/api/usuarios/{id}", dependencies=[Depends(exigir_gestor)])
 def editar_usuario(id: int, body: _UsuarioIn, request: Request, db: Session = Depends(get_db)):
     u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
     if not u:
@@ -2322,7 +2282,7 @@ def editar_usuario(id: int, body: _UsuarioIn, request: Request, db: Session = De
     return depois
 
 
-@app.post("/api/usuarios/{id}/senha", dependencies=[Depends(exigir_mestre)])
+@app.post("/api/usuarios/{id}/senha", dependencies=[Depends(exigir_gestor)])
 def redefinir_senha_usuario(id: int, body: _NovaSenhaIn, request: Request, db: Session = Depends(get_db)):
     u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
     if not u:
@@ -2337,11 +2297,11 @@ def redefinir_senha_usuario(id: int, body: _NovaSenhaIn, request: Request, db: S
     u.updated_at = _utcnow()
     db.commit()
     usuarios.encerrar_sessoes_do_usuario(db, u.id)
-    _auditar(request, db, "senha_redefinida", f"{u.login} (pelo mestre)")
+    _auditar(request, db, "senha_redefinida", f"{u.login} (por {usuario_atual(request).login})")
     return {"usuario": _usuario_out(u), "senha": senha}
 
 
-@app.delete("/api/usuarios/{id}", status_code=204, dependencies=[Depends(exigir_mestre)])
+@app.delete("/api/usuarios/{id}", status_code=204, dependencies=[Depends(exigir_gestor)])
 def excluir_usuario(id: int, request: Request, db: Session = Depends(get_db)):
     """Exclui o acesso. Os ensaios e relatórios dele continuam com o nome gravado."""
     u = db.query(UsuarioDB).filter(UsuarioDB.id == id).first()
@@ -2355,7 +2315,7 @@ def excluir_usuario(id: int, request: Request, db: Session = Depends(get_db)):
     return Response(status_code=204)
 
 
-@app.get("/api/auditoria", dependencies=[Depends(exigir_mestre)])
+@app.get("/api/auditoria", dependencies=[Depends(exigir_gestor)])
 def listar_auditoria(usuario: str = "", acao: str = "", limite: int = 300, db: Session = Depends(get_db)):
     q = db.query(AuditoriaDB)
     if usuario:

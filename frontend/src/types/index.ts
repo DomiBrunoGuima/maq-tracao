@@ -672,6 +672,12 @@ export interface UsuarioLogado {
   registro: string;
   email: string;
   mestre: boolean;
+  // Acesso desenvolvedor (AUTOMATIC): acesso completo
+  desenvolvedor: boolean;
+  // Pode abrir Usuários e acessos (mestre e desenvolvedor)
+  gerencia_usuarios: boolean;
+  // Pode abrir as Configurações: registradores, CLP, modo da máquina (só o desenvolvedor)
+  configura: boolean;
   trocar_senha: boolean;
 }
 

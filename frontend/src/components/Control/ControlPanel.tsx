@@ -187,7 +187,7 @@ export default function ControlPanel({ onOpenEnsaio }: { onOpenEnsaio?: (id: num
   const usuarioLogado = useUsuarioOpcional();
   const [cadastro, setCadastro] = useState<CadastroForm>(() => {
     const c = cadastroSalvo();
-    return usuarioLogado && !usuarioLogado.mestre ? { ...c, operador: usuarioLogado.nome } : c;
+    return usuarioLogado && !usuarioLogado.mestre && !usuarioLogado.desenvolvedor ? { ...c, operador: usuarioLogado.nome } : c;
   });
   const finalizarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

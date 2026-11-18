@@ -1086,9 +1086,9 @@ def generate_html_report(ensaio, df: pd.DataFrame, kpis: dict, req,
         )
 
         # O usuário logado que emite o relatório assina automaticamente (se ainda
-        # não estiver na lista). O acesso mestre não assina por ninguém.
+        # não estiver na lista). Os acessos fixos (mestre, desenvolvedor) não assinam.
         assinaturas = [s for s in req.assinaturas if s.nome]
-        if emissor.get("nome") and not emissor.get("mestre") and getattr(req, "assinar_emissor", True):
+        if emissor.get("nome") and not (emissor.get("mestre") or emissor.get("desenvolvedor")) and getattr(req, "assinar_emissor", True):
             nomes = {s.nome.strip().lower() for s in assinaturas}
             if emissor["nome"].strip().lower() not in nomes:
                 cargo = " · ".join(x for x in (emissor.get("cargo"), emissor.get("registro")) if x)

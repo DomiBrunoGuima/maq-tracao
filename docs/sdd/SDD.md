@@ -79,7 +79,8 @@ continuidade ao desenvolvimento. O operador da máquina deve usar o Manual.
 | SSE | Server-Sent Events: fluxo contínuo de dados do servidor para a tela. |
 | L₀ | Comprimento inicial de referência do corpo de prova (mm). |
 | Fmáx | Força máxima registrada no ensaio. |
-| Mestre | Acesso administrador fixo do sistema. |
+| Mestre | Acesso administrador fixo do cliente (gestão de usuários). |
+| Desenvolvedor | Acesso fixo da AUTOMATIC, completo (Configurações e modo vendido). |
 
 # 2. VISÃO GERAL DO SISTEMA
 
@@ -190,8 +191,8 @@ navegador do próprio PC e fala com o servidor só por HTTP.
 | `normas.py` | Normas cadastradas e parâmetros sugeridos. |
 | `report.py` | Relatório técnico em HTML com gráficos. |
 | `sobrecarga.py` | Monitor de sobrecarga da célula de carga. |
-| `usuarios.py` | Usuários, mestre, sessões, senhas e auditoria. |
-| `acesso.py` | Senha do técnico para as Configurações. |
+| `usuarios.py` | Usuários, mestre, desenvolvedor, sessões, senhas e auditoria. |
+| `credencial_desenvolvedor.py` | Hash da senha do acesso desenvolvedor. |
 | `backup.py` | Backup periódico em pasta sincronizada. |
 | `simulator.py` | Simula IHM e CLP para treino e testes sem máquina. |
 | `watcher.py`, `ftp_client.py` | Importação de CSV pela pasta monitorada e pela FTP da IHM. |
@@ -487,7 +488,7 @@ ensaio), `cliente_id`, `numero` (ex.: 0007/2026), `titulo`, `cliente_nome`,
 login.
 
 **sessoes**: `token_hash` (SHA-256 do token, nunca o token), `usuario_id`
-(0 = mestre), `criada_em`, `ultimo_uso`, `ip`.
+(0 = mestre, -1 = desenvolvedor), `criada_em`, `ultimo_uso`, `ip`.
 
 **auditoria**: `data`, `usuario_id`, `usuario` (login no momento), `acao`,
 `detalhe`, `ip`.
@@ -508,13 +509,18 @@ login.
 | Perfil | Pode |
 |---|---|
 | Usuário | Operar a máquina, ver e editar cadastros, gerar relatórios, trocar a própria senha. |
-| Técnico | Usuário que também sabe a senha das Configurações (padrão `tracao2026`, trocável em Configurações → Sobre). |
-| Mestre | Login `mestre`, fixo no programa. Gerencia usuários, vê a auditoria e entra nas Configurações sem a senha do técnico. |
+| Mestre | Login `mestre`, fixo no programa, do cliente. Gerencia usuários e vê a auditoria. Não abre as Configurações. |
+| Desenvolvedor | Login `desenvolvedor`, fixo no programa, da AUTOMATIC. Acesso completo: Configurações, registradores, CLP e modo vendido (só tração ou tração + flexão), além da gestão de usuários. |
 
 O mestre não pode ser alterado, desativado nem excluído pela tela e funciona
 mesmo com o banco vazio. No código fica só o salt e o hash da senha; a senha é
 entregue em separado pela AUTOMATIC e não consta deste documento. Trocá-la exige
 gerar novo hash e novo executável.
+
+O desenvolvedor segue a mesma regra: só o hash (formato do PBKDF2 dos usuários)
+fica em `backend/credencial_desenvolvedor.py`, gravado por
+`instalacao/definir_senha_desenvolvedor.py`, que pede a senha sem exibi-la.
+Hash vazio = login desativado e sessões abertas encerradas.
 
 ## 7.2 Autenticação e sessão
 
@@ -528,17 +534,16 @@ gerar novo hash e novo executável.
   senha ou desativar o usuário.
 - **5 tentativas erradas** bloqueiam o login por **5 minutos**.
 - Toda rota `/api` exige sessão, menos login, logout e `/api/health`.
-- A senha do técnico das Configurações gera um token de 8 h enviado no
-  cabeçalho `X-Config-Token`.
+- Alterar configuração (`PUT /api/config`) e testar registrador
+  (`/api/control/probe`) exigem o acesso desenvolvedor (403 para os demais).
 
 ## 7.3 Auditoria
 
 Ações registradas: `login`, `login_falhou`, `logout`, `usuario_criado`,
 `usuario_editado`, `usuario_excluido`, `senha_trocada`, `senha_redefinida`,
 `ensaio_iniciado`, `ensaio_editado`, `ensaio_excluido`, `relatorio_gerado`,
-`relatorio_excluido`, `cliente_excluido`, `config_aberta`, `config_alterada`,
-`config_senha_errada`, `config_senha_trocada`. Cada registro guarda data,
-usuário, detalhe e IP. Só o mestre consulta (tela Usuários e acessos →
+`relatorio_excluido`, `cliente_excluido`, `config_alterada`. Cada registro guarda data,
+usuário, detalhe e IP. O mestre e o desenvolvedor consultam (tela Usuários e acessos →
 Registro de atividades).
 
 # 8. PROTEÇÃO DE SOBRECARGA
@@ -565,7 +570,7 @@ Registro de atividades).
   emitir. Campos vêm pré-preenchidos com o último relatório e com o cadastro do
   ensaio (`/campos-relatorio`).
 - Responsabilidade: "Emitido por" (usuário logado) e executor do ensaio, com
-  nome, cargo e registro do cadastro do usuário. O mestre não assina.
+  nome, cargo e registro do cadastro do usuário. Mestre e desenvolvedor não assinam.
 - O relatório emitido fica salvo na tabela `relatorios` e pode ser reaberto
   igual ao original. Modos tração e flexão.
 - Comparação de vários ensaios (sobreposição de curvas, média e desvio padrão)
@@ -586,7 +591,7 @@ Registro de atividades).
 # 11. CONFIGURAÇÃO
 
 Toda a configuração fica em `config.json`, editado pela tela (Configurações,
-com senha do técnico ou mestre) e aplicado na hora, sem reiniciar. As chaves
+só pelo acesso desenvolvedor) e aplicado na hora, sem reiniciar. As chaves
 principais:
 
 | Grupo | Chaves |
@@ -653,7 +658,7 @@ Grupos de rotas:
 | Ensaios | `/ensaios`, `/ensaios/{id}` e `/kpis`, `/curvas`, `/qualidade`, `/parametros_ihm`, `/reimport`; equivalentes em `/flexao/ensaios` |
 | Cadastro | `/clientes`, `/busca`, `/normas` |
 | Relatórios | `/relatorio`, `/relatorios`, `/relatorios/{id}/html`, `/ensaios/{id}/campos-relatorio` |
-| Sistema | `/config`, `/config/login`, `/config/senha`, `/backup`, `/backup/agora`, `/sobrecarga`, `/sobrecarga/reconhecer`, `/scan`, `/ftp/fetch_csv`, `/health` |
+| Sistema | `/config`, `/backup`, `/backup/agora`, `/sobrecarga`, `/sobrecarga/reconhecer`, `/scan`, `/ftp/fetch_csv`, `/health` |
 
 A API não foi publicada para terceiros: não tem autenticação por chave nem
 documentação externa. Não deve ser exposta fora da rede local.
@@ -673,7 +678,7 @@ contínua.
 | `test_report.py` | Numeração de figuras e tabelas, KPI ausente, energia em joules |
 | `test_sobrecarga.py` | Disparo, trava até reconhecer, módulo da força, falha do pulso, registrador próprio |
 | `test_backup.py` | Geração do zip, retenção, intervalo, pasta inválida |
-| `test_auth.py` | Login obrigatório, mestre fixo, gestão de usuários, bloqueio, logout, dados do usuário no relatório |
+| `test_auth.py` | Login obrigatório, mestre e desenvolvedor fixos, mestre sem Configurações, gestão de usuários, bloqueio, logout, dados do usuário no relatório |
 
 Os testes usam o simulador e dados sintéticos; não substituem a verificação na
 máquina do Anexo A.

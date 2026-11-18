@@ -1,7 +1,12 @@
 """Login, usuários e auditoria.
 
-- Acesso mestre: login ``mestre``, senha fixa (só o hash fica no código). Não pode ser
-  alterado, desativado nem excluído pela tela. É o único que abre a Gestão de usuários.
+- Acesso mestre (cliente): login ``mestre``, senha fixa (só o hash fica no código). Não
+  pode ser alterado, desativado nem excluído pela tela. Gerencia usuários, mas não abre as
+  Configurações (registradores, modo da máquina, CLP).
+- Acesso desenvolvedor (AUTOMATIC): login ``desenvolvedor``, acesso completo, inclusive
+  Configurações e o modo da máquina (só tração ou tração + flexão). Só o hash da senha
+  fica em ``credencial_desenvolvedor.py``, gerado por
+  ``instalacao/definir_senha_desenvolvedor.py``. Sem hash, o login fica desativado.
 - Usuários (operadores): criados pelo mestre, que gera a senha. Senhas guardadas com
   PBKDF2-SHA256 (200 mil iterações, salt aleatório por usuário).
 - Sessão: token aleatório num cookie HttpOnly; no banco fica só o SHA-256 do token.
@@ -21,6 +26,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from . import credencial_desenvolvedor
 from .database import AuditoriaDB, SessaoDB, UsuarioDB
 
 COOKIE = "maq_sessao"
@@ -39,6 +45,14 @@ MESTRE_NOME = "Administrador (acesso mestre)"
 _MESTRE_SALT = bytes.fromhex("038fa1162853eb3a880fafeefa0d260e")
 _MESTRE_HASH = "6c03a01518a1b9df4e182d206e5b7cc8799e53066e7812f9fbe59e5a16032e68"
 
+# ── Acesso desenvolvedor (AUTOMATIC) ──────────────────────────────────────
+DESENVOLVEDOR_ID = -1
+DESENVOLVEDOR_LOGIN = "desenvolvedor"
+DESENVOLVEDOR_NOME = "Desenvolvedor (AUTOMATIC)"
+
+# Logins que não podem ser usados por usuários criados na tela
+LOGINS_RESERVADOS = (MESTRE_LOGIN, DESENVOLVEDOR_LOGIN)
+
 
 @dataclass
 class Usuario:
@@ -49,17 +63,35 @@ class Usuario:
     registro: str = ""
     email: str = ""
     mestre: bool = False
+    desenvolvedor: bool = False
     trocar_senha: bool = False
+
+    @property
+    def fixo(self) -> bool:
+        """Acesso fixo (mestre ou desenvolvedor): senha não muda pela tela, não assina relatório."""
+        return self.mestre or self.desenvolvedor
+
+    @property
+    def gerencia_usuarios(self) -> bool:
+        return self.mestre or self.desenvolvedor
+
+    @property
+    def configura(self) -> bool:
+        """Abre as Configurações: registradores, CLP, modo da máquina (tração / flexão)."""
+        return self.desenvolvedor
 
     def publico(self) -> dict:
         return {
             "id": self.id, "login": self.login, "nome": self.nome, "cargo": self.cargo,
             "registro": self.registro, "email": self.email, "mestre": self.mestre,
-            "trocar_senha": self.trocar_senha,
+            "desenvolvedor": self.desenvolvedor, "gerencia_usuarios": self.gerencia_usuarios,
+            "configura": self.configura, "trocar_senha": self.trocar_senha,
         }
 
 
 MESTRE = Usuario(id=MESTRE_ID, login=MESTRE_LOGIN, nome=MESTRE_NOME, cargo="Administrador", mestre=True)
+DESENVOLVEDOR = Usuario(id=DESENVOLVEDOR_ID, login=DESENVOLVEDOR_LOGIN, nome=DESENVOLVEDOR_NOME,
+                        cargo="Desenvolvedor", desenvolvedor=True)
 
 
 def _de_db(u: UsuarioDB) -> Usuario:
@@ -87,6 +119,15 @@ def confere_senha(senha: str, salvo: str) -> bool:
 def _confere_mestre(senha: str) -> bool:
     dk = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), _MESTRE_SALT, _ITER)
     return hmac.compare_digest(dk.hex(), _MESTRE_HASH)
+
+
+def desenvolvedor_ativo() -> bool:
+    """O login do desenvolvedor só existe depois que a senha foi definida."""
+    return bool(credencial_desenvolvedor.SENHA_HASH)
+
+
+def _confere_desenvolvedor(senha: str) -> bool:
+    return desenvolvedor_ativo() and confere_senha(senha, credencial_desenvolvedor.SENHA_HASH)
 
 
 # Sem letras/números que se confundem (0/O, 1/l/I).
@@ -148,6 +189,9 @@ def autenticar(db: Session, login: str, senha: str) -> Usuario | None:
     if login == MESTRE_LOGIN:
         ok = _confere_mestre(senha)
         usuario = MESTRE if ok else None
+    elif login == DESENVOLVEDOR_LOGIN:
+        ok = _confere_desenvolvedor(senha)
+        usuario = DESENVOLVEDOR if ok else None
     else:
         u = db.query(UsuarioDB).filter(UsuarioDB.login == login).first()
         ok = bool(u and u.ativo and confere_senha(senha, u.senha_hash))
@@ -206,6 +250,12 @@ def usuario_da_sessao(db: Session, token: str | None) -> Usuario | None:
         return None
     if s.usuario_id == MESTRE_ID:
         usuario = MESTRE
+    elif s.usuario_id == DESENVOLVEDOR_ID:
+        if not desenvolvedor_ativo():
+            db.delete(s)
+            db.commit()
+            return None
+        usuario = DESENVOLVEDOR
     else:
         u = db.query(UsuarioDB).filter(UsuarioDB.id == s.usuario_id).first()
         if not u or not u.ativo:

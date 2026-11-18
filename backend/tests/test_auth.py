@@ -6,7 +6,7 @@ import hashlib
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main, usuarios
+from backend import credencial_desenvolvedor, main, usuarios
 from backend.acquisition import build_ensaio_dataframe, persist_ensaio
 from backend.database import EnsaioDB, get_db
 
@@ -15,8 +15,9 @@ from .test_cadastro import _samples
 pytestmark = pytest.mark.login_real
 
 # A senha real do mestre não está no repositório: nos testes o hash é trocado
-# pelo de uma senha conhecida.
+# pelo de uma senha conhecida. O mesmo vale para o desenvolvedor.
 SENHA_MESTRE = "senha-de-teste-123"
+SENHA_DEV = "dev-de-teste-4567"
 
 
 @pytest.fixture()
@@ -25,6 +26,7 @@ def cli(monkeypatch):
     monkeypatch.setattr(usuarios, "_MESTRE_SALT", salt)
     monkeypatch.setattr(usuarios, "_MESTRE_HASH",
                         hashlib.pbkdf2_hmac("sha256", SENHA_MESTRE.encode(), salt, usuarios._ITER).hex())
+    monkeypatch.setattr(credencial_desenvolvedor, "SENHA_HASH", usuarios.hash_senha(SENHA_DEV))
     usuarios._falhas.clear()
     c = TestClient(main.app)
     yield c
@@ -62,8 +64,44 @@ def test_mestre_fixo(cli):
     # Senha do mestre não muda e o login dele não pode ser usado por outro usuário
     assert cli.post("/api/auth/senha", json={"atual": SENHA_MESTRE, "nova": "Outra1234"}).status_code == 403
     assert cli.post("/api/usuarios", json={"login": "mestre", "nome": "X"}).status_code == 422
-    # Mestre já abre as Configurações sem a senha do técnico
-    assert cli.get("/api/config/sessao").json()["ok"] is True
+    assert cli.post("/api/usuarios", json={"login": "desenvolvedor", "nome": "X"}).status_code == 422
+    # Mestre (cliente) não abre as Configurações: registradores, CLP e modo da máquina
+    me = cli.get("/api/auth/me").json()
+    assert me["gerencia_usuarios"] is True and me["configura"] is False
+    corpo = {**main._config, "flexao_habilitada": not main._config.get("flexao_habilitada", True)}
+    assert cli.put("/api/config", json=corpo).status_code == 403
+    assert cli.post("/api/control/probe", json={}).status_code == 403
+
+
+def test_desenvolvedor_acesso_completo(cli, monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "_CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setattr(main, "_config", dict(main._config))
+    assert _login(cli, "desenvolvedor", "errada").status_code == 401
+    r = _login(cli, "Desenvolvedor", SENHA_DEV)
+    assert r.status_code == 200
+    me = r.json()
+    assert me["desenvolvedor"] is True and me["mestre"] is False
+    assert me["configura"] is True and me["gerencia_usuarios"] is True
+    # Muda o modo da máquina (tração + flexão -> só tração) e fica auditado
+    corpo = {**main._config, "auto_load": False, "flexao_habilitada": False}
+    r = cli.put("/api/config", json=corpo)
+    assert r.status_code == 200, r.text
+    assert r.json()["flexao_habilitada"] is False
+    # Também gerencia usuários e vê a auditoria
+    _criar(cli, login="ana.op", nome="Ana")
+    acoes = [e["acao"] for e in cli.get("/api/auditoria").json()]
+    assert "config_alterada" in acoes and "usuario_criado" in acoes
+    # Senha fixa: não muda pela tela
+    assert cli.post("/api/auth/senha", json={"atual": SENHA_DEV, "nova": "Outra1234"}).status_code == 403
+
+
+def test_desenvolvedor_sem_senha_definida_fica_desativado(cli, monkeypatch):
+    assert _login(cli, "desenvolvedor", SENHA_DEV).status_code == 200
+    monkeypatch.setattr(credencial_desenvolvedor, "SENHA_HASH", "")
+    # A sessão aberta cai e o login não entra com nenhuma senha
+    assert cli.get("/api/auth/me").status_code == 401
+    assert _login(cli, "desenvolvedor", "").status_code == 401
+    assert _login(cli, "desenvolvedor", SENHA_DEV).status_code == 401
 
 
 def test_gestao_de_usuarios(cli):

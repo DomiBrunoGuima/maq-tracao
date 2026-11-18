@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
-  Check, Copy, History, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserCheck, UserCog, UserX, X,
+  Check, Copy, History, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserCheck, UserCog, UserX, Wrench, X,
 } from "lucide-react";
 import {
   criarUsuario, editarUsuario, excluirUsuario, getAuditoria, getUsuarios, redefinirSenha,
 } from "../../api/client";
 import type { Usuario, UsuarioIn } from "../../types";
+import { useAuth } from "../../hooks/useAuth";
 
 const inputCls =
   "w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white " +
@@ -56,6 +57,7 @@ function sugerirLogin(nome: string): string {
 }
 
 export default function UsuariosView() {
+  const { usuario } = useAuth();
   const [aba, setAba] = useState<"usuarios" | "auditoria">("usuarios");
   return (
     <div className="h-full overflow-y-auto">
@@ -70,9 +72,15 @@ export default function UsuariosView() {
               usuário saem automaticamente nos relatórios que ele gerar.
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 flex-shrink-0">
-            <ShieldCheck size={13} /> Acesso mestre
-          </span>
+          {usuario.desenvolvedor ? (
+            <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-300 flex-shrink-0">
+              <Wrench size={13} /> Acesso desenvolvedor
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 flex-shrink-0">
+              <ShieldCheck size={13} /> Acesso mestre
+            </span>
+          )}
         </div>
         <div className="flex gap-1 border-b border-border">
           {([["usuarios", "Usuários", UserCog], ["auditoria", "Registro de atividades", History]] as const).map(([id, label, Icon]) => (
@@ -173,7 +181,7 @@ function ListaUsuarios() {
       </div>
       <p className="text-[11px] text-muted">
         As senhas são guardadas criptografadas (hash) e não podem ser consultadas depois. Se alguém esquecer,
-        gere uma nova senha. O acesso mestre é fixo e não aparece nesta lista.
+        gere uma nova senha. Os acessos fixos (mestre e desenvolvedor) não aparecem nesta lista.
       </p>
 
       {editando && (
@@ -384,7 +392,7 @@ function Auditoria() {
     refetchInterval: 15000,
   });
   const { data: lista } = useQuery({ queryKey: ["usuarios"], queryFn: getUsuarios });
-  const logins = useMemo(() => ["mestre", ...(lista ?? []).map((u) => u.login)], [lista]);
+  const logins = useMemo(() => ["mestre", "desenvolvedor", ...(lista ?? []).map((u) => u.login)], [lista]);
 
   return (
     <div className="space-y-3">
