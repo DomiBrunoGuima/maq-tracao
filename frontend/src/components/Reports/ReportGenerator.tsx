@@ -224,6 +224,16 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
   const [cpIds, setCpIds] = useState<number[]>([]);
   const [graficos, setGraficos] = useState<GraficoRelatorio[]>(["tensao_alongamento"]);
   const [requisitos, setRequisitos] = useState<Requisito[]>(flexao ? [] : REQUISITOS_PADRAO);
+  // Norma define o modelo: NBR 15561 (alongamento ≥ 350 %) ou ISO 13953 (solda de topo:
+  // força máxima e tipo de falha dúctil/frágil escolhido pelo operador para cada CP)
+  const [normaRelatorio, setNormaRelatorio] = useState<"NBR 15561" | "ISO 13953">("NBR 15561");
+  const iso13953 = resumido && normaRelatorio === "ISO 13953";
+  const [falhas, setFalhas] = useState<Record<string, string>>({});
+  function escolherNorma(n: "NBR 15561" | "ISO 13953") {
+    setNormaRelatorio(n);
+    setGraficos([n === "ISO 13953" ? "forca_deslocamento" : "tensao_alongamento"]);
+    setCondicoesState(c => ({ ...c, metodo_ensaio: n, norma_referencia: n }));
+  }
   const [conclusaoManual, setConclusaoManual] = useState("");
   const [extras, setExtras] = useState({
     include_sumario: flexao,
@@ -345,6 +355,9 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
         graficos: resumido ? graficos : [],
         requisitos: requisitos.filter(r => r.valor.trim()),
         conclusao_manual: conclusaoManual,
+        norma_relatorio: normaRelatorio,
+        falhas: iso13953 ? falhas : {},
+        ...(iso13953 ? { requisitos: [] } : {}),
         comparacao_ids: flags.include_comparativo ? comparacaoIds : [],
         empresa, cliente, amostra, objetivos,
         condicoes, local_data: localData,
@@ -403,10 +416,19 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                 </label>
                 {resumido && (
                   <label className="flex flex-col gap-1">
+                    <span className="text-xs text-muted">Norma do relatório</span>
+                    <select value={normaRelatorio} onChange={e => escolherNorma(e.target.value as "NBR 15561" | "ISO 13953")} className={INPUT_CLS}>
+                      <option value="NBR 15561">NBR 15561 (alongamento ≥ 350 %)</option>
+                      <option value="ISO 13953">ISO 13953 (solda de topo: força e dúctil/frágil)</option>
+                    </select>
+                  </label>
+                )}
+                {resumido && (
+                  <label className="flex flex-col gap-1">
                     <span className="text-xs text-muted">Relatório de</span>
                     <select value={escopo} onChange={e => setEscopo(e.target.value as "teste" | "lote")} className={INPUT_CLS}>
                       <option value="teste">Um teste (este CP)</option>
-                      <option value="lote">Um lote (vários CPs, com mínimo, máximo e média)</option>
+                      <option value="lote">Um lote (vários CPs)</option>
                     </select>
                   </label>
                 )}
@@ -710,7 +732,28 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                   {!usuario.mestre && !usuario.desenvolvedor && ", e a sua assinatura entra aqui se não estiver na lista"}.
                 </p>
               )}
-              {resumido && (
+              {iso13953 && (
+                <div className="space-y-2">
+                  <span className="text-xs text-muted block">
+                    Tipo de falha de cada CP (ISO 13953). Todos dúcteis: APROVADO; algum frágil: REPROVADO.
+                  </span>
+                  {[ensaioId, ...(escopo === "lote" ? cpIds : [])].map(id => {
+                    const e = ensaios?.find(x => x.id === id);
+                    return (
+                      <div key={id} className="grid grid-cols-[1fr_auto] gap-3 items-center">
+                        <span className="text-xs font-mono text-slate-300 truncate">{e ? (e.nome || e.filename.replace(".csv", "")) : `Ensaio ${id}`}</span>
+                        <select value={falhas[String(id)] ?? ""} onChange={ev => setFalhas(f => ({ ...f, [String(id)]: ev.target.value }))}
+                          className={INPUT_CLS}>
+                          <option value="">— escolher —</option>
+                          <option value="Dúctil">Dúctil</option>
+                          <option value="Frágil">Frágil</option>
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {resumido && !iso13953 && (
                 <div className="space-y-2">
                   <span className="text-xs text-muted block">
                     Requisitos normativos (definidos pelo laboratório; já vem com Alongamento ≥ 350 % da NBR 15561). Cada linha sai Aprovado/Reprovado comparando o menor valor dos CPs.

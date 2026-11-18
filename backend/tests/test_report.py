@@ -154,3 +154,24 @@ def test_assinaturas_com_funcao_e_responsabilidade_opcional():
     assert "Executado por:" in html and "Validado por:" in html
     assert "Responsabilidade" not in html
     assert ">Fulano<" not in html
+
+
+def test_iso13953_forca_e_tipo_de_falha_sem_minimo():
+    df = _df()
+    k = calculate_kpis(df); k["ensaio_id"] = 1
+    lote = _lote()
+    for i, cp in enumerate(lote):
+        cp[2]["ensaio_id"] = 2 + i
+    req = _req_resumido(norma_relatorio="ISO 13953", graficos=["forca_deslocamento"],
+                        requisitos=[{"propriedade": "alongamento", "criterio": ">=", "valor": "350"}],
+                        falhas={"1": "Dúctil", "2": "Dúctil", "3": "Dúctil"})
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, k, req, comparacao_series=lote)
+    assert "Tipo de falha" in html and html.count(">Dúctil<") == 3
+    assert ">Mínimo<" not in html and "σmax (MPa)" not in html and "≥ 350" not in html
+    assert "APROVADO" in html
+    req.falhas["3"] = "Frágil"
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, k, req, comparacao_series=lote)
+    assert "REPROVADO" in html and ">Frágil<" in html
+    req.falhas.pop("3")
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, k, req, comparacao_series=lote)
+    assert 'class="conclusao"' not in html and "1 sem classificação" in html

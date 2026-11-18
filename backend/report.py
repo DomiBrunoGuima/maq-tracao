@@ -377,7 +377,7 @@ def _linhas_por_cp(cps: list[tuple], condicoes) -> list[dict]:
         base = garras or l0
         desl = k.get("deslocamento_final_mm")
         along = (desl / base * 100) if (desl is not None and base) else k.get("alonga_final_pct")
-        linhas.append({"nome": nome, "df": cdf, "kpis": k, "area": area, "l0": l0,
+        linhas.append({"id": k.get("ensaio_id"), "nome": nome, "df": cdf, "kpis": k, "area": area, "l0": l0,
                        "base": base, "base_garras": bool(garras),
                        "forca_max": fmax, "tensao_max": tensao, "alongamento": along})
     return linhas
@@ -487,6 +487,23 @@ def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, a
 
     if linhas:
         tab_num += 1
+        if _iso13953(req):
+            corpo = "".join(
+                f'<tr><td {_TD_TXT}>{_esc(ln["nome"])}</td><td {_TD_NUM}>{_num(ln["forca_max"], ".1f")}</td>'
+                f'<td {_TD_TXT} class="falha">{_esc(_falha(req, ln) or "—")}</td></tr>'
+                for ln in linhas
+            )
+            partes.append(
+                f'<p style="margin-bottom:8px">Na Tabela {tab_num} estão apresentados a força máxima e o tipo '
+                f'de falha {"de cada corpo de prova" if n > 1 else "do corpo de prova"}.</p>'
+                f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+                f'Tabela {tab_num} – Resultados do ensaio de tração em solda de topo (ISO 13953).</p>'
+                f'<table style="width:75%;margin:0 auto 18px"><thead><tr>'
+                f'<th {_TH}>Corpo de prova</th><th {_TH}>Força máxima (N)</th><th {_TH}>Tipo de falha</th>'
+                f'</tr></thead><tbody>{corpo}</tbody></table>'
+            )
+            linhas = []   # pula a tabela da NBR 15561 abaixo
+    if linhas:
         corpo = "".join(
             f'<tr><td {_TD_TXT}>{_esc(ln["nome"])}</td><td {_TD_NUM}>{_num(ln["forca_max"], ".1f")}</td>'
             f'<td {_TD_NUM}>{_num(ln["tensao_max"])}</td><td {_TD_NUM}>{_num(ln["alongamento"])}</td></tr>'
@@ -525,6 +542,60 @@ def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, a
     return partes, fig_num, tab_num
 
 
+def _iso13953(req) -> bool:
+    return "13953" in (getattr(req, "norma_relatorio", "") or "")
+
+
+def _falha(req, ln: dict) -> str:
+    """Tipo de falha que o operador escolheu para o CP (Dúctil/Frágil)."""
+    falhas = getattr(req, "falhas", None) or {}
+    v = falhas.get(str(ln.get("id"))) or falhas.get(ln["nome"]) or ""
+    v = v.strip().lower()
+    return "Dúctil" if v.startswith("d") else "Frágil" if v.startswith("f") else ""
+
+
+def _conclusao_iso13953(linhas: list[dict], req, tab_num: int) -> str:
+    """ISO 13953: o requisito é falha dúctil em todos os CPs. Aprovado se todos
+    forem dúcteis, reprovado se algum for frágil; sem conclusão automática enquanto
+    houver CP sem classificação (vale a conclusão escrita à mão)."""
+    tipos = [_falha(req, ln) for ln in linhas]
+    n_ductil, n_fragil = tipos.count("Dúctil"), tipos.count("Frágil")
+    if n_fragil:
+        conclusao = "REPROVADO"
+    elif linhas and n_ductil == len(linhas):
+        conclusao = "APROVADO"
+    else:
+        conclusao = (getattr(req, "conclusao_manual", "") or "").strip().upper()
+    pendentes = len(linhas) - n_ductil - n_fragil
+    res = "Reprovado" if n_fragil else ("Aprovado" if linhas and not pendentes else "—")
+    cor_res = ";color:#b91c1c" if res == "Reprovado" else ";color:#15803d" if res == "Aprovado" else ""
+    valor = (f"{n_ductil} {'dúctil' if n_ductil == 1 else 'dúcteis'}, "
+             f"{n_fragil} {'frágil' if n_fragil == 1 else 'frágeis'}"
+             + (f", {pendentes} sem classificação" if pendentes else ""))
+    linhas_html = (
+        f'<tr><td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold">Tipo de falha '
+        f'({len(linhas)} CP{"s" if len(linhas) != 1 else ""})</td>'
+        f'<td {_TD_TXT}>{_esc(valor)}</td><td {_TD_TXT}>Falha dúctil (ISO 13953)</td>'
+        f'<td style="border:1px solid #bbb;padding:5px 9px;font-weight:bold{cor_res}">{res}</td></tr>'
+    )
+    if conclusao:
+        cor = "#15803d" if conclusao == "APROVADO" else "#b91c1c" if conclusao == "REPROVADO" else "#1a1a1a"
+        linhas_html += (
+            f'<tr><td style="border:1px solid #bbb;padding:7px 9px;font-weight:bold;background:#f4f6f9">Conclusão</td>'
+            f'<td colspan="3" class="conclusao" style="border:1px solid #bbb;padding:7px 9px;font-weight:bold;'
+            f'font-size:12pt;letter-spacing:1px;color:{cor}">{_esc(conclusao)}</td></tr>'
+        )
+    return (
+        f'<p style="margin-bottom:8px">Na Tabela {tab_num} está apresentado um resumo dos resultados obtidos.</p>'
+        f'<p style="text-align:center;font-style:italic;font-size:9.5pt;margin-bottom:4px">'
+        f'Tabela {tab_num} – Resumo dos Resultados.</p>'
+        f'<table style="width:90%;margin:0 auto 20px"><thead><tr>'
+        f'<th {_TH}>Propriedade</th><th {_TH}>Resultado obtido</th>'
+        f'<th {_TH}>Requisito normativo</th><th {_TH}>Resultado</th></tr></thead>'
+        f'<tbody>{linhas_html}</tbody></table>'
+    )
+
+
 _PROPRIEDADES = {
     "tensao_max": ("Tensão Máxima", "MPa", ".2f"),
     "alongamento": ("Alongamento Final", "%", ".2f"),
@@ -535,6 +606,8 @@ _PROPRIEDADES = {
 def _conclusao_resumida(linhas: list[dict], req, tab_num: int) -> str:
     """Tensão máxima e alongamento final (menor valor entre os CPs), com os requisitos
     definidos pelo laboratório e a conclusão APROVADO/REPROVADO."""
+    if _iso13953(req):
+        return _conclusao_iso13953(linhas, req, tab_num)
     n = len(linhas)
     requisitos = [r for r in (getattr(req, "requisitos", None) or [])
                   if r.propriedade in _PROPRIEDADES and _float_br(r.valor) is not None]

@@ -380,6 +380,11 @@ class ReportRequest(BaseModel):
     assinar_emissor: bool = True
     requisitos: List[Requisito] = []
     conclusao_manual: str = ""         # usada quando não há requisitos: APROVADO/REPROVADO
+    # Norma que define o modelo do relatório resumido:
+    #   "NBR 15561" → Fmax, σmax, alongamento, mínimo e requisitos (≥ 350 %)
+    #   "ISO 13953" → solda de topo: Fmax por CP e tipo de falha (dúctil/frágil)
+    norma_relatorio: str = "NBR 15561"
+    falhas: Dict[str, str] = {}        # id do ensaio → "Dúctil" | "Frágil" (ISO 13953)
     # Flags de seção
     include_empresa: bool = True
     include_cliente: bool = False

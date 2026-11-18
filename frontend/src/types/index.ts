@@ -635,6 +635,8 @@ export interface ReportRequest {
   assinar_emissor?: boolean;
   requisitos?: Requisito[];
   conclusao_manual?: string;
+  norma_relatorio?: "NBR 15561" | "ISO 13953";
+  falhas?: Record<string, string>;
   include_empresa: boolean;
   include_cliente: boolean;
   include_amostra: boolean;

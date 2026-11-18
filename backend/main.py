@@ -676,6 +676,7 @@ def generate_report(req: ReportRequest, request: Request, db: Session = Depends(
     df = pd.read_json(io.StringIO(r.data_json))
     ihm_params = _load_ihm_params_for(r.filename, db)
     kpis = calculate_kpis(df, ihm_params=ihm_params)
+    kpis["ensaio_id"] = r.id
 
     comparacao_series = None
     if req.modelo == "resumido":
@@ -692,6 +693,7 @@ def generate_report(req: ReportRequest, request: Request, db: Session = Depends(
                 try:
                     cdf = pd.read_json(io.StringIO(cr.data_json))
                     ck = calculate_kpis(cdf, ihm_params=_load_ihm_params_for(cr.filename, db))
+                    ck["ensaio_id"] = cr.id
                     comparacao_series.append((cr.nome, cdf, ck))
                 except Exception as exc:
                     print(f"[relatorio] falha ao carregar CP {cid} do lote: {exc}", flush=True)
