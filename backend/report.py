@@ -238,13 +238,22 @@ body { font-family: Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a;
         background: #fff; box-shadow: 0 2px 16px rgba(0,0,0,0.10); border-radius: 2px; }
 table { border-collapse: collapse; }
 p { margin: 6px 0; }
+/* Numeração automática "Página X de Y" no rodapé de cada folha impressa/PDF */
+@page {
+  size: A4;
+  margin: 1.5cm 1.5cm 1.8cm 1.5cm;
+  @bottom-right {
+    content: "Página " counter(page) " de " counter(pages);
+    font-family: Arial, sans-serif; font-size: 8pt; color: #666;
+  }
+}
 @media print {
   body { background: #fff; }
-  .page { max-width: 21cm; margin: 0; padding: 1.5cm 2cm;
+  .page { max-width: none; margin: 0; padding: 0 0.5cm;
           box-shadow: none; border-radius: 0; }
   .page-break { page-break-before: always; }
   /* Não cortar gráfico, linha de tabela nem o bloco de data + assinaturas */
-  .figura, tr, .assinaturas-bloco, .responsavel { page-break-inside: avoid; break-inside: avoid; }
+  .figura, tr, table, .assinaturas-bloco, .responsavel { page-break-inside: avoid; break-inside: avoid; }
   h2 { page-break-after: avoid; break-after: avoid; }
 }
 """
@@ -334,9 +343,6 @@ GRAFICOS_TRACAO = {
 _PALETA = ["#1e3a5f", "#c0392b", "#27ae60", "#8e44ad", "#e67e22", "#2980b9",
            "#7f8c8d", "#d35400", "#16a085", "#2c3e50"]
 
-# Fora disso o valor quase sempre é área digitada errada (ex.: "1.127" em vez de 1127 mm²)
-_AREA_MIN_MM2 = 5.0
-_TENSAO_MAX_PLAUSIVEL_MPA = 100.0
 
 
 def _float_br(v) -> float | None:
@@ -451,19 +457,8 @@ _TD_TXT = 'style="border:1px solid #bbb;padding:5px 9px"'
 def _resultados_resumido(cps, linhas, req, fig_num, tab_num, kpis, tensao_max, alongamento, area, l0):
     partes: list[str] = []
 
-    # Aviso de área/tensão fora do esperado (quase sempre área digitada errada na IHM)
-    suspeitos = [ln for ln in linhas
-                 if (ln["area"] is not None and 0 < ln["area"] < _AREA_MIN_MM2)
-                 or (ln["tensao_max"] is not None and ln["tensao_max"] > _TENSAO_MAX_PLAUSIVEL_MPA)]
-    if suspeitos:
-        itens = "; ".join(f'{_esc(ln["nome"])}: área {_num(ln["area"], ".3f")} mm², σmax {_num(ln["tensao_max"])} MPa'
-                          for ln in suspeitos)
-        partes.append(
-            '<p class="aviso-area" style="color:#b45309;background:#fff7ed;border:1px solid #fed7aa;'
-            f'padding:8px 12px;margin-bottom:12px">Atenção: a tensão calculada está fora do esperado '
-            f'({itens}). Confira a área da seção digitada na IHM antes de emitir o relatório.</p>'
-        )
-
+    # O aviso de área/tensão fora do esperado não vai mais para o relatório (pedido
+    # da qualidade em 19/11/2026): é conferência interna, não informação ao cliente.
     n = len(linhas)
     graficos = [g for g in (getattr(req, "graficos", None) or []) if g in GRAFICOS_TRACAO]
     for g in graficos:

@@ -138,10 +138,10 @@ def test_resumido_sem_requisito_usa_conclusao_manual_ou_omite():
     assert "APROVADO" in html
 
 
-def test_resumido_avisa_area_digitada_errada():
+def test_resumido_nao_mostra_aviso_de_area_no_relatorio():
     df = _df(area=1.127)
     html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(escopo="teste"))
-    assert 'class="aviso-area"' in html
+    assert 'class="aviso-area"' not in html and "Confira a área" not in html
 
 
 def test_assinaturas_com_funcao_e_responsabilidade_opcional():
@@ -175,3 +175,9 @@ def test_iso13953_forca_e_tipo_de_falha_sem_minimo():
     req.falhas.pop("3")
     html = generate_html_report(SimpleNamespace(nome="CP1"), df, k, req, comparacao_series=lote)
     assert 'class="conclusao"' not in html and "1 sem classificação" in html
+
+
+def test_numeracao_de_paginas_no_rodape_impresso():
+    df = _df()
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(escopo="teste"))
+    assert 'counter(page) " de " counter(pages)' in html
