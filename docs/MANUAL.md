@@ -217,7 +217,7 @@ Clique no ensaio na lista. A tela mostra:
 | Alongamento final | Último deslocamento do ensaio (fim/ruptura) ÷ L₀ × 100, e também (d − L₀) ÷ L₀ × 100, para quando o deslocamento da máquina já inclui o L₀. |
 | Ruptura | Queda brusca de força: a força cai ao menos 25 % de Fmáx em até 2 leituras. Sem isso, aceita queda gradual abaixo de 10 % de Fmáx. Sem nenhuma das duas, o ensaio foi interrompido antes de romper. |
 | Energia | Área sob a curva força × deslocamento até a ruptura, em joules. |
-| Rigidez k | Força por milímetro no trecho elástico (N/mm). |
+| Rigidez k | Força por milímetro, média do início até a força máxima (N/mm). |
 | L₀ | Comprimento inicial de referência do corpo de prova. |
 
 ### Qualidade dos dados
@@ -260,7 +260,7 @@ Na aba **Resultados**, ou clicando no ensaio com a etiqueta FLEXÃO:
 | εf | Deformação de flexão: εf = 6·s·h ÷ L², com s = deflexão. |
 | δ | Deflexão máxima. |
 | k | Rigidez (N/mm). |
-| Energia | Área sob força × deflexão até o pico. |
+| Energia | Área sob força × deflexão do ensaio. |
 
 Qualidade dos dados, trecho elástico com R², estágios, Inspeção do ponto,
 Dados do teste, Comparar e Gerar Relatório funcionam como na tração. O seletor
@@ -773,6 +773,11 @@ dispositivo): D0–D4095 → 0x1000 + n; D4096+ → 0x9000 + (n − 4096); M0–
 octal. D é holding register, M e Y são coils, X é entrada discreta.
 
 ### 14.5 Cálculos
+
+O detalhe de cada conta (fórmula, unidade, origem dos dados, exemplo numérico e
+regra de aprovação do relatório de lote) está no **Manual de Cálculos**:
+`docs/calculos/CALCULOS.md` e `docs/Manual de Cálculos - Sistema de Ensaios.pdf`.
+Resumo:
 
 Tração:
 
