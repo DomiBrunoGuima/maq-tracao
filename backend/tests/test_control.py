@@ -271,6 +271,33 @@ def test_forca_do_clp_em_kgf_vira_newton(monkeypatch):
     assert all(r.get("scale", 1.0) == 1.0 for r in main._control_registers())
 
 
+def test_emergencia_e_fins_de_curso_sao_nf(monkeypatch):
+    """Emergência e fins de curso são contatos NF: bit 0 = acionado, 1 = normal."""
+    from backend import main
+
+    regs = [
+        {"name": "emergencia", "role": "emergencia", "address": 4029, "data_type": "coil"},
+        {"name": "lim_inf", "role": "limite_inferior", "address": 4030, "data_type": "coil"},
+        {"name": "lim_sup", "role": "limite_superior", "address": 4031, "data_type": "coil",
+         "normalmente_fechado": False},
+        {"name": "rup", "role": "ruptura_bit", "address": 4040, "data_type": "coil"},
+    ]
+    monkeypatch.setattr(main, "_config", {**main._config, "control_registers": regs})
+    rn = {r["role"]: r["name"] for r in regs}
+
+    normal = main._extras({"emergencia": 1, "lim_inf": 1, "lim_sup": 0}, rn)
+    assert normal["emergencia"] is False
+    assert normal["limite_inferior"] is False
+    assert normal["limite_superior"] is False  # NA: 0 = normal
+
+    acionado = main._extras({"emergencia": 0, "lim_inf": 0, "lim_sup": 1}, rn)
+    assert acionado["emergencia"] is True
+    assert acionado["limite_inferior"] is True
+    assert acionado["limite_superior"] is True
+
+    assert main._extras({}, rn)["emergencia"] is None  # sem leitura
+
+
 def test_alongamento_final_duas_formas():
     """Alongamento final usa o último deslocamento, nas formas d/L₀ e (d−L₀)/L₀."""
     import pandas as pd

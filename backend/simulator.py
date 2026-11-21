@@ -145,7 +145,7 @@ class _Sim:
         if role == "deslocamento_maximo":
             return round(self.disp_max, 3)
         if role in ("emergencia", "limite_superior", "limite_inferior"):
-            return 0
+            return 1  # contatos NF: 1 = normal (0 seria acionado)
         if role == "limite_forca":
             return round(self.limite_forca, 2)
         if role == "velocidade":

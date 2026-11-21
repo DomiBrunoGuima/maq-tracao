@@ -177,6 +177,28 @@ _BIT_ROLES = ("material_integro_bit", "ruptura_bit", "emergencia", "limite_super
 # Roles extras exibidos no painel (além de força/deslocamento/ruptura)
 _EXTRA_ROLES = ("forca_maxima", "tensao_maxima", "deslocamento_maximo",
                 "emergencia", "limite_superior", "limite_inferior")
+# Sinais de segurança ligados em contato normalmente fechado (NF): o bit fica em 1
+# com tudo normal e cai para 0 quando a emergência é apertada ou o fim de curso é
+# atingido (e também se o fio romper). O software inverte a leitura desses roles
+# para que "acionado" = bit em 0. Um registrador pode desligar a inversão com
+# "normalmente_fechado": false no config.json (contato NA).
+_SAFETY_NF_ROLES = ("emergencia", "limite_superior", "limite_inferior")
+
+
+def _safety_nf_roles() -> set[str]:
+    """Roles de segurança cuja leitura deve ser invertida (contato NF)."""
+    return {
+        r["role"] for r in _config.get("control_registers", [])
+        if r.get("role") in _SAFETY_NF_ROLES and r.get("normalmente_fechado", True)
+    }
+
+
+def _bit_acionado(role: str, v, nf_roles: set[str]) -> bool | None:
+    """Converte a leitura de um bit em bool. Para os sinais NF, 0 = acionado."""
+    if v is None:
+        return None
+    ativo = bool(v)
+    return (not ativo) if role in nf_roles else ativo
 
 
 def _clp_conn() -> tuple[str, int, int]:
@@ -1513,10 +1535,11 @@ def control_status():
 def _extras(data: dict, rn: dict[str, str]) -> dict:
     """Valores extras da tela de ensaio (máximos do CLP, emergência e fins de curso)."""
     out: dict = {}
+    nf = _safety_nf_roles()
     for role in _EXTRA_ROLES:
         name = rn.get(role)
         v = data.get(name) if name else None
-        out[role] = (bool(v) if v is not None else None) if role in _BIT_ROLES else v
+        out[role] = _bit_acionado(role, v, nf) if role in _BIT_ROLES else v
     return out
 
 
