@@ -133,6 +133,7 @@ export interface CamposRelatorio {
   requisitos?: Requisito[];
   titulo?: string;
   metodo_ensaio?: string;
+  norma_relatorio?: string;
 }
 
 export interface KPIs {
@@ -635,7 +636,7 @@ export interface ReportRequest {
   assinar_emissor?: boolean;
   requisitos?: Requisito[];
   conclusao_manual?: string;
-  norma_relatorio?: "NBR 15561" | "ISO 13953";
+  norma_relatorio?: "NBR 15561" | "NBR 14683-1" | "ISO 13953";
   falhas?: Record<string, string>;
   include_empresa: boolean;
   include_cliente: boolean;

@@ -382,6 +382,7 @@ class ReportRequest(BaseModel):
     conclusao_manual: str = ""         # usada quando não há requisitos: APROVADO/REPROVADO
     # Norma que define o modelo do relatório resumido:
     #   "NBR 15561" → Fmax, σmax, alongamento, mínimo e requisitos (≥ 350 %)
+    #   "NBR 14683-1" → mesmo modelo; a tela já preenche σmax ≥ 15 MPa e alongamento ≥ 500 %
     #   "ISO 13953" → solda de topo: Fmax por CP e tipo de falha (dúctil/frágil)
     norma_relatorio: str = "NBR 15561"
     falhas: Dict[str, str] = {}        # id do ensaio → "Dúctil" | "Frágil" (ISO 13953)

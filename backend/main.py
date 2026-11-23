@@ -885,6 +885,7 @@ def _campos_comuns_relatorio(db: Session, r, condicoes: dict) -> dict:
         "titulo": (anterior.get("titulo") or "")
                   if anterior.get("tipo", "tracao") == ("flexao" if isinstance(r, EnsaioFlexaoDB) else "tracao") else "",
         "metodo_ensaio": (anterior.get("condicoes") or {}).get("metodo_ensaio", ""),
+        "norma_relatorio": anterior.get("norma_relatorio", ""),
         "equipamentos": (anterior.get("condicoes") or {}).get("equipamentos", ""),
     }
 

@@ -33,10 +33,28 @@ const EMPTY_CONDICOES: CondicoesEnsaio = {
   metodo_ensaio: "", certificado_calibracao: "",
 };
 
-// Requisito padrão da qualidade (editável e removível na tela)
-const REQUISITOS_PADRAO: Requisito[] = [
-  { propriedade: "alongamento", criterio: ">=", valor: "350", referencia: "NBR 15561" },
+// Normas do relatório resumido. NBR 15561 e NBR 14683-1 usam o mesmo modelo
+// (Fmax, σmax, alongamento e requisitos); muda só o requisito que já vem preenchido.
+// ISO 13953 é o modelo de solda de topo (força e dúctil/frágil).
+type NormaRelatorio = "NBR 15561" | "NBR 14683-1" | "ISO 13953";
+const NORMAS: [NormaRelatorio, string][] = [
+  ["NBR 15561", "NBR 15561 (alongamento ≥ 350 %)"],
+  ["NBR 14683-1", "NBR 14683-1 (tensão ≥ 15 MPa e alongamento ≥ 500 %)"],
+  ["ISO 13953", "ISO 13953 (solda de topo: força e dúctil/frágil)"],
 ];
+const REQUISITOS_NORMA: Record<NormaRelatorio, Requisito[]> = {
+  "NBR 15561": [
+    { propriedade: "alongamento", criterio: ">=", valor: "350", referencia: "NBR 15561" },
+  ],
+  "NBR 14683-1": [
+    { propriedade: "tensao_max", criterio: ">=", valor: "15", referencia: "NBR 14683-1" },
+    { propriedade: "alongamento", criterio: ">=", valor: "500", referencia: "NBR 14683-1" },
+  ],
+  "ISO 13953": [],
+};
+
+// Requisito padrão da qualidade (editável e removível na tela)
+const REQUISITOS_PADRAO: Requisito[] = REQUISITOS_NORMA["NBR 15561"];
 
 const TITULO_TRACAO = "Relatório de Resistência ao Alongamento (Tração)";
 
@@ -224,13 +242,15 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
   const [cpIds, setCpIds] = useState<number[]>([]);
   const [graficos, setGraficos] = useState<GraficoRelatorio[]>(["tensao_alongamento"]);
   const [requisitos, setRequisitos] = useState<Requisito[]>(flexao ? [] : REQUISITOS_PADRAO);
-  // Norma define o modelo: NBR 15561 (alongamento ≥ 350 %) ou ISO 13953 (solda de topo:
-  // força máxima e tipo de falha dúctil/frágil escolhido pelo operador para cada CP)
-  const [normaRelatorio, setNormaRelatorio] = useState<"NBR 15561" | "ISO 13953">("NBR 15561");
+  // Norma define o modelo: NBR 15561 / NBR 14683-1 (requisitos de tensão e alongamento) ou
+  // ISO 13953 (solda de topo: força máxima e tipo de falha dúctil/frágil escolhido pelo
+  // operador para cada CP)
+  const [normaRelatorio, setNormaRelatorio] = useState<NormaRelatorio>("NBR 15561");
   const iso13953 = resumido && normaRelatorio === "ISO 13953";
   const [falhas, setFalhas] = useState<Record<string, string>>({});
-  function escolherNorma(n: "NBR 15561" | "ISO 13953") {
+  function escolherNorma(n: NormaRelatorio) {
     setNormaRelatorio(n);
+    if (n !== "ISO 13953") setRequisitos(REQUISITOS_NORMA[n].map(r => ({ ...r })));
     setGraficos([n === "ISO 13953" ? "forca_deslocamento" : "tensao_alongamento"]);
     setCondicoesState(c => ({ ...c, metodo_ensaio: n, norma_referencia: n }));
   }
@@ -280,6 +300,13 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
         setAssinaturas(c.assinaturas.map((s, i) => ({ ...s, funcao: s.funcao ?? padrao[i] ?? "" })));
       }
       if (c.requisitos?.length) setRequisitos(c.requisitos);
+      // Volta com a norma do último relatório (ex.: quem ensaia sempre pela NBR 14683-1)
+      if (c.norma_relatorio && NORMAS.some(([k]) => k === c.norma_relatorio)) {
+        const n = c.norma_relatorio as NormaRelatorio;
+        setNormaRelatorio(n);
+        setGraficos([n === "ISO 13953" ? "forca_deslocamento" : "tensao_alongamento"]);
+        if (!c.requisitos?.length && n !== "ISO 13953") setRequisitos(REQUISITOS_NORMA[n].map(r => ({ ...r })));
+      }
       if (c.titulo) setTitulo(c.titulo);
       if (c.metodo_ensaio) setCondicoesState((x) => ({ ...x, metodo_ensaio: x.metodo_ensaio || c.metodo_ensaio }));
       setAutoPreenchido(true);
@@ -417,9 +444,8 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
                 {resumido && (
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-muted">Norma do relatório</span>
-                    <select value={normaRelatorio} onChange={e => escolherNorma(e.target.value as "NBR 15561" | "ISO 13953")} className={INPUT_CLS}>
-                      <option value="NBR 15561">NBR 15561 (alongamento ≥ 350 %)</option>
-                      <option value="ISO 13953">ISO 13953 (solda de topo: força e dúctil/frágil)</option>
+                    <select value={normaRelatorio} onChange={e => escolherNorma(e.target.value as NormaRelatorio)} className={INPUT_CLS}>
+                      {NORMAS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                     </select>
                   </label>
                 )}
@@ -756,7 +782,7 @@ export default function ReportGenerator({ ensaioId, tipo = "tracao", onClose }: 
               {resumido && !iso13953 && (
                 <div className="space-y-2">
                   <span className="text-xs text-muted block">
-                    Requisitos normativos (definidos pelo laboratório; já vem com Alongamento ≥ 350 % da NBR 15561). Cada linha sai Aprovado/Reprovado comparando o menor valor dos CPs.
+                    Requisitos normativos (definidos pelo laboratório; já vêm preenchidos conforme a norma escolhida acima). Cada linha sai Aprovado/Reprovado comparando o menor valor dos CPs.
                   </span>
                   {requisitos.map((r, i) => (
                     <div key={i} className="grid grid-cols-[1.3fr_0.7fr_0.8fr_1.4fr_auto] gap-2 items-center">

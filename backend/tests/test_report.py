@@ -129,6 +129,17 @@ def test_resumido_conclusao_pelos_requisitos_do_laboratorio():
     assert "REPROVADO" in html and ">Reprovado<" in html
 
 
+def test_nbr14683_tensao_e_alongamento_minimos():
+    df = _df()
+    reqs = [{"propriedade": "tensao_max", "criterio": ">=", "valor": "15", "referencia": "NBR 14683-1"},
+            {"propriedade": "alongamento", "criterio": ">=", "valor": "500", "referencia": "NBR 14683-1"}]
+    html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df),
+                                _req_resumido(norma_relatorio="NBR 14683-1", requisitos=reqs),
+                                comparacao_series=_lote())
+    assert "≥ 15 MPa (NBR 14683-1)" in html and "≥ 500 % (NBR 14683-1)" in html
+    assert 'class="conclusao"' in html
+
+
 def test_resumido_sem_requisito_usa_conclusao_manual_ou_omite():
     df = _df()
     html = generate_html_report(SimpleNamespace(nome="CP1"), df, calculate_kpis(df), _req_resumido(escopo="teste"))
